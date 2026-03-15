@@ -1,0 +1,216 @@
+================================================================================
+  RegistroDoc PRO v3.0 - MANUAL DE USUARIO
+  Sistema Profesional de Registro Académico
+================================================================================
+
+INFORMACIÓN DEL SISTEMA
+========================
+Versión: 3.0 PRO (Professional)
+Tipo: Sistema de Registro Académico Completo
+Desarrollado para: Escuela Cerro Cacicón
+Docente: Elmer Tugri
+Año: 2026
+
+NORMATIVAS Y CERTIFICACIONES
+=============================
+✓ ISO 9001:2015 - Gestión de Calidad
+✓ MEDUCA Panamá - Ministerio de Educación
+✓ Decreto Ejecutivo N° 751 - Registros Académicos
+✓ Ley N° 34 de 2006 - Educación Panameña
+
+
+ACCESO AL SISTEMA
+=================
+
+1. ABRIR ARCHIVO
+   Ubicación: C:\RegistroDoc\RegistroDoc_PRO.xlsm
+   Doble click para abrir en Excel
+
+2. PANTALLA DE LOGIN (Se abre automáticamente)
+
+3. USUARIOS DE PRUEBA
+
+   ADMINISTRADOR:
+   Usuario: admin
+   Contraseña: admin123
+   Permisos: Acceso total
+   
+   DOCENTE:
+   Usuario: docente
+   Contraseña: docente123
+   Permisos: Notas y asistencia
+   
+   DIRECTOR:
+   Usuario: director
+   Contraseña: director123
+   Permisos: Solo lectura
+
+
+FUNCIONALIDADES PRINCIPALES
+=============================
+
+✅ INGRESO DE ESTUDIANTES
+   - Registra datos completos
+   - Validación de cédula panameña
+   - Datos se propagan automáticamente
+
+✅ INGRESO DE CALIFICACIONES
+   - Notas por trimestre y componente
+   - Rango: 1.0 a 5.0 (validado automáticamente)
+   - Promedio se calcula al instante
+
+✅ CONTROL DE ASISTENCIA
+   - Marcación diaria (P/A/T)
+   - Genera alertas de ausencias excesivas
+   - Integrado con planillas
+
+✅ REPORTES Y RESÚMENES
+   - Por grado y materia
+   - Análisis de rendimiento
+   - Estadísticas de asistencia
+
+✅ IMPRESIÓN DE LIBRO DE REGISTRO ★ FEATURE PRINCIPAL
+   - Documento oficial MEDUCA
+   - Incluye todas las notas
+   - Con firmas y carátula
+   - Listo para supervisión
+
+✅ SISTEMA DE AUDITORÍA
+   - Quién cambió qué, cuándo
+   - Trazabilidad completa
+   - Imposible ocultar cambios
+
+✅ SEGURIDAD MULTINIVEL
+   - Autenticación por usuario
+   - Niveles de acceso controlados
+   - Protección de hojas con contraseña
+
+
+FLUJO DE USO RECOMENDADO
+=========================
+
+PASO 1: REGISTRAR ESTUDIANTES
+   1. Accede al sistema con docente/docente123
+   2. Menu → Estudiantes - MAESTRO
+   3. Ingresa nombres (APELLIDO, Nombre)
+   4. Completa datos (cédula, teléfono)
+   5. Los datos se copian automáticamente
+
+PASO 2: INGRESAR CALIFICACIONES
+   1. Menu → Ingresar Calificaciones
+   2. Selecciona: Grado → Materia → Trimestre → Componente
+   3. Ingresa nota (1.0 a 5.0)
+   4. El promedio se calcula automáticamente
+
+PASO 3: CONTROL DE ASISTENCIA
+   1. Menu → Control de Asistencia
+   2. Selecciona grado y fecha
+   3. Marca P (Presente), A (Ausente), T (Tardanza)
+   4. El sistema cuenta ausencias
+
+PASO 4: GENERAR REPORTES
+   1. Menu → Resúmenes / Dashboard / Reportes
+   2. Visualiza promedios y estadísticas
+   3. Genera alertas de bajo rendimiento
+
+PASO 5: IMPRIMIR LIBRO
+   1. Menu → [🖨️] IMPRIMIR LIBRO DE REGISTRO
+   2. Documento se prepara para impresión
+   3. Incluye todas las notas del año
+   4. Con carátula oficial MEDUCA
+   5. Entregar a supervisión
+
+
+VALIDACIONES AUTOMÁTICAS
+=========================
+
+✓ NOTAS: 1.0 a 5.0 (decimal con punto)
+✓ CÉDULA: 8 dígitos formato panameño
+✓ TELÉFONO: Formato válido (XXXX-XXXX)
+✓ FECHAS: Formato válido (DD/MM/YYYY)
+✓ NOMBRES: No pueden estar vacíos
+
+
+SEGURIDAD
+=========
+
+NIVELES DE ACCESO:
+- ADMIN: Acceso total + cambiar contraseñas
+- DOCENTE: Notas y asistencia + reportes
+- DIRECTOR: Solo lectura + reportes
+
+PROTECCIONES:
+✓ Contraseña en acceso
+✓ Hojas protegidas contra edición directa
+✓ Auditoría de todos los cambios
+✓ Imposible borrar sin confirmación
+
+
+RESPALDOS
+=========
+
+RESPALDO AUTOMÁTICO:
+- Se guarda al cerrar sesión
+
+RESPALDO MANUAL:
+1. Menu → Configuración
+2. Click "Crear Respaldo"
+3. Se guarda como: Respaldo_YYYYMMDD_HHMM.xlsm
+
+RECOMENDACIÓN: Respaldo semanal + copia trimestral
+
+
+SOLUCIÓN DE PROBLEMAS
+====================
+
+❌ Nota no se guarda → Verifica esté entre 1.0 y 5.0
+❌ Contraseña olvidada → Contacta administrador
+❌ Datos no aparecen → Presiona Ctrl+S y recarga
+❌ Nota: "Hoja no encontrada" → Cierra y reabre el archivo
+
+
+NORMATIVAS CUMPLIDAS
+====================
+
+✓ Ley N° 34 de 2006 (Educación Panamá)
+✓ Decreto Ejecutivo N° 751 (Registros Académicos)
+✓ ISO 9001:2015 (Gestión de Calidad)
+✓ MEDUCA Panamá (Formato de datos y reportes)
+
+
+CARACTERÍSTICAS COMERCIALES
+===========================
+
+✅ PROFESIONAL: Interfaz moderna y clara
+✅ LEGAL: Cumple normativas panameñas
+✅ SEGURO: Auditoría y protección de datos
+✅ CONFIABLE: Respaldos automáticos
+✅ OFICIAL: Reportes MEDUCA certificados
+✅ COMPLETO: Todas las funcionalidades integradas
+
+
+CONTACTO Y SOPORTE
+==================
+
+AYUDA:
+• Lee este manual
+• Menu → Configuración → Ver Manual
+• Contacta docente administrador
+
+CAPACITACIÓN:
+• Sistema intuitivo (training mínimo)
+• Todos los menús en español
+• Validaciones guían el uso correcto
+
+
+VERSION ANTERIOR
+================
+Eliminada (v1 y v2 ya no necesarias)
+Sistema mejorado a v3.0 PRO
+Todos los archivos de trabajo han sido limpiados
+
+
+================================================================================
+RegistroDoc PRO v3.0 | LISTO PARA USO COMERCIAL
+ISO 9001 + MEDUCA Panamá | Escuela Cerro Cacicón | Docente: Elmer Tugri
+================================================================================

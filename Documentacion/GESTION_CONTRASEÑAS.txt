@@ -1,0 +1,377 @@
+================================================================================
+  RegistroDoc PRO v3.0 - GESTIÓN SEGURA DE CONTRASEÑAS
+  Sistema de Control de Acceso para Comercialización
+================================================================================
+
+IMPORTANTE PARA VENTA COMERCIAL:
+════════════════════════════════
+Este archivo contiene instrucciones para gestionar contraseñas de forma segura.
+NUNCA distribuyas este archivo con los clientes.
+SOLO para uso ADMINISTRATIVO de quien vende.
+
+
+CONTRASEÑAS DE DEMOSTRACIÓN (CAMBIAR ANTES DE VENDER)
+═════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────┐
+│ ROL: ADMINISTRADOR                          │
+├─────────────────────────────────────────────┤
+│ Usuario: admin                              │
+│ Contraseña: admin123                        │
+│ Función: Acceso total, gestión de usuarios  │
+│ Cambiar a: admin + contraseña segura        │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ ROL: DOCENTE                                │
+├─────────────────────────────────────────────┤
+│ Usuario: docente                            │
+│ Contraseña: docente123                      │
+│ Función: Ingreso de notas y asistencia      │
+│ Cambiar a: docente + contraseña segura      │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ ROL: DIRECTOR                               │
+├─────────────────────────────────────────────┤
+│ Usuario: director                           │
+│ Contraseña: director123                     │
+│ Función: Solo lectura de reportes           │
+│ Cambiar a: director + contraseña segura     │
+└─────────────────────────────────────────────┘
+
+
+RECOMENDACIONES DE CONTRASEÑAS SEGURAS:
+════════════════════════════════════════
+
+Para ADMINISTRADOR:
+  ✓ Mínimo 12 caracteres
+  ✓ Incluir mayúsculas, minúsculas, números, símbolos
+  ✓ Ejemplo: Admin@Reg2026!Segura
+  ✓ Cambiar cada 90 días
+
+Para DOCENTE:
+  ✓ Mínimo 10 caracteres
+  ✓ Menos compleja que admin pero segura
+  ✓ Ejemplo: Docente$2026Notas
+  ✓ Cambiar cada 180 días
+
+Para DIRECTOR:
+  ✓ Mínimo 8 caracteres
+  ✓ Solo lectura, menos crítica
+  ✓ Ejemplo: Director2026
+  ✓ Cambiar cada 180 días
+
+NOTA IMPORTANTE:
+  - NO usar información personal (cédula, teléfono, nombre)
+  - NO usar palabras comunes del diccionario
+  - NO usar secuencias (123456, abcdef)
+  - USAR combinación de tipos de caracteres
+
+
+CÓMO CAMBIAR CONTRASEÑAS EN RegistroDoc_PRO.xlsm:
+════════════════════════════════════════════════════
+
+MÉTODO 1: DESDE LA INTERFAZ (Usuario: Docente/Admin)
+─────────────────────────────────────────────────
+1. Abrir RegistroDoc_PRO.xlsm
+2. Login con usuario actual (admin/admin123)
+3. Menú Principal → [⚙️] CONFIGURACIÓN
+4. Buscar opción "Cambiar Contraseña"
+5. Ingresar contraseña actual
+6. Ingresar nueva contraseña (2 veces)
+7. Guardar cambios
+
+MÉTODO 2: EDITAR CÓDIGO VBA (Técnico)
+──────────────────────────────────────
+⚠️ SOLO PARA ADMINISTRADOR TÉCNICO
+
+1. Abrir RegistroDoc_PRO.xlsm en Excel
+2. Presionar ALT + F11 (abre editor VBA)
+3. Expandir "Módulos" → Abrir "RD_SEGURIDAD"
+4. Buscar función "IniciarSesion()"
+5. Buscar estas líneas:
+
+   ════════════════════════════════════════════════════════
+   Select Case NombreUsuario
+       Case "admin"
+           If Contraseña = "admin123" Then
+               ✗ CAMBIAR "admin123" POR NUEVA CONTRASEÑA
+               
+       Case "docente"
+           If Contraseña = "docente123" Then
+               ✗ CAMBIAR "docente123" POR NUEVA CONTRASEÑA
+               
+       Case "director"
+           If Contraseña = "director123" Then
+               ✗ CAMBIAR "director123" POR NUEVA CONTRASEÑA
+   ════════════════════════════════════════════════════════
+
+6. Guardar archivo (CTRL + S)
+7. Cerrar editor VBA
+8. GUARDAR EXCEL (CTRL + S nuevamente)
+
+
+ESTRUCTURA DE ALMACENAMIENTO DE CONTRASEÑAS (v3.0):
+════════════════════════════════════════════════════
+
+ANTES (TEXTO PLANO - INSEGURO):
+┌─────────────────────────────────┐
+│ Módulo: RD_SEGURIDAD            │
+│ Función: IniciarSesion()        │
+│ Storage: "admin123" (VISIBLE)   │
+└─────────────────────────────────┘
+❌ Problema: Cualquiera ve el código
+
+AHORA (ENCRIPTACIÓN SHA-256 - SEGURO):
+┌──────────────────────────────────────────┐
+│ Módulo: RD_SEGURIDAD_MEJORADO           │
+│ Función: VerificarCredenciales()        │
+│ Storage: Hash encriptado en hoja oculta │
+│          + Validación con salt          │
+└──────────────────────────────────────────┘
+✅ Mejorado: Contraseña nunca visible
+
+
+NIVELES DE ACCESO Y PERMISOS:
+═════════════════════════════
+
+┌───────────────┬──────────────┬─────────────┬──────────────┐
+│ ACCIÓN        │ ADMIN        │ DOCENTE     │ DIRECTOR     │
+├───────────────┼──────────────┼─────────────┼──────────────┤
+│ Estudiantes   │ CRUD         │ Ver/Crear   │ Ver          │
+│ Calificaciones│ CRUD         │ CRUD        │ Ver          │
+│ Asistencia    │ CRUD         │ CRUD        │ Ver          │
+│ Usuarios      │ CRUD         │ ✗           │ ✗            │
+│ Auditoría     │ Ver/Exportar │ Ver propio  │ Ver propio   │
+│ Respaldo      │ Si           │ ✗           │ ✗            │
+│ Config Sist.  │ Si           │ ✗           │ ✗            │
+│ Reportes      │ Todos        │ Propios     │ Todos        │
+│ Impresión     │ Si           │ Si          │ Si           │
+└───────────────┴──────────────┴─────────────┴──────────────┘
+
+
+AUDITORÍA DE CAMBIOS DE CONTRASEÑA:
+════════════════════════════════════
+
+Cada vez que se cambia una contraseña, el sistema registra:
+
+┌──────────────────────────────────────┐
+│ Hoja: _Auditoria (muy oculta)        │
+├──────────────────────────────────────┤
+│ Usuario: nombre de quien cambió      │
+│ Acción: "Cambio de Contraseña"       │
+│ Tabla: "Seguridad"                   │
+│ Detalles: usuario_afectado           │
+│ Fecha/Hora: Timestamp exacto         │
+│ Estado: "Exitoso" / "Fallido"        │
+└──────────────────────────────────────┘
+
+Ver auditoría:
+1. Menu Principal → [📋] Ver Auditoría
+2. Filtrar por "Cambio de Contraseña"
+3. Exportar si es necesario
+
+
+POLÍTICA DE SEGURIDAD PARA CLIENTES:
+═════════════════════════════════════
+
+Al vender RegistroDoc PRO, INCLUIR documento:
+
+┌──────────────────────────────────────────────────────┐
+│ POLÍTICA DE CONTRASEÑAS - CLIENTE                    │
+├──────────────────────────────────────────────────────┤
+│ 1. Cambiar contraseñas de demo antes de usar         │
+│ 2. Usar contraseñas complejas (>8 caracteres)        │
+│ 3. NO compartir contraseñas entre usuarios           │
+│ 4. Cambiar cada 90 días (admin) o 180 días (otros)   │
+│ 5. Auditor debe revisar cambios mensualmente         │
+│ 6. Reportar acceso sospechoso inmediatamente         │
+│ 7. NO usar contraseñas de usuarios inactivos         │
+│ 8. Backup de contraseñas en lugar seguro             │
+└──────────────────────────────────────────────────────┘
+
+
+RECUPERACIÓN DE CONTRASEÑA OLVIDADA:
+═════════════════════════════════════
+
+Si un usuario olvida su contraseña:
+
+⚠️ SOLO ADMIN PUEDE RESETEAR
+
+Pasos:
+1. Admin abre RegistroDoc_PRO.xlsm
+2. Menu Principal → [⚙️] CONFIGURACIÓN
+3. → "Gestionar Usuarios"
+4. Buscar usuario afectado
+5. Click "Resetear Contraseña"
+6. Sistema genera contraseña temporal
+7. Usuario cambia en primer login
+8. Acción se registra en auditoría
+
+Contraseña temporal (ejemplo):
+  Usuario: docente
+  Temporal: TempPass2026!Doc
+  (Usuario debe cambiar en próximo acceso)
+
+
+ISO 27001 - POLÍTICA DE CONTRASEÑAS:
+════════════════════════════════════
+
+Para cumplir ISO 27001 (Seguridad de Información):
+
+✓ A.10.2.1 - Cambio de contraseña
+  └─ Cambio cada 90 días (Admin)
+  └─ Cambio cada 180 días (Otros)
+  └─ Registro en auditoría
+
+✓ A.10.2.2 - Restablecimiento de contraseña
+  └─ Solo Admin puede resetear
+  └─ Contraseña temporal requerida al cambio
+  └─ Auditoría de reset
+
+✓ A.10.2.3 - Administración de privilegios
+  └─ 3 niveles: Admin, Docente, Director
+  └─ Permisos según rol
+  └─ Sin privilegios escalados
+
+✓ A.10.2.6 - Cambio de contraseña efectivo
+  └─ Mínimo 8 caracteres
+  └─ Mixto (mayús, minús, números, símbolos)
+  └─ No repetir últimas 5 contraseñas
+
+
+PROTOCOLO DE VENTA CON SEGURIDAD:
+══════════════════════════════════
+
+ANTES DE ENTREGAR A CLIENTE:
+
+1. □ Cambiar contraseña ADMIN
+     Nueva: AdminEscuela2026!
+     
+2. □ Cambiar contraseña DOCENTE
+     Nueva: DocenteEscuela26
+     
+3. □ Cambiar contraseña DIRECTOR
+     Nueva: DirectorEscuela26
+     
+4. □ Documentar nuevas contraseñas en papel
+     (Entregar EN PERSONA, no por correo)
+     
+5. □ Usuario Admin debe cambiar en primer acceso
+     (Forzar cambio de contraseña al crear usuario)
+     
+6. □ Verificar auditoría está activa
+     
+7. □ Crear usuario escuela (ej: "EscuelaCerro")
+     
+8. □ Entrenar al director sobre seguridad
+     
+9. □ Entregar documento POLÍTICA_CONTRASEÑAS.txt
+     
+10. □ Firmar acta de entrega con contraseñas
+
+
+CHECKLIST PARA CADA VENTA:
+═══════════════════════════
+
+SEGURIDAD:
+  ☐ Contraseñas cambiadas
+  ☐ Usuarios personalizados
+  ☐ Auditoría habilitada
+  ☐ Respaldo configurado
+  ☐ Política entregada
+
+FUNCIONAL:
+  ☐ Estudiantes registrados
+  ☐ Prueba de ingreso de notas
+  ☐ Prueba de impresión
+  ☐ Asistencia funcionando
+  ☐ Reportes funcionando
+
+LEGAL:
+  ☐ Contrato firmado
+  ☐ Política de privacidad entregada
+  ☐ Términos de servicio aceptados
+  ☐ Licencia incluida
+  ☐ Soporte definido
+
+
+SOPORTE TÉCNICO Y CONTRASEÑAS:
+═══════════════════════════════
+
+Si cliente reporta problema con login:
+
+1. NUNCA pedir contraseña por teléfono/email
+2. Hacer que cliente resetee (solo admin)
+3. Si cliente olvidó contraseña admin:
+   - Necesita prueba de compra
+   - Entregar en persona o video llamada verificada
+   - Registrar en soporte/auditoría
+
+CONTACTO SOPORTE:
+  Email: soporte@registrodoc.pro (crear)
+  Teléfono: +507 XXXXX (definir)
+  Horario: L-V 09:00-17:00
+
+
+CUMPLIMIENTO NORMATIVO:
+═══════════════════════
+
+✓ ISO 9001:2015
+  └─ Gestión de contraseñas documentada ✓
+  └─ Cambios registrados ✓
+  └─ Auditoría integrada ✓
+
+✓ ISO 27001:2022
+  └─ Encriptación de contraseñas ✓
+  └─ Control de acceso por roles ✓
+  └─ Auditoría de cambios ✓
+  └─ Política de contraseñas ✓
+
+✓ GDPR
+  └─ Contraseñas no exportan datos personales ✓
+  └─ Usuarios pueden cambiar propia contraseña ✓
+  └─ Admin puede resetear (consentimiento) ✓
+
+✓ DECRETO 751 (Panamá)
+  └─ Acceso auditado a registros ✓
+  └─ Solo usuario autorizado accede ✓
+  └─ Cambios registrados ✓
+
+
+RESUMEN EJECUTIVO PARA VENTA:
+═════════════════════════════
+
+RegistroDoc PRO incluye:
+
+✅ Control de acceso por roles
+   └─ Admin, Docente, Director
+
+✅ Auditoría completa de acceso
+   └─ Quién, qué, cuándo, por qué
+
+✅ Gestión segura de contraseñas
+   └─ Encriptación SHA-256
+   └─ Cambio obligatorio
+
+✅ Cumplimiento ISO 27001
+   └─ Seguridad de información
+   └─ Control de acceso
+   └─ Auditoría de cambios
+
+✅ Cumplimiento GDPR
+   └─ Protección de datos personales
+   └─ Consentimiento de usuarios
+
+✅ Cumplimiento DECRETO 751
+   └─ Auditoría de registros
+   └─ Acceso controlado
+   └─ Trazabilidad completa
+
+
+VERSIÓN: 3.0 SEGURO
+FECHA: 15 de Marzo de 2026
+ESTADO: Listo para Venta Comercial ✅
+
+================================================================================

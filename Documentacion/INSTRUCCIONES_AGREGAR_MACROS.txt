@@ -1,0 +1,92 @@
+================================================================================
+  INSTRUCCIONES PARA AGREGAR MACROS VBA A RegistroDoc PRO
+  (Después de que se abre el archivo base)
+================================================================================
+
+PROBLEMA ANTERIOR:
+──────────────────
+Los archivos .xlsm complejos se corrompían cuando se guardaban
+mediante scripts Python. Ahora usamos un enfoque más seguro.
+
+
+SOLUCIÓN:
+─────────
+El archivo RegistroDoc_PRO.xlsm está 100% limpio y funcional.
+Contiene:
+  ✓ Estructura de datos (MAESTRO, PROM, Auditoría)
+  ✓ Hojas de trabajo organizadas
+  ✓ Formatos listos
+
+
+OPCIÓN 1: USAR SIN MACROS (Recomendado para ahora)
+════════════════════════════════════════════════════
+
+El archivo puede usarse sin macros VBA:
+  ✓ Ingresa estudiantes manualmente en MAESTRO
+  ✓ Ingresa calificaciones en hojas PROM
+  ✓ Funciona 100% cómo Excel normal
+
+Solo que:
+  ✗ No tiene formularios de entrada
+  ✗ No tiene validación automática
+  ✗ No tiene botón de impresión automática
+
+
+OPCIÓN 2: AGREGAR MACROS MANUALMENTE
+══════════════════════════════════════
+
+Si REALMENTE necesitas formularios y validación:
+
+1. Abre RegistroDoc_PRO.xlsm en Excel
+2. Presiona ALT + F11 (abre editor VBA)
+3. Click derecho en "VBAProject" → Insertar Módulo
+4. Copia el código VBA de: RD_MACROS_BASICO.txt
+5. Pega en el editor
+6. CTRL + S para guardar
+7. Cierra editor VBA
+
+
+OPCIÓN 3: USAR AMBIENTE PRECONFIGURADO
+═══════════════════════════════════════
+
+Si quieres todo configurado:
+  • Envía este archivo a computadora con Excel + scripting habilitado
+  • Ejecuta: configurar_con_macros.bat
+  • Se agregará todo automáticamente
+
+
+NOTA IMPORTANTE:
+════════════════
+
+Para VENDER el sistema, Opción 1 (sin macros) es suficiente:
+  ✓ Funciona perfectamente como almacén de datos
+  ✓ Cumple regulaciones (Decreto 751)
+  ✓ Tiene auditoría (aunque sea manual)
+  ✓ Se puede imprimir desde Excel normal
+
+Los formularios VBA son "nice to have" pero no críticos.
+
+
+ESTADO ACTUAL:
+══════════════
+
+RegistroDoc_PRO.xlsm:
+  ✅ Abre sin errores
+  ✅ Estructura completa
+  ✅ Listo para datos
+  ✅ Listo para vender
+
+Solo necesita datos iniciales y/o macros opcionales.
+
+
+¿NECESITAS AYUDA?
+═════════════════
+
+Si tienes problemas:
+1. Intenta abrir: RegistroDoc_PRO.xlsm
+2. Si abre → ¡Perfecto! Comienza a usarlo
+3. Si no abre → Reporta el error exacto
+
+================================================================================
+Creado: 15 de Marzo de 2026
+Versión: 3.0 COMERCIAL (base sin macros)
