@@ -69,6 +69,16 @@ def ft(ws,rng,r,g,b,bold=False,sz=10):
     ws.range(rng).api.Font.Bold = bold
     ws.range(rng).api.Font.Size = sz
 
+def safe_clear(ws, rng):
+    """Limpia un rango, incluso si existen celdas combinadas."""
+    try:
+        ws.range(rng).clear()
+    except Exception:
+        # Excel falla con "Esta accion no se puede realizar en una celda combinada"
+        # cuando el rango intercepta combinaciones preexistentes.
+        ws.range(rng).api.UnMerge()
+        ws.range(rng).clear()
+
 print("\n[1/7] Abriendo Excel...")
 app = xw.App(visible=True)
 app.display_alerts = False
@@ -121,7 +131,7 @@ except Exception:
     except ValueError:
         pass  # Ya existe; tomar la hoja existente
     ws_portada = wb.sheets["PORTADA"]
-ws_portada.range("A1:J40").clear()
+safe_clear(ws_portada, "A1:J40")
 ws_portada.range("A1").value = "RegistroDoc Multigrado"
 ft(ws_portada, "A1", 31, 56, 100, True, 22)
 ws_portada.range("A3").value = "Iniciando sistema..."
