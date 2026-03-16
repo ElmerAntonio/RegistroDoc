@@ -110,11 +110,19 @@ def crear_dashboard_graficos(wb):
     ws.range("D4").value = ["Grado", "Total"]
     ws.range("D5").value = [["7", "=B5"], ["8", "=B6"], ["9", "=B7"]]
 
-    chart = ws.charts.add(left=ws.range("D9").left, top=ws.range("D9").top, width=460, height=260)
-    chart.set_source_data(ws.range("D4:E7"))
-    chart.chart_type = "column_clustered"
-    chart.api.HasTitle = True
-    chart.api.ChartTitle.Text = "Cantidad de estudiantes por grado"
+    # En algunas versiones de xlwings, ws.charts.add puede devolver una tupla;
+    # usamos COM directo para evitar incompatibilidades.
+    chart_obj = ws.api.ChartObjects().Add(
+        ws.range("D9").left,
+        ws.range("D9").top,
+        460,
+        260,
+    )
+    chart = chart_obj.Chart
+    chart.SetSourceData(ws.range("D4:E7").api)
+    chart.ChartType = 51  # xlColumnClustered
+    chart.HasTitle = True
+    chart.ChartTitle.Text = "Cantidad de estudiantes por grado"
 
     ws.api.Columns("A:B").ColumnWidth = 28
     ws.api.Columns("D:E").ColumnWidth = 14
