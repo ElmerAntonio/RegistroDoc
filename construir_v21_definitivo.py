@@ -69,6 +69,30 @@ def ft(ws,rng,r,g,b,bold=False,sz=10):
     ws.range(rng).api.Font.Bold = bold
     ws.range(rng).api.Font.Size = sz
 
+def safe_clear(ws, rng):
+    """Limpia un rango, incluso si existen celdas combinadas."""
+    try:
+        ws.range(rng).clear()
+    except Exception:
+        # Excel falla con "Esta accion no se puede realizar en una celda combinada"
+        # cuando el rango intercepta combinaciones preexistentes.
+        ws.range(rng).api.UnMerge()
+        ws.range(rng).clear()
+
+
+def safe_delete_pictures(ws):
+    """Elimina imagenes de la hoja sin abortar si Excel falla con algun objeto."""
+    for pic in list(ws.pictures):
+        try:
+            pic.delete()
+        except Exception:
+            # Fallback COM directo por nombre si el wrapper de xlwings falla.
+            try:
+                ws.api.Shapes(pic.name).Delete()
+            except Exception:
+                # No detener la generacion por una imagen bloqueada/corrupta.
+                pass
+
 print("\n[1/7] Abriendo Excel...")
 app = xw.App(visible=True)
 app.display_alerts = False
@@ -121,15 +145,14 @@ except Exception:
     except ValueError:
         pass  # Ya existe; tomar la hoja existente
     ws_portada = wb.sheets["PORTADA"]
-ws_portada.range("A1:J40").clear()
+safe_clear(ws_portada, "A1:J40")
 ws_portada.range("A1").value = "RegistroDoc Multigrado"
 ft(ws_portada, "A1", 31, 56, 100, True, 22)
 ws_portada.range("A3").value = "Iniciando sistema..."
 ft(ws_portada, "A3", 80, 80, 80, False, 11)
 bg(ws_portada, "A1:J40", 255, 255, 255)
 
-for pic in list(ws_portada.pictures):
-    pic.delete()
+safe_delete_pictures(ws_portada)
 
 if os.path.exists(PORTADA_IMG):
     try:
