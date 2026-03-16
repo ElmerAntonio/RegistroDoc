@@ -113,9 +113,14 @@ print("      MAESTRO OK")
 # PASO 1.1: HOJA PORTADA CON IMAGEN
 # ============================================================
 print("\n[2.1/7] Creando hoja PORTADA con imagen...")
-if "PORTADA" not in [s.name for s in wb.sheets]:
-    wb.sheets.add("PORTADA", before=wb.sheets[0])
-ws_portada = wb.sheets["PORTADA"]
+try:
+    ws_portada = wb.sheets["PORTADA"]
+except Exception:
+    try:
+        wb.sheets.add("PORTADA", before=wb.sheets[0])
+    except ValueError:
+        pass  # Ya existe; tomar la hoja existente
+    ws_portada = wb.sheets["PORTADA"]
 ws_portada.range("A1:J40").clear()
 ws_portada.range("A1").value = "RegistroDoc Multigrado"
 ft(ws_portada, "A1", 31, 56, 100, True, 22)
