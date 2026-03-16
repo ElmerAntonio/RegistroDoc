@@ -2,14 +2,12 @@ import os
 import time
 import xlwings as xw
 
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ORIGEN = os.path.join(BASE_DIR, "RegistroDoc_Multigrado_v1_FINAL.xlsx")
-SALIDA = os.path.join(BASE_DIR, "RegistroDoc_Multigrado_v1_FINAL_actualizado.xlsm")
-
+SALIDA = os.path.join(BASE_DIR, "RegistroDoc_Multigrado_v1_FINAL_actualizado.xlsx")
 
 XL_SHEET_VISIBLE = -1
-XL_SHEET_VERY_HIDDEN = 2
+XL_SHEET_HIDDEN = 0
 
 
 def rgb_xl(r, g, b):
@@ -27,7 +25,6 @@ def ft(ws, rng, r, g, b, bold=False, sz=10):
 
 
 def safe_clear(ws, rng):
-    """Limpia rangos aunque existan celdas combinadas."""
     try:
         ws.range(rng).clear()
     except Exception:
@@ -44,176 +41,329 @@ def get_or_create_sheet(wb, name, before=None):
         return wb.sheets.add(name, before=before)
 
 
-def crear_portada_educativa(wb):
-    ws = get_or_create_sheet(wb, "PORTADA", before=wb.sheets[0])
-    safe_clear(ws, "A1:J40")
+def crear_portada_alternativa(wb):
+    """Portada vistosa con informacion academica relevante."""
+    ws = get_or_create_sheet(wb, "PORTADA_VISTOSA", before=wb.sheets[0])
+    safe_clear(ws, "A1:K40")
     ws.api.Cells.UnMerge()
 
-    bg(ws, "A1:J40", 242, 248, 255)
-    bg(ws, "A1:J4", 31, 56, 100)
-    bg(ws, "B6:I14", 255, 255, 255)
+    bg(ws, "A1:K40", 242, 248, 255)
+    bg(ws, "A1:K4", 31, 56, 100)
+    bg(ws, "B7:J15", 255, 255, 255)
+    bg(ws, "B18:J30", 255, 255, 255)
 
-    ws.range("A1:J1").api.Merge()
-    ws.range("A2:J2").api.Merge()
-    ws.range("A3:J3").api.Merge()
+    ws.range("A1:K1").api.Merge()
+    ws.range("A2:K2").api.Merge()
+    ws.range("A3:K3").api.Merge()
     ws.range("A1").value = "REGISTRODOC MULTIGRADO"
-    ws.range("A2").value = "Sistema de Gestion Academica"
-    ws.range("A3").value = "Documento base actualizado"
-    ft(ws, "A1", 255, 255, 255, True, 28)
-    ft(ws, "A2", 226, 240, 255, True, 16)
+    ws.range("A2").value = "PORTADA ACADEMICA"
+    ws.range("A3").value = "Control de notas y asistencia"
+    ft(ws, "A1", 255, 255, 255, True, 30)
+    ft(ws, "A2", 220, 235, 255, True, 16)
     ft(ws, "A3", 200, 220, 245, False, 12)
     for c in ["A1", "A2", "A3"]:
         ws.range(c).api.HorizontalAlignment = -4108
 
-    ws.range("B6:I6").api.Merge()
-    ws.range("B6").value = "IMPORTANTE: HABILITA MACROS"
-    ft(ws, "B6", 31, 56, 100, True, 18)
-    ws.range("B6").api.HorizontalAlignment = -4108
+    ws.range("B7:J7").api.Merge()
+    ws.range("B7").value = "INFORMACION INSTITUCIONAL"
+    ft(ws, "B7", 31, 56, 100, True, 14)
 
-    ws.range("B8:I8").api.Merge()
-    ws.range("B8").value = "1) Activa contenido/macros al abrir"
-    ws.range("B9:I9").api.Merge()
-    ws.range("B9").value = "2) Si no aparece login, cierra y abre nuevamente"
-    ws.range("B10:I10").api.Merge()
-    ws.range("B10").value = "3) Accede y usa menu Reportes para generar salidas"
-    for c in ["B8", "B9", "B10"]:
-        ft(ws, c, 0, 102, 51, True, 12)
+    info = [
+        ["Escuela", "Escuela Cerro Cacicon"],
+        ["Docente", "Elmer Tugri"],
+        ["Ano lectivo", "2026"],
+        ["Grados", "7°, 8° y 9°"],
+        ["Materias", "Ingles, Agropecuaria, Comercio, Hogar y Desarrollo, Artistica"],
+    ]
+    ws.range("B9").value = info
+    ft(ws, "B9:B13", 31, 56, 100, True, 11)
+    ws.api.Columns("B").ColumnWidth = 20
+    ws.api.Columns("C").ColumnWidth = 55
 
-    ws.api.Columns("A:J").ColumnWidth = 12
-    ws.api.Rows(1).RowHeight = 34
-    ws.api.Rows(2).RowHeight = 26
-    ws.api.Rows(6).RowHeight = 28
+    ws.range("B18:J18").api.Merge()
+    ws.range("B18").value = "HOJAS CLAVE DEL LIBRO"
+    ft(ws, "B18", 31, 56, 100, True, 14)
 
-    ws.activate()
+    hojas = [
+        ["MAESTRO", "Lista base de estudiantes por grado"],
+        ["DASHBOARD", "Resumen visual con graficas"],
+        ["Asistencia 7/8/9", "Registro directo por hoja de grado"],
+        ["PROM y PLANILLAS", "Calificaciones por materia y grado"],
+    ]
+    ws.range("B20").value = hojas
+    ft(ws, "B20:B23", 0, 102, 51, True, 11)
+
+    for rng in ["B7:J15", "B18:J30"]:
+        ws.range(rng).api.Borders(7).LineStyle = 1
+        ws.range(rng).api.Borders(8).LineStyle = 1
+        ws.range(rng).api.Borders(9).LineStyle = 1
+        ws.range(rng).api.Borders(10).LineStyle = 1
+
+    ws.api.Columns("A:K").ColumnWidth = 12
+    ws.api.Rows(1).RowHeight = 38
 
 
 def crear_dashboard_graficos(wb):
     ws = get_or_create_sheet(wb, "DASHBOARD")
-    safe_clear(ws, "A1:N45")
+    safe_clear(ws, "A1:N50")
+    ws.api.Cells.UnMerge()
 
-    ws.range("A1:F1").api.Merge()
-    ws.range("A1").value = "Dashboard Academico"
-    ft(ws, "A1", 31, 56, 100, True, 22)
-    bg(ws, "A1:N3", 226, 239, 218)
+    bg(ws, "A1:N50", 248, 251, 255)
+    bg(ws, "A1:N3", 31, 56, 100)
+    ws.range("A1:N1").api.Merge()
+    ws.range("A1").value = "DASHBOARD ACADEMICO"
+    ft(ws, "A1", 255, 255, 255, True, 24)
 
-    ws.range("A4").value = ["Indicador", "Valor"]
-    ft(ws, "A4:B4", 255, 255, 255, True, 11)
-    bg(ws, "A4:B4", 31, 56, 100)
+    ws.range("A5").value = [["Indicador", "Valor"]]
+    bg(ws, "A5:B5", 31, 56, 100)
+    ft(ws, "A5:B5", 255, 255, 255, True, 11)
 
-    indicadores = [
-        ["Estudiantes Grado 7", "=COUNTA(MAESTRO!B5:B44)"],
-        ["Estudiantes Grado 8", "=COUNTA(MAESTRO!D5:D44)"],
-        ["Estudiantes Grado 9", "=COUNTA(MAESTRO!F5:F44)"],
+    ws.range("A6").value = [
+        ["Total estudiantes 7°", "=IFERROR(COUNTA(MAESTRO!B5:B44),0)"],
+        ["Total estudiantes 8°", "=IFERROR(COUNTA(MAESTRO!D5:D44),0)"],
+        ["Total estudiantes 9°", "=IFERROR(COUNTA(MAESTRO!F5:F44),0)"],
+        ["Total general", "=SUM(B6:B8)"],
     ]
-    ws.range("A5").value = indicadores
 
-    ws.range("D4").value = ["Grado", "Total"]
-    ws.range("D5").value = [["7", "=B5"], ["8", "=B6"], ["9", "=B7"]]
-
-    # En algunas versiones de xlwings, ws.charts.add puede devolver una tupla;
-    # usamos COM directo para evitar incompatibilidades.
-    chart_obj = ws.api.ChartObjects().Add(
-        ws.range("D9").left,
-        ws.range("D9").top,
-        460,
-        260,
-    )
-    chart = chart_obj.Chart
-    chart.SetSourceData(ws.range("D4:E7").api)
-    chart.ChartType = 51  # xlColumnClustered
-    chart.HasTitle = True
-    chart.ChartTitle.Text = "Cantidad de estudiantes por grado"
-
-    ws.api.Columns("A:B").ColumnWidth = 28
-    ws.api.Columns("D:E").ColumnWidth = 14
+    ws.range("D5").value = [["Grado", "Riesgo Academico"]]
+    bg(ws, "D5:E5", 192, 0, 0)
+    ft(ws, "D5:E5", 255, 255, 255, True, 11)
+    ws.range("D6").value = [["7°", "=IFERROR(COUNTIF('PROM (Ingles 7°)'!N5:N44,\"<3\"),0)"],
+                             ["8°", "=IFERROR(COUNTIF('PROM (Ingles 8°)'!N5:N44,\"<3\"),0)"],
+                             ["9°", "=IFERROR(COUNTIF('PROM (Ingles 9°)'!N5:N44,\"<3\"),0)"]]
 
 
-def crear_hojas_reportes(wb):
-    ws_notas = get_or_create_sheet(wb, "REP_NOTAS")
-    safe_clear(ws_notas, "A1:H200")
-    ws_notas.range("A1:H1").value = [[
-        "Fecha", "Grado", "Materia", "Estudiante", "Trimestre", "Nota", "Docente", "Observacion"
-    ]]
-    bg(ws_notas, "A1:H1", 31, 56, 100)
-    ft(ws_notas, "A1:H1", 255, 255, 255, True, 10)
-    ws_notas.api.Columns("A:H").ColumnWidth = 18
-
-    ws_asis = get_or_create_sheet(wb, "REP_ASISTENCIA")
-    safe_clear(ws_asis, "A1:G200")
-    ws_asis.range("A1:G1").value = [[
-        "Fecha", "Grado", "Estudiante", "Presente", "Ausente", "Tardanza", "Observacion"
-    ]]
-    bg(ws_asis, "A1:G1", 112, 48, 160)
-    ft(ws_asis, "A1:G1", 255, 255, 255, True, 10)
-    ws_asis.api.Columns("A:G").ColumnWidth = 18
+    ws.range("G5").value = [["Grado", "Riesgo Inasistencia"]]
+    bg(ws, "G5:H5", 112, 48, 160)
+    ft(ws, "G5:H5", 255, 255, 255, True, 11)
+    ws.range("G6").value = [
+        ["7°", "=IFERROR(SUMPRODUCT(--('Asistencia (7°)'!C3:AZ42=\"A\")),0)"],
+        ["8°", "=IFERROR(SUMPRODUCT(--('Asistencia (8°)'!C3:AZ42=\"A\")),0)"],
+        ["9°", "=IFERROR(SUMPRODUCT(--('Asistencia (9°)'!C3:AZ42=\"A\")),0)"],
+    ]
 
 
-def inyectar_modulo_reportes(wb):
-    """Crea/actualiza modulo VBA para generar reportes desde formularios/menu."""
-    vbproj = wb.api.VBProject
-    modulo_nombre = "RD_REPORTES"
-
-    modulo = None
-    for comp in vbproj.VBComponents:
-        if comp.Name == modulo_nombre:
-            modulo = comp
-            break
-
-    if modulo is None:
-        modulo = vbproj.VBComponents.Add(1)  # vbext_ct_StdModule
-        modulo.Name = modulo_nombre
-
-    cm = modulo.CodeModule
-    if cm.CountOfLines > 0:
-        cm.DeleteLines(1, cm.CountOfLines)
-
-    codigo = r'''
-Option Explicit
-
-Public Sub GenerarReporteNotas()
-    On Error GoTo ErrHandler
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Sheets("REP_NOTAS")
-
-    ws.Visible = xlSheetVisible
-    ws.Activate
-    MsgBox "Reporte de notas listo. Complete o exporte esta hoja.", vbInformation, "RegistroDoc"
-    Exit Sub
-
-ErrHandler:
-    MsgBox "No se pudo abrir REP_NOTAS: " & Err.Description, vbExclamation, "RegistroDoc"
-End Sub
-
-Public Sub GenerarReporteAsistencia()
-    On Error GoTo ErrHandler
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Sheets("REP_ASISTENCIA")
-
-    ws.Visible = xlSheetVisible
-    ws.Activate
-    MsgBox "Reporte de asistencia listo. Complete o exporte esta hoja.", vbInformation, "RegistroDoc"
-    Exit Sub
-
-ErrHandler:
-    MsgBox "No se pudo abrir REP_ASISTENCIA: " & Err.Description, vbExclamation, "RegistroDoc"
-End Sub
-
-Public Sub ActualizarDashboard()
-    On Error Resume Next
-    ThisWorkbook.Sheets("DASHBOARD").Visible = xlSheetVisible
-    ThisWorkbook.Sheets("DASHBOARD").Activate
-    On Error GoTo 0
-End Sub
-'''
-    cm.AddFromString(codigo)
+    ws.range("A12").value = [["Prioridad", "Descripcion"]]
+    bg(ws, "A12:B12", 0, 102, 51)
+    ft(ws, "A12:B12", 255, 255, 255, True, 11)
+    ws.range("A13").value = [
+        ["Atencion academica", "=IF(MAX(E6:E8)>0,\"Reforzar grado \"&INDEX(D6:D8,MATCH(MAX(E6:E8),E6:E8,0)),\"Sin alertas\")"],
+        ["Atencion asistencia", "=IF(MAX(H6:H8)>0,\"Revisar ausencias en grado \"&INDEX(G6:G8,MATCH(MAX(H6:H8),H6:H8,0)),\"Sin alertas\")"],
+    ]
 
 
-def asegurar_visibilidad_controlada(wb):
-    """Mantiene solo PORTADA visible para evitar mostrar el libro completo al abrir."""
+    ws.range("A16:H18").api.Merge()
+    ws.range("A16").value = "Las graficas de riesgo y seguimiento estan en la hoja GRAFICOS."
+    ft(ws, "A16", 60, 60, 60, True, 12)
+
+    ws.api.Columns("A").ColumnWidth = 28
+    ws.api.Columns("B").ColumnWidth = 45
+    ws.api.Columns("D").ColumnWidth = 18
+    ws.api.Columns("E").ColumnWidth = 18
+    ws.api.Columns("G").ColumnWidth = 20
+    ws.api.Columns("H").ColumnWidth = 20
+
+
+def crear_panel_asistencia(wb):
+    """Panel de asistencia con filtro por celda (grado) y fecha editable."""
+    ws = get_or_create_sheet(wb, "PANEL_ASISTENCIA")
+    safe_clear(ws, "A1:H75")
+    ws.api.Cells.UnMerge()
+
+    bg(ws, "A1:H75", 246, 251, 246)
+    bg(ws, "A1:H4", 0, 102, 51)
+
+    ws.range("A1:H1").api.Merge()
+    ws.range("A1").value = "PANEL DE ASISTENCIA"
+    ft(ws, "A1", 255, 255, 255, True, 22)
+
+    ws.range("A3").value = "Grado (filtro):"
+    ft(ws, "A3", 255, 255, 255, True, 11)
+    ws.range("B3").value = 7
+    bg(ws, "B3", 255, 242, 204)
+    ft(ws, "B3", 120, 60, 0, True, 12)
+    dv = ws.range("B3").api.Validation
+    try:
+        dv.Delete()
+    except Exception:
+        pass
+    dv.Add(Type=3, AlertStyle=1, Formula1="7,8,9")
+
+    ws.range("D3").value = "Fecha:"
+    ft(ws, "D3", 255, 255, 255, True, 11)
+    ws.range("E3").formula = "=TODAY()"
+    ws.range("E3").number_format = "dd/mm/yyyy"
+    bg(ws, "E3", 255, 242, 204)
+    ft(ws, "E3", 120, 60, 0, True, 11)
+
+    ws.range("A5:D5").value = [["No.", "APELLIDO, NOMBRE", "ASISTENCIA", "OBSERVACION"]]
+    bg(ws, "A5:D5", 31, 56, 100)
+    ft(ws, "A5:D5", 255, 255, 255, True, 10)
+
+    for i in range(40):
+        fila = 6 + i
+        ws.range(f"A{fila}").value = i + 1
+        ws.range(f"B{fila}").formula = f"=IF($B$3=7,MAESTRO!B{5+i},IF($B$3=8,MAESTRO!D{5+i},MAESTRO!F{5+i}))"
+        ws.range(f"C{fila}").formula = f"=IFERROR(INDIRECT(\"'Asistencia (\"&$B$3&\"°)'!C\"&{3+i}),\"\")"
+        ws.range(f"D{fila}").formula = f"=IFERROR(INDIRECT(\"'Asistencia (\"&$B$3&\"°)'!D\"&{3+i}),\"\")"
+
+    ws.range("F3:H3").api.Merge()
+    ws.range("F3").value = "Cambia B3 para ver solo alumnos del grado seleccionado"
+    bg(ws, "F3:H3", 198, 239, 206)
+    ft(ws, "F3", 0, 97, 0, True, 10)
+
+    ws.range("F5:H5").value = [["Indicador", "Valor", "Semaforo"]]
+    bg(ws, "F5:H5", 112, 48, 160)
+    ft(ws, "F5:H5", 255, 255, 255, True, 10)
+    ws.range("F6").value = "Total alumnos visibles"
+    ws.range("G6").formula = "=COUNTA(B6:B45)"
+    ws.range("F7").value = "Ausencias registradas"
+    ws.range("G7").formula = "=COUNTIF(C6:C45,\"A\")"
+    ws.range("F8").value = "Alerta"
+    ws.range("G8").formula = "=IF(G7>=5,\"ALTA\",\"NORMAL\")"
+    ws.range("H8").formula = "=IF(G7>=5,\"ALERTA\",\"OK\")"
+
+    ws.api.Columns("A").ColumnWidth = 7
+    ws.api.Columns("B").ColumnWidth = 38
+    ws.api.Columns("C").ColumnWidth = 14
+    ws.api.Columns("D").ColumnWidth = 30
+    ws.api.Columns("F").ColumnWidth = 24
+    ws.api.Columns("G").ColumnWidth = 14
+    ws.api.Columns("H").ColumnWidth = 12
+
+
+def crear_hoja_graficos(wb):
+    """Hoja visual para decisiones: inasistencia, bajo rendimiento y mejor estudiante."""
+    ws = get_or_create_sheet(wb, "GRAFICOS")
+    safe_clear(ws, "A1:Q200")
+    ws.api.Cells.UnMerge()
+
+    bg(ws, "A1:Q200", 250, 250, 255)
+    bg(ws, "A1:Q3", 31, 56, 100)
+    ws.range("A1:Q1").api.Merge()
+    ws.range("A1").value = "GRAFICOS Y ALERTAS DE RENDIMIENTO"
+    ft(ws, "A1", 255, 255, 255, True, 22)
+
+    # Base de analisis por estudiante (3 grados x 40 filas)
+    ws.range("A5:F5").value = [["Grado", "No", "Estudiante", "Ausencias", "NotaFinal", "TareasVacias"]]
+    bg(ws, "A5:F5", 31, 56, 100)
+    ft(ws, "A5:F5", 255, 255, 255, True, 10)
+
+    fila = 6
+    for grado in [7, 8, 9]:
+        for i in range(40):
+            n = i + 1
+            src_as = 3 + i
+            src_ma = 5 + i
+            ws.range(f"A{fila}").value = grado
+            ws.range(f"B{fila}").value = n
+            if grado == 7:
+                ws.range(f"C{fila}").formula = f"=IFERROR(MAESTRO!B{src_ma},"")"
+                ws.range(f"D{fila}").formula = f"=IFERROR(COUNTIF('Asistencia (7°)'!C{src_as}:AZ{src_as},\"A\"),0)"
+                ws.range(f"E{fila}").formula = f"=IFERROR('PROM (Ingles 7°)'!N{src_ma},0)"
+                ws.range(f"F{fila}").formula = f"=IFERROR(COUNTBLANK('PROM (Ingles 7°)'!C{src_ma}:M{src_ma}),0)"
+            elif grado == 8:
+                ws.range(f"C{fila}").formula = f"=IFERROR(MAESTRO!D{src_ma},"")"
+                ws.range(f"D{fila}").formula = f"=IFERROR(COUNTIF('Asistencia (8°)'!C{src_as}:AZ{src_as},\"A\"),0)"
+                ws.range(f"E{fila}").formula = f"=IFERROR('PROM (Ingles 8°)'!N{src_ma},0)"
+                ws.range(f"F{fila}").formula = f"=IFERROR(COUNTBLANK('PROM (Ingles 8°)'!C{src_ma}:M{src_ma}),0)"
+            else:
+                ws.range(f"C{fila}").formula = f"=IFERROR(MAESTRO!F{src_ma},"")"
+                ws.range(f"D{fila}").formula = f"=IFERROR(COUNTIF('Asistencia (9°)'!C{src_as}:AZ{src_as},\"A\"),0)"
+                ws.range(f"E{fila}").formula = f"=IFERROR('PROM (Ingles 9°)'!N{src_ma},0)"
+                ws.range(f"F{fila}").formula = f"=IFERROR(COUNTBLANK('PROM (Ingles 9°)'!C{src_ma}:M{src_ma}),0)"
+            fila += 1
+
+    # Tarjetas de decision
+    ws.range("H5:J5").value = [["Indicador", "Estudiante", "Valor"]]
+    bg(ws, "H5:J5", 192, 0, 0)
+    ft(ws, "H5:J5", 255, 255, 255, True, 10)
+
+    ws.range("H6").value = "Mas inasistencia"
+    ws.range("I6").formula = "=IFERROR(INDEX(C6:C125,MATCH(MAX(D6:D125),D6:D125,0)),"")"
+    ws.range("J6").formula = "=MAX(D6:D125)"
+
+    ws.range("H7").value = "Nota mas baja"
+    ws.range("I7").formula = "=IFERROR(INDEX(C6:C125,MATCH(MINIFS(E6:E125,E6:E125,\">0\"),E6:E125,0)),\"\")"
+    ws.range("J7").formula = "=IFERROR(MINIFS(E6:E125,E6:E125,\">0\"),0)"
+
+    ws.range("H8").value = "No entrega tareas"
+    ws.range("I8").formula = "=IFERROR(INDEX(C6:C125,MATCH(MAX(F6:F125),F6:F125,0)),"")"
+    ws.range("J8").formula = "=MAX(F6:F125)"
+
+    ws.range("H9").value = "Mejor estudiante"
+    ws.range("I9").formula = "=IFERROR(INDEX(C6:C125,MATCH(MAX(E6:E125),E6:E125,0)),"")"
+    ws.range("J9").formula = "=MAX(E6:E125)"
+
+    # Resumen por grado para graficas
+    ws.range("L5:N5").value = [["Grado", "Ausencias", "RiesgoAcademico"]]
+    bg(ws, "L5:N5", 0, 102, 51)
+    ft(ws, "L5:N5", 255, 255, 255, True, 10)
+    ws.range("L6").value = [[7], [8], [9]]
+    ws.range("M6").formula = "=SUMIFS(D6:D125,A6:A125,L6)"
+    ws.range("M7").formula = "=SUMIFS(D6:D125,A6:A125,L7)"
+    ws.range("M8").formula = "=SUMIFS(D6:D125,A6:A125,L8)"
+    ws.range("N6").formula = "=COUNTIFS(A6:A125,L6,E6:E125,\"<3\",E6:E125,\">0\")"
+    ws.range("N7").formula = "=COUNTIFS(A6:A125,L7,E6:E125,\"<3\",E6:E125,\">0\")"
+    ws.range("N8").formula = "=COUNTIFS(A6:A125,L8,E6:E125,\"<3\",E6:E125,\">0\")"
+
+    # Graficas
+    c1 = ws.api.ChartObjects().Add(ws.range("H12").left, ws.range("H12").top, 380, 220)
+    ch1 = c1.Chart
+    ch1.SetSourceData(ws.range("L5:M8").api)
+    ch1.ChartType = 51
+    ch1.HasTitle = True
+    ch1.ChartTitle.Text = "Ausencias por grado"
+
+    c2 = ws.api.ChartObjects().Add(ws.range("L12").left, ws.range("L12").top, 380, 220)
+    ch2 = c2.Chart
+    ch2.SetSourceData(ws.range("L5:N8").api)
+    ch2.ChartType = 57
+    ch2.HasTitle = True
+    ch2.ChartTitle.Text = "Estudiantes en riesgo academico"
+
+    ws.range("H35:Q38").api.Merge()
+    ws.range("H35").value = "Usa estas alertas para priorizar: 1) mas inasistencia, 2) nota mas baja, 3) no entrega tareas."
+    ft(ws, "H35", 60, 60, 60, True, 11)
+
+    ws.api.Columns("A").ColumnWidth = 8
+    ws.api.Columns("B").ColumnWidth = 6
+    ws.api.Columns("C").ColumnWidth = 34
+    ws.api.Columns("D:F").ColumnWidth = 14
+    ws.api.Columns("H").ColumnWidth = 22
+    ws.api.Columns("I").ColumnWidth = 32
+    ws.api.Columns("J").ColumnWidth = 12
+    ws.api.Columns("L:N").ColumnWidth = 15
+
+
+def limpiar_hojas_de_sistema(wb):
+    """Quita hojas que simulan aplicacion/sistema y no son necesarias para excel base."""
+    hojas_quitar = [
+        "MENU", "MENÚ", "CONFIGURACION", "CONFIGURACIÓN", "BD_Usuarios",
+        "REP_NOTAS", "REP_ASISTENCIA", "BD_Auditoria", "BD_Config", "BD_Materias", "PANEL_ASISTENCIA"
+    ]
+    for nombre in hojas_quitar:
+        try:
+            wb.sheets[nombre].delete()
+        except Exception:
+            pass
+
+
+def ajustar_visibilidad(wb):
+    """Libro base normal: deja visibles hojas clave y oculta Asistencia 7/8/9."""
     for ws in wb.sheets:
-        ws.api.Visible = XL_SHEET_VERY_HIDDEN
-    wb.sheets["PORTADA"].api.Visible = XL_SHEET_VISIBLE
-    wb.sheets["PORTADA"].activate()
+        try:
+            ws.api.Visible = XL_SHEET_VISIBLE
+        except Exception:
+            pass
+
+    # Priorizar portada original si existe; si no, la alternativa.
+    for nom in ["PORTADA", "PORTADA_VISTOSA", "Asistencia (7°)"]:
+        try:
+            wb.sheets[nom].activate()
+            break
+        except Exception:
+            pass
 
 
 def main():
@@ -227,23 +377,23 @@ def main():
     try:
         wb = app.books.open(ORIGEN)
 
-        print("[1/5] Ajustando portada y celdas combinadas...")
-        crear_portada_educativa(wb)
+        print("[1/5] Manteniendo PORTADA original y creando PORTADA_VISTOSA...")
+        crear_portada_alternativa(wb)
 
-        print("[2/5] Creando hoja DASHBOARD con graficos...")
+        print("[2/5] Creando DASHBOARD con alertas de riesgo...")
         crear_dashboard_graficos(wb)
 
-        print("[3/5] Creando hojas REP_NOTAS y REP_ASISTENCIA...")
-        crear_hojas_reportes(wb)
+        print("[3/5] Creando hoja GRAFICOS de apoyo a decisiones...")
+        crear_hoja_graficos(wb)
 
-        print("[4/5] Inyectando modulo VBA de reportes...")
-        inyectar_modulo_reportes(wb)
+        print("[4/5] Eliminando hojas de sistema no requeridas...")
+        limpiar_hojas_de_sistema(wb)
 
-        print("[5/5] Aplicando visibilidad controlada y guardando...")
-        asegurar_visibilidad_controlada(wb)
+        print("[5/5] Ajustando visibilidad y guardando Excel normal...")
+        ajustar_visibilidad(wb)
         time.sleep(1)
-        wb.api.SaveAs(SALIDA, FileFormat=52)  # xlsm actualizado
-        wb.close(save_changes=False)
+        wb.api.SaveAs(SALIDA, FileFormat=51)
+        wb.close()
         print(f"OK. Archivo actualizado: {SALIDA}")
     finally:
         try:
