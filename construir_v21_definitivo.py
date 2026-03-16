@@ -12,7 +12,6 @@ import os, time
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ORIGEN = os.path.join(BASE_DIR, "RegistroDoc_Multigrado_v1_FINAL.xlsx")
 SALIDA = os.path.join(BASE_DIR, "RegistroDoc_v21.xlsm")
-PORTADA_IMG = os.path.join(BASE_DIR, "education.avif")
 
 if not os.path.exists(ORIGEN):
     print(f"ERROR: No se encontro: {ORIGEN}")
@@ -69,6 +68,17 @@ def ft(ws,rng,r,g,b,bold=False,sz=10):
     ws.range(rng).api.Font.Bold = bold
     ws.range(rng).api.Font.Size = sz
 
+def safe_clear(ws, rng):
+    """Limpia un rango, incluso si existen celdas combinadas."""
+    try:
+        ws.range(rng).clear()
+    except Exception:
+        # Excel falla con "Esta accion no se puede realizar en una celda combinada"
+        # cuando el rango intercepta combinaciones preexistentes.
+        ws.range(rng).api.UnMerge()
+        ws.range(rng).clear()
+
+
 print("\n[1/7] Abriendo Excel...")
 app = xw.App(visible=True)
 app.display_alerts = False
@@ -110,9 +120,9 @@ for c in ["C","E","G"]: ws_m.api.Columns(c).ColumnWidth = 3
 print("      MAESTRO OK")
 
 # ============================================================
-# PASO 1.1: HOJA PORTADA CON IMAGEN
+# PASO 1.1: HOJA PORTADA (SIN IMAGEN, DISENO EDUCATIVO)
 # ============================================================
-print("\n[2.1/7] Creando hoja PORTADA con imagen...")
+print("\n[2.1/7] Creando hoja PORTADA educativa...")
 try:
     ws_portada = wb.sheets["PORTADA"]
 except Exception:
@@ -121,36 +131,73 @@ except Exception:
     except ValueError:
         pass  # Ya existe; tomar la hoja existente
     ws_portada = wb.sheets["PORTADA"]
-ws_portada.range("A1:J40").clear()
-ws_portada.range("A1").value = "RegistroDoc Multigrado"
-ft(ws_portada, "A1", 31, 56, 100, True, 22)
-ws_portada.range("A3").value = "Iniciando sistema..."
-ft(ws_portada, "A3", 80, 80, 80, False, 11)
-bg(ws_portada, "A1:J40", 255, 255, 255)
 
-for pic in list(ws_portada.pictures):
-    pic.delete()
+safe_clear(ws_portada, "A1:J40")
+ws_portada.api.Cells.UnMerge()
 
-if os.path.exists(PORTADA_IMG):
-    try:
-        ws_portada.pictures.add(
-            PORTADA_IMG,
-            name="img_education",
-            update=True,
-            left=ws_portada.range("B5").left,
-            top=ws_portada.range("B5").top,
-            width=480,
-        )
-        print(f"      Imagen cargada: {PORTADA_IMG}")
-    except Exception as e:
-        ws_portada.range("A5").value = "No se pudo cargar education.avif en Excel."
-        ws_portada.range("A6").value = f"Detalle: {e}"
-        print(f"      AVISO: no se pudo insertar la imagen ({e})")
-else:
-    ws_portada.range("A5").value = "No se encontro education.avif en la carpeta del proyecto."
-    print(f"      AVISO: no existe {PORTADA_IMG}")
+# Fondo y paneles
+bg(ws_portada, "A1:J40", 242, 248, 255)
+bg(ws_portada, "A1:J4", 31, 56, 100)
+bg(ws_portada, "B6:I13", 255, 255, 255)
+bg(ws_portada, "B16:I28", 255, 255, 255)
 
-ws_portada.api.Columns("A:J").ColumnWidth = 14
+# Titulos grandes
+ws_portada.range("A1:J1").api.Merge()
+ws_portada.range("A2:J2").api.Merge()
+ws_portada.range("A3:J3").api.Merge()
+ws_portada.range("A1").value = "REGISTRODOC MULTIGRADO"
+ws_portada.range("A2").value = "Sistema de Gestion Academica"
+ws_portada.range("A3").value = "Version 2.1"
+ft(ws_portada, "A1", 255, 255, 255, True, 28)
+ft(ws_portada, "A2", 226, 240, 255, True, 16)
+ft(ws_portada, "A3", 200, 220, 245, False, 12)
+for cell in ["A1", "A2", "A3"]:
+    ws_portada.range(cell).api.HorizontalAlignment = -4108
+
+# Mensaje principal
+ws_portada.range("B6:I6").api.Merge()
+ws_portada.range("B6").value = "BIENVENIDO/A DOCENTE"
+ft(ws_portada, "B6", 31, 56, 100, True, 20)
+ws_portada.range("B6").api.HorizontalAlignment = -4108
+
+ws_portada.range("B8:I8").api.Merge()
+ws_portada.range("B8").value = "Para iniciar correctamente:"
+ft(ws_portada, "B8", 40, 40, 40, True, 13)
+
+ws_portada.range("B10:I10").api.Merge()
+ws_portada.range("B10").value = "1) Habilita las MACROS al abrir el archivo"
+ft(ws_portada, "B10", 0, 102, 51, True, 13)
+
+ws_portada.range("B11:I11").api.Merge()
+ws_portada.range("B11").value = "2) Cierra y abre nuevamente si el login no aparece"
+ft(ws_portada, "B11", 0, 102, 51, True, 13)
+
+ws_portada.range("B12:I12").api.Merge()
+ws_portada.range("B12").value = "3) Usa usuario y contrasena del sistema"
+ft(ws_portada, "B12", 0, 102, 51, True, 13)
+
+# Nota de seguridad
+ws_portada.range("B16:I16").api.Merge()
+ws_portada.range("B16").value = "SEGURIDAD Y CONTROL"
+ft(ws_portada, "B16", 112, 48, 160, True, 15)
+ws_portada.range("B18:I18").api.Merge()
+ws_portada.range("B18").value = "Este libro oculta hojas automaticamente y muestra login por macros."
+ft(ws_portada, "B18", 60, 60, 60, False, 11)
+ws_portada.range("B19:I19").api.Merge()
+ws_portada.range("B19").value = "Si ves MAESTRO o no sale login, habilita macros y vuelve a abrir."
+ft(ws_portada, "B19", 170, 0, 0, True, 11)
+
+# Bordes y formato
+for rng in ["B6:I13", "B16:I28"]:
+    ws_portada.range(rng).api.Borders(7).LineStyle = 1
+    ws_portada.range(rng).api.Borders(8).LineStyle = 1
+    ws_portada.range(rng).api.Borders(9).LineStyle = 1
+    ws_portada.range(rng).api.Borders(10).LineStyle = 1
+
+ws_portada.api.Columns("A:J").ColumnWidth = 12
+for fila, alto in [(1,34),(2,26),(3,20),(6,30),(8,24),(10,22),(11,22),(12,22),(16,24),(18,22),(19,22)]:
+    ws_portada.api.Rows(fila).RowHeight = alto
+
 ws_portada.activate()
 print("      PORTADA OK")
 
@@ -495,28 +542,31 @@ print("      RD_CORE OK")
 # ---- THISWORKBOOK ----
 vba.VBComponents("ThisWorkbook").CodeModule.AddFromString("""
 Private Sub Workbook_Open()
-    On Error GoTo MostrarInstruccion
+    On Error Resume Next
     Application.Wait Now + TimeValue("00:00:01")
     Call OcultarTodasLasHojas
+
+    Err.Clear
     frmLogin.Show
-    Exit Sub
-MostrarInstruccion:
-    On Error Resume Next
-    Dim ws As Worksheet
-    For Each ws In ThisWorkbook.Sheets
-        ws.Visible = True
-    Next ws
-    ThisWorkbook.Sheets("MAESTRO").Activate
-    MsgBox "Habilita las macros y vuelve a abrir el archivo para mostrar el login automaticamente.", vbInformation, "RegistroDoc"
+
+    ' Si falla el login por cualquier motivo, NO destapar todo el libro.
+    If Err.Number <> 0 Then
+        Err.Clear
+        ThisWorkbook.Sheets("PORTADA").Visible = True
+        ThisWorkbook.Sheets("PORTADA").Activate
+        MsgBox "No se pudo abrir el login automaticamente. Habilita macros y vuelve a abrir el archivo.", vbExclamation, "RegistroDoc"
+    End If
+
+    On Error GoTo 0
 End Sub
 
 Sub OcultarTodasLasHojas()
     On Error Resume Next
     Dim ws As Worksheet
     For Each ws In ThisWorkbook.Sheets
-        If ws.Name <> "MAESTRO" Then ws.Visible = 2
+        If ws.Name <> "PORTADA" Then ws.Visible = 2
     Next ws
-    ThisWorkbook.Sheets("MAESTRO").Visible = True
+    ThisWorkbook.Sheets("PORTADA").Visible = True
     On Error GoTo 0
 End Sub
 
@@ -1609,6 +1659,10 @@ except Exception as e:
 time.sleep(3)
 
 print(f"\n[7/7] Guardando: {SALIDA}")
+try:
+    wb.sheets["PORTADA"].activate()
+except Exception:
+    pass
 app.display_alerts = False
 app.screen_updating = True
 # Cerrar cualquier dialogo pendiente
