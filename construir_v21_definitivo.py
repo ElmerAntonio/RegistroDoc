@@ -79,6 +79,20 @@ def safe_clear(ws, rng):
         ws.range(rng).api.UnMerge()
         ws.range(rng).clear()
 
+
+def safe_delete_pictures(ws):
+    """Elimina imagenes de la hoja sin abortar si Excel falla con algun objeto."""
+    for pic in list(ws.pictures):
+        try:
+            pic.delete()
+        except Exception:
+            # Fallback COM directo por nombre si el wrapper de xlwings falla.
+            try:
+                ws.api.Shapes(pic.name).Delete()
+            except Exception:
+                # No detener la generacion por una imagen bloqueada/corrupta.
+                pass
+
 print("\n[1/7] Abriendo Excel...")
 app = xw.App(visible=True)
 app.display_alerts = False
@@ -138,8 +152,7 @@ ws_portada.range("A3").value = "Iniciando sistema..."
 ft(ws_portada, "A3", 80, 80, 80, False, 11)
 bg(ws_portada, "A1:J40", 255, 255, 255)
 
-for pic in list(ws_portada.pictures):
-    pic.delete()
+safe_delete_pictures(ws_portada)
 
 if os.path.exists(PORTADA_IMG):
     try:
