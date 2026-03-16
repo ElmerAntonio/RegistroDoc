@@ -9,8 +9,10 @@ import os, time
 # Prof. Elmer Tugri - Panama 2026
 # ============================================================
 
-ORIGEN = r"C:\RegistroDoc\RegistroDoc_Multigrado_v1_FINAL.xlsx"
-SALIDA = r"C:\RegistroDoc\RegistroDoc_v21.xlsm"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ORIGEN = os.path.join(BASE_DIR, "RegistroDoc_Multigrado_v1_FINAL.xlsx")
+SALIDA = os.path.join(BASE_DIR, "RegistroDoc_v21.xlsm")
+PORTADA_IMG = os.path.join(BASE_DIR, "education.avif")
 
 if not os.path.exists(ORIGEN):
     print(f"ERROR: No se encontro: {ORIGEN}")
@@ -20,6 +22,7 @@ if not os.path.exists(ORIGEN):
 print("=" * 60)
 print("  RegistroDoc Multigrado v2.1 - Version DEFINITIVA")
 print("=" * 60)
+print(f"Carpeta de trabajo: {BASE_DIR}")
 
 # ============================================================
 # NOMBRES EXACTOS DE HOJAS ORIGINALES
@@ -105,6 +108,51 @@ ws_m.api.Columns("A").ColumnWidth = 5
 for c in ["B","D","F"]: ws_m.api.Columns(c).ColumnWidth = 30
 for c in ["C","E","G"]: ws_m.api.Columns(c).ColumnWidth = 3
 print("      MAESTRO OK")
+
+# ============================================================
+# PASO 1.1: HOJA PORTADA CON IMAGEN
+# ============================================================
+print("\n[2.1/7] Creando hoja PORTADA con imagen...")
+try:
+    ws_portada = wb.sheets["PORTADA"]
+except Exception:
+    try:
+        wb.sheets.add("PORTADA", before=wb.sheets[0])
+    except ValueError:
+        pass  # Ya existe; tomar la hoja existente
+    ws_portada = wb.sheets["PORTADA"]
+ws_portada.range("A1:J40").clear()
+ws_portada.range("A1").value = "RegistroDoc Multigrado"
+ft(ws_portada, "A1", 31, 56, 100, True, 22)
+ws_portada.range("A3").value = "Iniciando sistema..."
+ft(ws_portada, "A3", 80, 80, 80, False, 11)
+bg(ws_portada, "A1:J40", 255, 255, 255)
+
+for pic in list(ws_portada.pictures):
+    pic.delete()
+
+if os.path.exists(PORTADA_IMG):
+    try:
+        ws_portada.pictures.add(
+            PORTADA_IMG,
+            name="img_education",
+            update=True,
+            left=ws_portada.range("B5").left,
+            top=ws_portada.range("B5").top,
+            width=480,
+        )
+        print(f"      Imagen cargada: {PORTADA_IMG}")
+    except Exception as e:
+        ws_portada.range("A5").value = "No se pudo cargar education.avif en Excel."
+        ws_portada.range("A6").value = f"Detalle: {e}"
+        print(f"      AVISO: no se pudo insertar la imagen ({e})")
+else:
+    ws_portada.range("A5").value = "No se encontro education.avif en la carpeta del proyecto."
+    print(f"      AVISO: no existe {PORTADA_IMG}")
+
+ws_portada.api.Columns("A:J").ColumnWidth = 14
+ws_portada.activate()
+print("      PORTADA OK")
 
 # ============================================================
 # PASO 2: HOJA BD_CONFIG (materias y grados configurables)
@@ -459,7 +507,7 @@ MostrarInstruccion:
         ws.Visible = True
     Next ws
     ThisWorkbook.Sheets("MAESTRO").Activate
-    MsgBox "Habilita las macros y presiona el boton ABRIR SISTEMA en la hoja MAESTRO.", vbInformation, "RegistroDoc"
+    MsgBox "Habilita las macros y vuelve a abrir el archivo para mostrar el login automaticamente.", vbInformation, "RegistroDoc"
 End Sub
 
 Sub OcultarTodasLasHojas()
