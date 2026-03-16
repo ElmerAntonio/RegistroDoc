@@ -542,19 +542,22 @@ print("      RD_CORE OK")
 # ---- THISWORKBOOK ----
 vba.VBComponents("ThisWorkbook").CodeModule.AddFromString("""
 Private Sub Workbook_Open()
-    On Error GoTo MostrarInstruccion
+    On Error Resume Next
     Application.Wait Now + TimeValue("00:00:01")
     Call OcultarTodasLasHojas
+
+    Err.Clear
     frmLogin.Show
-    Exit Sub
-MostrarInstruccion:
-    On Error Resume Next
-    Dim ws As Worksheet
-    For Each ws In ThisWorkbook.Sheets
-        ws.Visible = True
-    Next ws
-    ThisWorkbook.Sheets("PORTADA").Activate
-    MsgBox "Habilita las macros y vuelve a abrir para mostrar el login. Si no, permaneceras en PORTADA.", vbInformation, "RegistroDoc"
+
+    ' Si falla el login por cualquier motivo, NO destapar todo el libro.
+    If Err.Number <> 0 Then
+        Err.Clear
+        ThisWorkbook.Sheets("PORTADA").Visible = True
+        ThisWorkbook.Sheets("PORTADA").Activate
+        MsgBox "No se pudo abrir el login automaticamente. Habilita macros y vuelve a abrir el archivo.", vbExclamation, "RegistroDoc"
+    End If
+
+    On Error GoTo 0
 End Sub
 
 Sub OcultarTodasLasHojas()
