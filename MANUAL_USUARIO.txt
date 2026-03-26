@@ -1,216 +1,298 @@
-================================================================================
-  RegistroDoc PRO v3.0 - MANUAL DE USUARIO
-  Sistema Profesional de Registro Académico
-================================================================================
+╔══════════════════════════════════════════════════════════════════════╗
+║                                                                      ║
+║              REGISTRODOC PRO — MANUAL DE USUARIO                     ║
+║              Sistema de Registro Académico Oficial                   ║
+║              República de Panamá — Año Lectivo 2026                  ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
 
-INFORMACIÓN DEL SISTEMA
-========================
-Versión: 3.0 PRO (Professional)
-Tipo: Sistema de Registro Académico Completo
-Desarrollado para: Escuela Cerro Cacicón
-Docente: Elmer Tugri
-Año: 2026
+Versión:      2.0.0
+Desarrollado: Elmer Tugri
+Institución:  Escuela Cerro Cacicón
+País:         República de Panamá
+Contacto:     elmer.tugri7@meduca.edu.pa
 
-NORMATIVAS Y CERTIFICACIONES
-=============================
-✓ ISO 9001:2015 - Gestión de Calidad
-✓ MEDUCA Panamá - Ministerio de Educación
-✓ Decreto Ejecutivo N° 751 - Registros Académicos
-✓ Ley N° 34 de 2006 - Educación Panameña
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+ÍNDICE
+══════
+  1. ¿Qué es RegistroDoc Pro?
+  2. Requisitos del sistema
+  3. Instalación y primera activación
+  4. Panel de Configuración
+  5. Gestión de Estudiantes
+  6. Ingreso de Notas
+  7. Control de Asistencia
+  8. Resumen de Calificaciones
+  9. Impresión de Planillas
+  10. Log de Auditoría
+  11. Respaldos y seguridad
+  12. Solución de problemas
 
-ACCESO AL SISTEMA
-=================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. ABRIR ARCHIVO
-   Ubicación: C:\RegistroDoc\RegistroDoc_PRO.xlsm
-   Doble click para abrir en Excel
+1. ¿QUÉ ES REGISTRODOC PRO?
+════════════════════════════
+RegistroDoc Pro es un sistema de registro académico digital diseñado
+específicamente para docentes de centros educativos oficiales de Panamá
+que trabajan en modalidad Premedia Multigrado Flexible.
 
-2. PANTALLA DE LOGIN (Se abre automáticamente)
+El programa se conecta directamente con el libro de registro oficial
+(Registro_2026.xlsx) del Ministerio de Educación de Panamá (MEDUCA),
+permitiendo al docente ingresar datos desde una interfaz amigable sin
+modificar el formato ni las fórmulas del registro oficial.
 
-3. USUARIOS DE PRUEBA
+Características principales:
+  ✓ Registra notas parciales, apreciación y pruebas (escala 1.0–5.0)
+  ✓ Controla asistencia diaria con simbología oficial MEDUCA
+  ✓ Gestiona estudiantes de 7°, 8° y 9° grado simultáneamente
+  ✓ Imprime planillas con el diseño oficial intacto
+  ✓ Configura todos los datos institucionales (portada, carátula)
+  ✓ Protegido con cifrado AES-256 nivel bancario
+  ✓ Licencia personal — un solo dispositivo por docente
 
-   ADMINISTRADOR:
-   Usuario: admin
-   Contraseña: admin123
-   Permisos: Acceso total
-   
-   DOCENTE:
-   Usuario: docente
-   Contraseña: docente123
-   Permisos: Notas y asistencia
-   
-   DIRECTOR:
-   Usuario: director
-   Contraseña: director123
-   Permisos: Solo lectura
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+2. REQUISITOS DEL SISTEMA
+══════════════════════════
+  • Sistema operativo: Windows 10 o Windows 11
+  • Procesador: Intel/AMD cualquier modelo moderno
+  • RAM: 2 GB mínimo (4 GB recomendado)
+  • Espacio en disco: 200 MB libres
+  • Microsoft Excel 2016 o superior (para imprimir con formato oficial)
+    — O LibreOffice Calc (gratuito) como alternativa
+  • No requiere conexión a internet
 
-FUNCIONALIDADES PRINCIPALES
-=============================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ INGRESO DE ESTUDIANTES
-   - Registra datos completos
-   - Validación de cédula panameña
-   - Datos se propagan automáticamente
+3. INSTALACIÓN Y PRIMERA ACTIVACIÓN
+═════════════════════════════════════
 
-✅ INGRESO DE CALIFICACIONES
-   - Notas por trimestre y componente
-   - Rango: 1.0 a 5.0 (validado automáticamente)
-   - Promedio se calcula al instante
+PASO 1 — Recibir el programa
+  • El proveedor le entregará el archivo: RegistroDocPro.exe
+  • Guárdelo en una carpeta de su preferencia (ej: Documentos\RegistroDoc)
+  • NO lo mueva a otra carpeta después de activarlo
 
-✅ CONTROL DE ASISTENCIA
-   - Marcación diaria (P/A/T)
-   - Genera alertas de ausencias excesivas
-   - Integrado con planillas
+PASO 2 — Primera apertura
+  • Haga doble clic en RegistroDocPro.exe
+  • Si Windows muestra "Windows protegió su PC", haga clic en
+    "Más información" y luego "Ejecutar de todas formas"
+    (es normal para programas nuevos no firmados digitalmente)
 
-✅ REPORTES Y RESÚMENES
-   - Por grado y materia
-   - Análisis de rendimiento
-   - Estadísticas de asistencia
+PASO 3 — Activación
+  • El programa mostrará la pantalla de activación
+  • Ingrese su N° de CÉDULA exactamente (ej: 4-785-823)
+  • Ingrese el CÓDIGO DE ACTIVACIÓN que le proporcionó el proveedor
+    Formato: RD-XXXXX-XXXXX-XXXXX-XXXXX
+  • Haga clic en "Activar programa"
+  • La activación es PERMANENTE en este dispositivo
 
-✅ IMPRESIÓN DE LIBRO DE REGISTRO ★ FEATURE PRINCIPAL
-   - Documento oficial MEDUCA
-   - Incluye todas las notas
-   - Con firmas y carátula
-   - Listo para supervisión
+IMPORTANTE:
+  • El programa solo funciona en la computadora donde fue activado
+  • Si cambia de computadora, contacte al proveedor para reactivación
+  • Guarde su código de activación en un lugar seguro
 
-✅ SISTEMA DE AUDITORÍA
-   - Quién cambió qué, cuándo
-   - Trazabilidad completa
-   - Imposible ocultar cambios
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ SEGURIDAD MULTINIVEL
-   - Autenticación por usuario
-   - Niveles de acceso controlados
-   - Protección de hojas con contraseña
+4. PANEL DE CONFIGURACIÓN (⚙️)
+═══════════════════════════════
+La primera vez que use el programa, complete la configuración.
 
+DATOS DEL DOCENTE:
+  • Nombre completo
+  • N° de Cédula
+  • N° de Posición en planilla
+  • N° de Seguro Social
+  • Teléfono y Correo electrónico
+  • Condición de nombramiento (ej: Instructor Vocacional)
+  • Jornada (Matutina / Vespertina)
 
-FLUJO DE USO RECOMENDADO
-=========================
+DATOS DE LA ESCUELA:
+  • Nombre del centro educativo
+  • Nombre del Director(a), Subdirector(a) y Coordinador(a)
+  • Regional MEDUCA
+  • Distrito, Corregimiento y Zona Escolar
 
-PASO 1: REGISTRAR ESTUDIANTES
-   1. Accede al sistema con docente/docente123
-   2. Menu → Estudiantes - MAESTRO
-   3. Ingresa nombres (APELLIDO, Nombre)
-   4. Completa datos (cédula, teléfono)
-   5. Los datos se copian automáticamente
+DATOS ACADÉMICOS:
+  • Año lectivo
+  • Grados que imparte
+  • Área curricular
+  • Asignaturas que imparte
 
-PASO 2: INGRESAR CALIFICACIONES
-   1. Menu → Ingresar Calificaciones
-   2. Selecciona: Grado → Materia → Trimestre → Componente
-   3. Ingresa nota (1.0 a 5.0)
-   4. El promedio se calcula automáticamente
+HORARIO:
+  • Complete la tabla con los períodos y materias de cada día
 
-PASO 3: CONTROL DE ASISTENCIA
-   1. Menu → Control de Asistencia
-   2. Selecciona grado y fecha
-   3. Marca P (Presente), A (Ausente), T (Tardanza)
-   4. El sistema cuenta ausencias
+MATERIAS POR GRADO:
+  • Puede agregar, editar o eliminar materias por grado
+  • Haga clic en "+ Agregar" para añadir una nueva materia
+  • Haga clic en "✕" para eliminar una materia
 
-PASO 4: GENERAR REPORTES
-   1. Menu → Resúmenes / Dashboard / Reportes
-   2. Visualiza promedios y estadísticas
-   3. Genera alertas de bajo rendimiento
+BOTONES:
+  • "💾 Guardar configuración" — Guarda todos los datos
+  • "📄 Actualizar portada Excel" — Escribe los datos en el Excel oficial
+    (¡Importante! Haga esto antes de imprimir la portada)
 
-PASO 5: IMPRIMIR LIBRO
-   1. Menu → [🖨️] IMPRIMIR LIBRO DE REGISTRO
-   2. Documento se prepara para impresión
-   3. Incluye todas las notas del año
-   4. Con carátula oficial MEDUCA
-   5. Entregar a supervisión
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+5. GESTIÓN DE ESTUDIANTES (👤)
+════════════════════════════════
+  1. Seleccione el grado (7°, 8° o 9°)
+  2. La lista muestra los estudiantes registrados
+  3. Para AGREGAR un estudiante:
+     • Ingrese el Apellido (en mayúsculas)
+     • Ingrese el Nombre
+     • Ingrese la Posición (1 al 40)
+     • Haga clic en "💾 Guardar"
+  4. Para EDITAR: haga clic en el nombre en la lista, modifique y guarde
+  5. Para ELIMINAR: seleccione de la lista y haga clic en "🗑 Eliminar"
 
-VALIDACIONES AUTOMÁTICAS
-=========================
+NOTA: Los nombres se guardan en el MAESTRO del Excel en formato
+      APELLIDO, Nombre y se copian automáticamente a todas las hojas.
 
-✓ NOTAS: 1.0 a 5.0 (decimal con punto)
-✓ CÉDULA: 8 dígitos formato panameño
-✓ TELÉFONO: Formato válido (XXXX-XXXX)
-✓ FECHAS: Formato válido (DD/MM/YYYY)
-✓ NOMBRES: No pueden estar vacíos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+6. INGRESO DE NOTAS (📝)
+══════════════════════════
+  1. Seleccione: Grado → Materia → Trimestre → Estudiante
+  2. Haga clic en "🔄 Cargar" si no carga automáticamente
+  3. Verá tres secciones de notas:
+     • NOTAS PARCIALES (hasta 13 notas, valor máximo por nota: varía)
+     • APRECIACIÓN (hasta 9 notas)
+     • PRUEBAS (hasta 2 pruebas)
 
-SEGURIDAD
-=========
+  4. Para cada nota ingrese:
+     • El VALOR (escala MEDUCA: 1.0 a 5.0)
+       - La celda se pone VERDE si la nota es válida
+       - La celda se pone ROJA si la nota está fuera de rango
+     • La FECHA de la evaluación (ej: 15/03/2026)
+     • La DESCRIPCIÓN (ej: "Prueba escrita Unidad 1")
 
-NIVELES DE ACCESO:
-- ADMIN: Acceso total + cambiar contraseñas
-- DOCENTE: Notas y asistencia + reportes
-- DIRECTOR: Solo lectura + reportes
+  5. En la sección OBSERVACIONES puede agregar notas sobre el estudiante
 
-PROTECCIONES:
-✓ Contraseña en acceso
-✓ Hojas protegidas contra edición directa
-✓ Auditoría de todos los cambios
-✓ Imposible borrar sin confirmación
+  6. Haga clic en "💾 Guardar todo" para guardar todas las notas
 
+IMPORTANTE:
+  • La escala va de 1.0 (mínimo) a 5.0 (máximo)
+  • El cero (0) NO existe en el sistema MEDUCA panameño
+  • Los PROMEDIOS son calculados automáticamente por las fórmulas del Excel
+  • El programa NO modifica las fórmulas, solo ingresa los valores
 
-RESPALDOS
-=========
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-RESPALDO AUTOMÁTICO:
-- Se guarda al cerrar sesión
+7. CONTROL DE ASISTENCIA (📅)
+═══════════════════════════════
+  1. Seleccione el grado
+  2. En "Columna día" ingrese el número de la columna del día a marcar
+     (Columna 3 = primera fecha del trimestre, siguientes en orden)
+  3. Seleccione el estado:
+     • ✓ Presente — El estudiante asistió
+     • ✗ Ausente  — El estudiante faltó (se marca con "-" en el Excel)
+     • T Tardanza — El estudiante llegó tarde
+  4. Seleccione uno o varios estudiantes de la tabla
+  5. Haga clic en "💾 Marcar sel."
 
-RESPALDO MANUAL:
-1. Menu → Configuración
-2. Click "Crear Respaldo"
-3. Se guarda como: Respaldo_YYYYMMDD_HHMM.xlsm
+La columna "Total Ausencias" y "Total Tardanzas" se actualiza
+automáticamente mediante las fórmulas del Excel.
 
-RECOMENDACIÓN: Respaldo semanal + copia trimestral
+SIMBOLOGÍA OFICIAL MEDUCA:
+  .  = Asistencia (presente)
+  -  = Ausencia
+  T  = Tardanza
+  E  = Excusa / Ausencia justificada
+  F  = Fuga
+  R  = Retirado
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SOLUCIÓN DE PROBLEMAS
-====================
+8. RESUMEN DE CALIFICACIONES (📊)
+════════════════════════════════════
+  1. Seleccione el grado
+  2. Haga clic en "🔄 Generar resumen"
+  3. Verá una tabla con todos los estudiantes y sus notas por:
+     • Trimestre 1, 2 y 3
+     • Promedio final por materia
+     • Estado: APROBADO (verde) o REPROBADO (rojo)
 
-❌ Nota no se guarda → Verifica esté entre 1.0 y 5.0
-❌ Contraseña olvidada → Contacta administrador
-❌ Datos no aparecen → Presiona Ctrl+S y recarga
-❌ Nota: "Hoja no encontrada" → Cierra y reabre el archivo
+Un estudiante APRUEBA si su promedio general es 3.0 o superior.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-NORMATIVAS CUMPLIDAS
-====================
+9. IMPRESIÓN DE PLANILLAS (🖨️)
+════════════════════════════════
+  1. Vaya a la pestaña "🖨️ Imprimir"
+  2. Seleccione la hoja que desea imprimir
+  3. Haga clic en "📂 Abrir Excel completo" para abrir todo el archivo
+     O en "🖨️ Imprimir hoja seleccionada" para imprimir directamente
 
-✓ Ley N° 34 de 2006 (Educación Panamá)
-✓ Decreto Ejecutivo N° 751 (Registros Académicos)
-✓ ISO 9001:2015 (Gestión de Calidad)
-✓ MEDUCA Panamá (Formato de datos y reportes)
+El Excel se abre con TODO su diseño, formato y fórmulas originales.
+Para imprimir desde Excel: Ctrl+P → ajustar si es necesario → Imprimir.
 
+IMPORTANTE: Para que la portada tenga sus datos actualizados, primero
+vaya a Configuración → "📄 Actualizar portada Excel".
 
-CARACTERÍSTICAS COMERCIALES
-===========================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ PROFESIONAL: Interfaz moderna y clara
-✅ LEGAL: Cumple normativas panameñas
-✅ SEGURO: Auditoría y protección de datos
-✅ CONFIABLE: Respaldos automáticos
-✅ OFICIAL: Reportes MEDUCA certificados
-✅ COMPLETO: Todas las funcionalidades integradas
+10. LOG DE AUDITORÍA (🔍)
+══════════════════════════
+El programa registra automáticamente cada acción realizada:
+  • Accesos al sistema
+  • Notas guardadas (con fecha y hora)
+  • Cambios de configuración
+  • Intentos fallidos de acceso
+  • Modificaciones al Excel
 
+Este log está cifrado y no puede ser editado ni borrado.
+Sirve como respaldo oficial de todas las actividades del docente.
 
-CONTACTO Y SOPORTE
-==================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AYUDA:
-• Lee este manual
-• Menu → Configuración → Ver Manual
-• Contacta docente administrador
+11. RESPALDOS Y SEGURIDAD
+══════════════════════════
+El programa crea automáticamente una copia de respaldo del Excel
+antes de cada escritura: Registro_2026_bak.xlsx
 
-CAPACITACIÓN:
-• Sistema intuitivo (training mínimo)
-• Todos los menús en español
-• Validaciones guían el uso correcto
+Se recomienda además:
+  • Copiar el archivo Excel a un USB mensualmente
+  • Enviar una copia por correo electrónico al finalizar cada trimestre
+  • NO modificar el Excel manualmente mientras el programa está abierto
 
+Si el programa detecta que el Excel fue modificado externamente,
+mostrará una advertencia y registrará el evento en el log de auditoría.
 
-VERSION ANTERIOR
-================
-Eliminada (v1 y v2 ya no necesarias)
-Sistema mejorado a v3.0 PRO
-Todos los archivos de trabajo han sido limpiados
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+12. SOLUCIÓN DE PROBLEMAS
+══════════════════════════
 
-================================================================================
-RegistroDoc PRO v3.0 | LISTO PARA USO COMERCIAL
-ISO 9001 + MEDUCA Panamá | Escuela Cerro Cacicón | Docente: Elmer Tugri
-================================================================================
+PROBLEMA: "El programa no abre" o aparece error de Windows
+SOLUCIÓN: Haga clic derecho en el .exe → Propiedades → 
+          Desbloquear → Aceptar. Luego ábralo de nuevo.
+
+PROBLEMA: "Código de activación inválido"
+SOLUCIÓN: Verifique que ingresó correctamente su número de cédula
+          (con guiones, ej: 4-785-823) y el código exactamente como
+          se lo proporcionaron. Contacte al proveedor si persiste.
+
+PROBLEMA: "Acceso bloqueado temporalmente"
+SOLUCIÓN: Espere el tiempo indicado antes de intentar nuevamente.
+          Si está bloqueado permanentemente, contacte al proveedor.
+
+PROBLEMA: "No se encontró Registro_2026.xlsx"
+SOLUCIÓN: El archivo Excel debe estar en la misma carpeta que el .exe.
+          NO mueva ni renombre el archivo Excel.
+
+PROBLEMA: "El Excel fue modificado externamente"
+SOLUCIÓN: Si usted no lo modificó, es posible que otro programa
+          lo haya tocado. El evento está registrado. Contacte al
+          proveedor si necesita verificar la integridad.
+
+PROBLEMA: Las notas no se guardan
+SOLUCIÓN: Verifique que la nota esté entre 1.0 y 5.0. El sistema
+          no acepta notas fuera de la escala oficial MEDUCA.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para soporte técnico contacte al proveedor del programa.
+
+© 2026 RegistroDoc Pro — Todos los derechos reservados
+Prohibida la reproducción o distribución sin autorización escrita.

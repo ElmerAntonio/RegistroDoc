@@ -1,0 +1,121 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║           REGISTRODOC PRO — PREGUNTAS FRECUENTES (FAQ)               ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOBRE EL PROGRAMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P: ¿El programa modifica el formato del libro de registro oficial?
+R: NO. El programa escribe SOLO en las celdas de datos (nombres, notas,
+   fechas). Las fórmulas, el diseño, los colores y el formato del Excel
+   nunca se tocan. Al imprimir, el resultado es exactamente el formato
+   oficial que exige MEDUCA.
+
+P: ¿Necesito tener Excel instalado?
+R: Para usar el programa de registro NO. Para IMPRIMIR con el formato
+   oficial SÍ necesita Excel (o LibreOffice Calc, que es gratuito).
+   El programa puede abrir el Excel automáticamente para imprimir.
+
+P: ¿Funciona sin internet?
+R: Sí, el programa funciona completamente sin conexión a internet.
+   Solo necesita internet la primera vez si instala Python o dependencias.
+
+P: ¿En qué escala van las notas?
+R: En la escala oficial MEDUCA de Panamá: 1.0 (mínimo) a 5.0 (máximo).
+   El programa NO permite ingresar notas fuera de este rango. El cero
+   (0) no existe en el sistema educativo panameño.
+
+P: ¿Cómo sé si un estudiante está aprobado?
+R: Un estudiante aprueba si su promedio general es 3.0 o superior.
+   En el panel de Resumen puede ver el estado de todos los estudiantes.
+
+P: ¿El programa calcula los promedios?
+R: NO directamente. Los promedios los calcula el Excel con sus fórmulas
+   originales (=TRUNC(AVERAGE(...),1)). El programa muestra el resultado
+   que ya está calculado en el Excel. Esto garantiza que los cálculos
+   sean exactamente los oficiales.
+
+P: ¿Puedo usar el programa en una USB?
+R: SÍ, puede ejecutarlo desde una USB, pero la activación queda vinculada
+   a la computadora donde se activó por primera vez. En otra computadora
+   pedirá reactivación.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOBRE LA LICENCIA Y ACTIVACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P: ¿Cuántas computadoras puedo usar con una licencia?
+R: Una (1) computadora por licencia. La activación queda vinculada
+   al hardware del dispositivo específico donde se activó.
+
+P: Cambié de computadora. ¿Puedo transferir mi licencia?
+R: Sí, pero debe contactar al proveedor para que le genere una
+   reactivación. No hay costo adicional por reactivación razonable
+   (cambio de equipo por daño o reemplazo normal).
+
+P: ¿Mi código de activación sirve para otra persona?
+R: NO. El código está vinculado a su número de cédula específica.
+   Si otra persona intenta usarlo con una cédula diferente, el sistema
+   lo rechazará automáticamente.
+
+P: ¿Qué pasa si olvido mi código de activación?
+R: Contacte al proveedor con su número de cédula y le proporcionará
+   el código nuevamente. Guárdelo en un lugar seguro.
+
+P: ¿Por qué el programa me bloquea después de varios intentos?
+R: Es una protección de seguridad. Después de 3 intentos fallidos
+   hay una espera de 30 segundos. Después de 5 intentos, 1 hora.
+   Después de 10 intentos el bloqueo es permanente y requiere contactar
+   al proveedor. Esto evita que alguien adivine códigos por fuerza bruta.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOBRE LA SEGURIDAD Y LOS DATOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P: ¿Mis datos están seguros?
+R: Sí. La configuración (con sus datos personales) y la licencia están
+   cifradas con AES-256-GCM, el mismo estándar que usan los bancos.
+   Ningún tercero puede leer esos archivos sin la clave de su hardware.
+
+P: ¿El programa envía mis datos a internet?
+R: NO. El programa no tiene conexión a internet ni envía ningún dato
+   a ningún servidor externo. Todo funciona localmente en su computadora.
+
+P: ¿Alguien puede ver mis notas o las de mis estudiantes?
+R: Las notas están en el archivo Excel, que usted controla. La
+   configuración del programa está cifrada y solo legible en su equipo.
+   Cumple con la Ley 81 de 2019 de Protección de Datos Personales.
+
+P: ¿Para qué sirve el log de auditoría?
+R: Registra todas las acciones realizadas en el programa con fecha y hora.
+   Sirve como respaldo oficial de las actividades del docente. Si alguien
+   cuestiona cuándo se ingresó una nota, el log lo demuestra.
+
+P: ¿Puede alguien manipular el Excel manualmente?
+R: Sí puede abrirlo y modificarlo, pero el programa lo detecta
+   mediante un hash SHA3-256 y registra el evento en el log de auditoría.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOBRE MEDUCA Y EL REGISTRO OFICIAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P: ¿El programa cumple con los requisitos de MEDUCA?
+R: Sí. El libro de registro que maneja el programa es el formato oficial
+   de MEDUCA. El programa solo facilita el ingreso de datos, pero el
+   formato, las fórmulas y los cálculos son los oficiales del Ministerio.
+
+P: ¿Puedo entregar el Excel impreso a la supervisión educativa?
+R: Sí. Al imprimir desde el Excel, el resultado es exactamente el
+   formato oficial que requiere la supervisión. El programa no altera
+   ningún elemento visual ni estructural del libro de registro.
+
+P: ¿Funciona para modalidad multigrado flexible?
+R: Sí. Está diseñado específicamente para esa modalidad, con soporte
+   para 7°, 8° y 9° grado simultáneamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para más información, contacte al proveedor del programa.
+
+© 2026 RegistroDoc Pro — Elmer Tugri — Panamá
