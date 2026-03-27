@@ -17,7 +17,7 @@ import os, json, shutil, re, datetime, copy
 #  SEGURIDAD
 # ─────────────────────────────────────────────────────────
 try:
-    from rdsecurity import (
+    from src.rdsecurity import (
         verificar_licencia, activar_licencia_completa,
         verificar_bloqueo, registrar_auditoria,
         guardar_config_segura, cargar_config_segura,
