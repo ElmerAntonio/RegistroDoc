@@ -85,7 +85,7 @@ def _hw_fingerprint() -> bytes:
         if platform.system() == "Windows":
             import subprocess
             r = subprocess.check_output(
-                ["vol", "C:"], shell=True,
+                ["cmd.exe", "/c", "vol", "C:"],
                 stderr=subprocess.DEVNULL, timeout=5
             ).decode()
             serial = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
