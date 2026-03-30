@@ -14,11 +14,16 @@ class DataEngine:
     def reiniciar_libreta(self):
         return self.cleaner.limpiar_todo(self.ruta, self.modalidad)
 
-    def _obtener_columna_nombres(self, grado):
-        if not os.path.exists(self.ruta): return 2
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+    def _obtener_columna_nombres(self, grado, wb=None):
+        if not os.path.exists(self.ruta) and wb is None: return 2
+
+        should_close = False
+        if wb is None:
+            wb = openpyxl.load_workbook(self.ruta, data_only=True)
+            should_close = True
+
         if "MAESTRO" not in wb.sheetnames: 
-            wb.close()
+            if should_close: wb.close()
             return 2
         ws = wb["MAESTRO"]
         grado_limpio = grado.replace("°", "").strip()
@@ -32,7 +37,7 @@ class DataEngine:
                     else: col = c
                     break
             if col != 2: break
-        wb.close()
+        if should_close: wb.close()
         
         if col != 2: return col
         if self.modalidad == "primaria": return 2
@@ -301,15 +306,21 @@ class DataEngine:
         wb.close()
         return True
 
-    def obtener_grados_activos(self):
-        if not os.path.exists(self.ruta): return []
-        wb = openpyxl.load_workbook(self.ruta, read_only=True)
+    def obtener_grados_activos(self, wb=None):
+        if not os.path.exists(self.ruta) and wb is None: return []
+
+        should_close = False
+        if wb is None:
+            wb = openpyxl.load_workbook(self.ruta, read_only=True)
+            should_close = True
+
         grados = []
         for sheet in wb.sheetnames:
             if "Asistencia" in sheet and "(" in sheet and ")" in sheet:
                 g = sheet.split("(")[1].split(")")[0].strip()
                 grados.append(g)
-        wb.close()
+
+        if should_close: wb.close()
         return sorted(list(set(grados))) if grados else ["7°", "8°", "9°"]
 
     def obtener_materias_por_grado(self, grado):
@@ -328,11 +339,16 @@ class DataEngine:
         wb.close()
         return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
 
-    def obtener_estudiantes_completos(self, grado):
-        if not os.path.exists(self.ruta): return []
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+    def obtener_estudiantes_completos(self, grado, wb=None):
+        if not os.path.exists(self.ruta) and wb is None: return []
+
+        should_close = False
+        if wb is None:
+            wb = openpyxl.load_workbook(self.ruta, data_only=True)
+            should_close = True
+
         ws_m = wb["MAESTRO"]
-        col_nom = self._obtener_columna_nombres(grado)
+        col_nom = self._obtener_columna_nombres(grado, wb=wb)
         ws_planilla = None
         if self.modalidad == "premedia":
             for sheet in wb.sheetnames:
@@ -350,7 +366,8 @@ class DataEngine:
                     fila_plan = 15 + (r - 4) 
                     cedula = ws_planilla.cell(row=fila_plan, column=5).value
                 estudiantes.append({"id": r - 4, "nombre": str(nom).strip(), "cedula": str(cedula).strip() if cedula else ""})
-        wb.close()
+
+        if should_close: wb.close()
         return estudiantes
 
     def agregar_estudiante(self, grado, nombre, cedula=""):
@@ -400,8 +417,15 @@ class DataEngine:
 
     def get_dashboard_stats(self):
         if not os.path.exists(self.ruta): return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
-        grados = self.obtener_grados_activos()
-        total = sum(len(self.obtener_estudiantes_completos(g)) for g in grados)
+
+        # Optimization: Use a single workbook load for all dashboard stats
+        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        try:
+            grados = self.obtener_grados_activos(wb=wb)
+            total = sum(len(self.obtener_estudiantes_completos(g, wb=wb)) for g in grados)
+        finally:
+            wb.close()
+
         return {"total": total, "riesgo": 0, "honor": "SANTOS FIDEL (4.9)", "asistencia": "98%"}
 
     def _encontrar_hoja_prom(self, wb, grado, materia):
