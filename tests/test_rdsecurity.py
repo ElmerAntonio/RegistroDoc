@@ -1,19 +1,5 @@
-import sys
-from unittest.mock import MagicMock
-
-# Mock cryptography before importing src.rdsecurity
-mock_crypto = MagicMock()
-sys.modules["cryptography"] = mock_crypto
-sys.modules["cryptography.hazmat"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.ciphers"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.ciphers.aead"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.kdf"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.kdf.pbkdf2"] = mock_crypto
-sys.modules["cryptography.hazmat.backends"] = mock_crypto
-
 import pytest
-from src.rdsecurity import validar_nota_meduca
+from src.rdsecurity import validar_nota_meduca, cifrar, descifrar
 
 def test_validar_nota_meduca_happy_path():
     """Test happy path scenarios for MEDUCA grade validation."""
@@ -101,3 +87,73 @@ def test_validar_nota_meduca_invalid_inputs():
     ok, _, msg = validar_nota_meduca(None)
     assert ok is False
     assert "vacía" in msg
+
+def test_cifrar_descifrar_happy_path():
+    """Test successful encryption and decryption flow."""
+    datos = b"Datos secretos de prueba para AES-256-GCM"
+    password = b"MiSuperClaveSecreta123"
+
+    # Encrypt
+    blob = cifrar(datos, password)
+
+    # Verify blob structure briefly
+    assert blob.startswith(b"RD26"), "Blob must start with magic bytes RD26"
+    assert len(blob) > 4 + 32 + 12 + 16, "Blob is too small"
+
+    # Decrypt
+    resultado = descifrar(blob, password)
+
+    # Ensure decrypted data exactly matches original data
+    assert resultado == datos, "Decrypted data must exactly match original data"
+
+
+def test_descifrar_incorrect_password():
+    """Test decryption fails with incorrect password."""
+    datos = b"Datos confidenciales"
+    password = b"ClaveCorrecta!"
+    password_incorrecta = b"ClaveIncorrecta!"
+
+    # Encrypt with correct password
+    blob = cifrar(datos, password)
+
+    # Attempt to decrypt with wrong password
+    with pytest.raises(ValueError, match="Autenticación fallida — archivo manipulado o clave incorrecta"):
+        descifrar(blob, password_incorrecta)
+
+
+def test_descifrar_integrity_failure_modified_blob():
+    """Test decryption fails when the blob has been modified (tampered)."""
+    datos = b"Datos financieros ultra secretos"
+    password = b"ClaveParaFinanzas#2026"
+
+    # Encrypt data normally
+    blob = cifrar(datos, password)
+
+    # Convert to mutable bytearray
+    blob_mut = bytearray(blob)
+
+    # Intentionally flip a bit in the ciphertext/tag area (last byte)
+    # This simulates corruption or a hacker trying to manipulate the encrypted file
+    blob_mut[-1] ^= 0x01
+
+    blob_modificado = bytes(blob_mut)
+
+    # Attempt to decrypt the modified blob with the correct password
+    # The AES-GCM tag validation should catch the modification and fail
+    with pytest.raises(ValueError, match="Autenticación fallida — archivo manipulado o clave incorrecta"):
+        descifrar(blob_modificado, password)
+
+
+def test_descifrar_invalid_blob_format():
+    """Test decryption fails gracefully when the blob format is completely invalid."""
+    password = b"CualquierClave"
+
+    # Too small blob
+    blob_pequeno = b"RD26" + (b"A" * 10)  # less than 4+32+12+16 bytes
+    with pytest.raises(ValueError, match="Archivo demasiado pequeño — posiblemente corrupto"):
+        descifrar(blob_pequeno, password)
+
+    # Invalid magic bytes but correct size
+    blob_invalido_magic = b"RD25" + (b"A" * (32 + 12 + 16 + 10))
+    with pytest.raises(ValueError, match="Formato inválido — archivo no reconocido"):
+        descifrar(blob_invalido_magic, password)
