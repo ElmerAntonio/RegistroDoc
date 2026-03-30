@@ -12,7 +12,12 @@ sys.modules["cryptography.hazmat.primitives.kdf"] = mock_crypto
 sys.modules["cryptography.hazmat.primitives.kdf.pbkdf2"] = mock_crypto
 sys.modules["cryptography.hazmat.backends"] = mock_crypto
 
+import os
 import pytest
+
+# Mock environment variable for tests
+os.environ["REGISTRODOC_MASTER_SALT"] = "test_salt_for_pytest"
+
 from src.rdsecurity import validar_nota_meduca
 
 def test_validar_nota_meduca_happy_path():
@@ -101,3 +106,36 @@ def test_validar_nota_meduca_invalid_inputs():
     ok, _, msg = validar_nota_meduca(None)
     assert ok is False
     assert "vacía" in msg
+
+def test_missing_master_salt():
+    """Test that importing rdsecurity without REGISTRODOC_MASTER_SALT raises an error."""
+    import sys
+    import importlib
+
+    # Store old environment variable
+    old_val = os.environ.get("REGISTRODOC_MASTER_SALT")
+
+    try:
+        # Remove from env
+        if "REGISTRODOC_MASTER_SALT" in os.environ:
+            del os.environ["REGISTRODOC_MASTER_SALT"]
+
+        # Remove from sys.modules to force reload
+        if "src.rdsecurity" in sys.modules:
+            del sys.modules["src.rdsecurity"]
+
+        # Import should fail
+        with pytest.raises(RuntimeError) as excinfo:
+            import src.rdsecurity
+
+        assert "CRITICAL ERROR: REGISTRODOC_MASTER_SALT no encontrada" in str(excinfo.value)
+
+    finally:
+        # Restore env
+        if old_val is not None:
+            os.environ["REGISTRODOC_MASTER_SALT"] = old_val
+
+        # Re-import for other tests just in case
+        if "src.rdsecurity" in sys.modules:
+            del sys.modules["src.rdsecurity"]
+        import src.rdsecurity
