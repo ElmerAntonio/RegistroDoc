@@ -3,6 +3,7 @@ from tkinter import messagebox
 import os
 import json
 import threading
+import datetime
 
 CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "perfil.json"))
 
@@ -211,7 +212,6 @@ class ConfigFrame(ctk.CTkFrame):
 
     # ================= FUNCIONES COMPARTIDAS =================
     def calcular_horas_automaticas(self):
-        import datetime
         try:
             inicio_str = self.calc_inicio.get().strip()
             salida_str = self.calc_salida.get().strip()
