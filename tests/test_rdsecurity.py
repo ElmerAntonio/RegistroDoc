@@ -1,16 +1,18 @@
 import sys
-from unittest.mock import MagicMock
 
-# Mock cryptography before importing src.rdsecurity
-mock_crypto = MagicMock()
-sys.modules["cryptography"] = mock_crypto
-sys.modules["cryptography.hazmat"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.ciphers"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.ciphers.aead"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.kdf"] = mock_crypto
-sys.modules["cryptography.hazmat.primitives.kdf.pbkdf2"] = mock_crypto
-sys.modules["cryptography.hazmat.backends"] = mock_crypto
+try:
+    import cryptography
+except ImportError:
+    from unittest.mock import MagicMock
+    mock_crypto = MagicMock()
+    sys.modules["cryptography"] = mock_crypto
+    sys.modules["cryptography.hazmat"] = mock_crypto
+    sys.modules["cryptography.hazmat.primitives"] = mock_crypto
+    sys.modules["cryptography.hazmat.primitives.ciphers"] = mock_crypto
+    sys.modules["cryptography.hazmat.primitives.ciphers.aead"] = mock_crypto
+    sys.modules["cryptography.hazmat.primitives.kdf"] = mock_crypto
+    sys.modules["cryptography.hazmat.primitives.kdf.pbkdf2"] = mock_crypto
+    sys.modules["cryptography.hazmat.backends"] = mock_crypto
 
 import pytest
 from src.rdsecurity import validar_nota_meduca
