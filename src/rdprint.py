@@ -83,25 +83,41 @@ def imprimir_hoja_directo(nombre_hoja: str = "Portada") -> tuple[bool, str]:
         return abrir_para_imprimir(nombre_hoja)
 
     try:
-        # Script VBScript temporal para imprimir desde Excel con formato original
-        vbs = f"""
-Set objExcel = CreateObject("Excel.Application")
-objExcel.Visible = False
-objExcel.DisplayAlerts = False
-Set objWB = objExcel.Workbooks.Open("{ruta.replace(chr(92), chr(92)+chr(92))}")
-On Error Resume Next
-objWB.Sheets("{nombre_hoja}").PrintOut
-objWB.Close False
-objExcel.Quit
-Set objExcel = Nothing
-"""
-        vbs_path = os.path.join(os.environ.get("TEMP", "."), "rd_print.vbs")
-        with open(vbs_path, "w", encoding="utf-8") as f:
-            f.write(vbs)
-        subprocess.run(["cscript", "//Nologo", vbs_path],
-                       capture_output=True, timeout=30)
-        os.remove(vbs_path)
-        return True, f"Hoja '{nombre_hoja}' enviada a la impresora."
+        # Import win32com here to prevent loading errors on non-Windows systems
+        import win32com.client
+
+        # Absolute path ensures we only use trusted, absolute file locations
+        abs_ruta = os.path.abspath(ruta)
+
+        # Ensure we only interact with files that exist to prevent path traversal issues
+        if not os.path.isfile(abs_ruta):
+             return False, "La ruta del archivo no es válida."
+
+        # Conectar a Excel de manera segura
+        excel = win32com.client.Dispatch("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+
+        try:
+            wb = excel.Workbooks.Open(abs_ruta)
+            try:
+                hoja = wb.Sheets(nombre_hoja)
+                hoja.PrintOut()
+                mensaje = f"Hoja '{nombre_hoja}' enviada a la impresora."
+                exito = True
+            except Exception as e_sheet:
+                mensaje = f"Error al imprimir la hoja '{nombre_hoja}'. Verifica que exista."
+                exito = False
+            finally:
+                wb.Close(SaveChanges=False)
+        except Exception as e_wb:
+            mensaje = f"Error al abrir el archivo con Excel: {e_wb}"
+            exito = False
+        finally:
+            excel.Quit()
+
+        return exito, mensaje
+
     except Exception as e:
         # Fallback: abrir normalmente
         return abrir_para_imprimir(nombre_hoja)
