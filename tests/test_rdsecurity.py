@@ -96,6 +96,42 @@ def test_validar_nota_meduca_invalid_inputs():
     assert ok is False
     assert "vacía" in msg
 
+import os
+from unittest.mock import patch
+from src.rdsecurity import cargar_cifrado
+
+@patch('src.rdsecurity._hw_fingerprint')
+def test_cargar_cifrado_missing_file(mock_hw_fingerprint):
+    # Mock hw_fingerprint to be deterministic
+    mock_hw_fingerprint.return_value = b"test_deterministic_hw_fingerprint"
+
+    # Pass a clearly non-existent path
+    ruta_invalida = "ruta_invalida_que_no_existe.enc"
+
+    # Ensure the file doesn't actually exist
+    if os.path.exists(ruta_invalida):
+        os.remove(ruta_invalida)
+
+    resultado = cargar_cifrado(ruta_invalida)
+
+    assert resultado == {}, "Expected empty dict for missing file"
+
+@patch('src.rdsecurity._hw_fingerprint')
+def test_cargar_cifrado_invalid_data(mock_hw_fingerprint, tmp_path):
+    # Mock hw_fingerprint to be deterministic
+    mock_hw_fingerprint.return_value = b"test_deterministic_hw_fingerprint"
+
+    # Create a temporary file path
+    temp_file = tmp_path / "basura.enc"
+
+    # Write garbage data to the file (this should cause decryption or json parsing to fail)
+    temp_file.write_bytes(os.urandom(100))
+
+    # Call cargar_cifrado and assert it returns an empty dict
+    resultado = cargar_cifrado(str(temp_file))
+
+    assert resultado == {}, "Expected empty dict when reading garbage data"
+
 def test_missing_master_salt():
     """Test that importing rdsecurity without REGISTRODOC_MASTER_SALT raises an error."""
     import sys
@@ -183,4 +219,4 @@ def test_generar_codigo_licencia_empty_string():
     codigo = generar_codigo_licencia(cedula)
 
     assert len(codigo) == 26
-    assert bool(re.match(r"^RD-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$", codigo))
+    assert bool(re.match(r"^RD-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$
