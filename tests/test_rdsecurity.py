@@ -1,21 +1,8 @@
 import sys
-
-try:
-    import cryptography
-except ImportError:
-    from unittest.mock import MagicMock
-    mock_crypto = MagicMock()
-    sys.modules["cryptography"] = mock_crypto
-    sys.modules["cryptography.hazmat"] = mock_crypto
-    sys.modules["cryptography.hazmat.primitives"] = mock_crypto
-    sys.modules["cryptography.hazmat.primitives.ciphers"] = mock_crypto
-    sys.modules["cryptography.hazmat.primitives.ciphers.aead"] = mock_crypto
-    sys.modules["cryptography.hazmat.primitives.kdf"] = mock_crypto
-    sys.modules["cryptography.hazmat.primitives.kdf.pbkdf2"] = mock_crypto
-    sys.modules["cryptography.hazmat.backends"] = mock_crypto
-
+import cryptography
 import pytest
 from src.rdsecurity import validar_nota_meduca
+from src.rdsecurity import generar_codigo_licencia
 
 def test_validar_nota_meduca_happy_path():
     """Test happy path scenarios for MEDUCA grade validation."""
@@ -103,3 +90,51 @@ def test_validar_nota_meduca_invalid_inputs():
     ok, _, msg = validar_nota_meduca(None)
     assert ok is False
     assert "vacía" in msg
+
+
+def test_generar_codigo_licencia_determinism():
+    """Test that generating a code for the same cedula always yields the exact same code."""
+    cedula = "8-765-4321"
+    codigo1 = generar_codigo_licencia(cedula)
+    codigo2 = generar_codigo_licencia(cedula)
+    codigo3 = generar_codigo_licencia(cedula)
+
+    assert codigo1 == codigo2
+    assert codigo1 == codigo3
+
+def test_generar_codigo_licencia_format():
+    """Test that the generated code has the correct length and format."""
+    cedula = "4-123-456"
+    codigo = generar_codigo_licencia(cedula)
+
+    # Check length
+    assert len(codigo) == 26
+
+    # Check format using regular expression
+    assert bool(re.match(r"^RD-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$", codigo))
+
+def test_generar_codigo_licencia_uniqueness():
+    """Test that different cedulas generate completely different codes."""
+    cedula1 = "8-111-222"
+    cedula2 = "8-111-223"
+
+    codigo1 = generar_codigo_licencia(cedula1)
+    codigo2 = generar_codigo_licencia(cedula2)
+
+    assert codigo1 != codigo2
+
+def test_generar_codigo_licencia_whitespace_handling():
+    """Test that leading and trailing whitespaces in the cedula are ignored."""
+    cedula = " 3-888-999 "
+    codigo_with_spaces = generar_codigo_licencia(cedula)
+    codigo_without_spaces = generar_codigo_licencia(cedula.strip())
+
+    assert codigo_with_spaces == codigo_without_spaces
+
+def test_generar_codigo_licencia_empty_string():
+    """Test generating a code for an empty string (should still work deterministically)."""
+    cedula = ""
+    codigo = generar_codigo_licencia(cedula)
+
+    assert len(codigo) == 26
+    assert bool(re.match(r"^RD-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$", codigo))
