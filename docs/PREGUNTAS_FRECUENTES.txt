@@ -119,3 +119,7 @@ R: Sí. Está diseñado específicamente para esa modalidad, con soporte
 Para más información, contacte al proveedor del programa.
 
 © 2026 RegistroDoc Pro — Elmer Tugri — Panamá
+
+
+¿Qué pasa si guardo notas mientras tengo el Excel abierto?
+RegistroDoc Pro tiene un sistema anti-caídas. Simplemente te mostrará un mensaje amigable pidiendo que cierres el Excel y vuelvas a intentarlo, protegiendo tus datos en todo momento.

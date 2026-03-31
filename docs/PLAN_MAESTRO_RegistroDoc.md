@@ -272,3 +272,10 @@ Cada agente tiene un rol fijo, responsabilidades claras y entregables medibles.
 
 *Plan elaborado por: Isabel — Asistente de Planificación Educativa y Desarrollo*  
 *Fecha: Marzo 2026 | Versión del documento: 1.0*
+
+
+### Actualización de rddata.py (DataEngine)
+- Implementa sistema de caché `_wb_cache`.
+- Manejo exhaustivo de `try/except PermissionError`.
+- Lógica bimodal integrada: 28 notas continuas para Primaria, secciones divididas para Premedia.
+- Sincronización automática de carátulas (Q24, Q25) con `sapp.py`.

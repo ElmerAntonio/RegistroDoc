@@ -296,3 +296,8 @@ Para soporte técnico contacte al proveedor del programa.
 
 © 2026 RegistroDoc Pro — Todos los derechos reservados
 Prohibida la reproducción o distribución sin autorización escrita.
+
+
+--- ACTUALIZACIÓN BIMODAL ---
+*Nota Importante sobre Archivos Abiertos:* Si la aplicación no puede guardar una nota, te mostrará una alerta indicando que debes cerrar el Excel (Error: El archivo Excel está abierto por otro programa).
+En modalidad Primaria, el sistema detecta automáticamente los trimestres directamente desde la columna A de la hoja MAESTRO.
