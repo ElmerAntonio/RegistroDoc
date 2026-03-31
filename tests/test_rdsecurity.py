@@ -53,7 +53,7 @@ def test_guardar_cargar_cifrado(mock_hw, temp_file):
 
 def test_cargar_cifrado_archivo_inexistente():
     # Sin mockear os.path.exists, usar ruta ficticia explícita
-    ruta_ficticia = "C:\ruta\totalmente\falsa\inexistente.enc"
+    ruta_ficticia = r"C:\ruta\totalmente\falsa\inexistente.enc"
     resultado = cargar_cifrado(ruta_ficticia)
     assert resultado == {}  # Debería devolver {} si no existe
 

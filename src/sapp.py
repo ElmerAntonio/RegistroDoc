@@ -1,11 +1,11 @@
 import customtkinter as ctk
 from tkinter import messagebox
 import os
+from config import BASE_DIR, CONFIG_FILE
 import json
 import threading
 import datetime
 
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "perfil.json"))
 
 class ConfigFrame(ctk.CTkFrame):
     def __init__(self, master, engine, app_principal, **kwargs):
@@ -79,11 +79,11 @@ class ConfigFrame(ctk.CTkFrame):
         self.entry_ano = self._crear_campo(f2, r, "Año Lectivo:", data.get("ano_lectivo", "2026")); r+=1
         self.entry_jor = self._crear_campo(f2, r, "Jornada:", data.get("jornada", "")); r+=1
 
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color=C["texto_dim"]).grid(row=r, column=0, columnspan=2, pady=5); r+=1
+        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_tit = self._crear_campo(f2, r, "Título (Carátula):", data.get("titulo_caratula", "Maestro de Grado")); r+=1
         self.entry_gru = self._crear_campo(f2, r, "Grupos (Carátula):", data.get("grupos_caratula", "7°A, 7°B")); r+=1
 
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color=C["texto_dim"]).grid(row=r, column=0, columnspan=2, pady=5); r+=1
+        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_t1 = self._crear_campo(f2, r, "Fecha Trimestre 1:", data.get("fecha_t1", "")); r+=1
         self.entry_t2 = self._crear_campo(f2, r, "Fecha Trimestre 2:", data.get("fecha_t2", "")); r+=1
         self.entry_t3 = self._crear_campo(f2, r, "Fecha Trimestre 3:", data.get("fecha_t3", "")); r+=1
@@ -273,7 +273,7 @@ class ConfigFrame(ctk.CTkFrame):
             "fecha_t2": self.entry_t2.get().strip(), "fecha_t3": self.entry_t3.get().strip(),
             "titulo_caratula": self.entry_tit.get().strip() if hasattr(self, 'entry_tit') else "Maestro de Grado",
             "grupos_caratula": self.entry_gru.get().strip() if hasattr(self, 'entry_gru') else "",
-            "materias_activas": [m for m, var in self.vars_materias.items() if var.get()] if hasattr(self, 'vars_materias') else [],
+            "materias_activas": [m for m, var in getattr(self, "vars_materias", {}).items() if var.get()] if getattr(self, 'vars_materias', None) else [],
         }
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(datos, f, ensure_ascii=False, indent=4)
         self.btn_sinc.configure(text="⏳ Sincronizando...", state="disabled"); self.update()
@@ -290,7 +290,7 @@ class ConfigFrame(ctk.CTkFrame):
         nueva = self.var_modalidad.get().lower()
         if nueva == self.engine.modalidad: return
         archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_2026.xlsx"
-        ruta_nueva = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", archivo_nuevo))
+        ruta_nueva = os.path.abspath(os.path.join(BASE_DIR, "..", archivo_nuevo))
         if not os.path.exists(ruta_nueva): return messagebox.showerror("Error", f"Falta: {archivo_nuevo}")
         if messagebox.askyesno("Confirmar", f"¿Cambiar a modo {nueva.capitalize()}?"):
             self.app_principal.reiniciar_motor(ruta_nueva, nueva)

@@ -2,9 +2,9 @@ import customtkinter as ctk
 from tkinter import messagebox
 import json
 import os
+from config import BASE_DIR, CONFIG_FILE
 from rddata import DataEngine 
 
-CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "perfil.json"))
 
 class SetupWizard(ctk.CTk):
     def __init__(self):
@@ -132,7 +132,7 @@ class SetupWizard(ctk.CTk):
 
         # 2. Inyectar datos y limpiar el Excel
         archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_2026.xlsx"
-        ruta_excel = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", archivo))
+        ruta_excel = os.path.abspath(os.path.join(BASE_DIR, "..", archivo))
         
         if os.path.exists(ruta_excel):
             try:
