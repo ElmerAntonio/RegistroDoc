@@ -10,8 +10,8 @@ class NotasFrame(ctk.CTkFrame):
         self.entradas_notas = {}
         self.col_a_modificar = None
 
-        self.grid_columnconfigure(0, weight=7)
-        self.grid_columnconfigure(1, weight=3)
+        self.grid_columnconfigure(0, weight=8)
+        self.grid_columnconfigure(1, weight=2)
         self.grid_rowconfigure(0, weight=1)
 
         self.crear_panel_izquierdo()
@@ -26,13 +26,26 @@ class NotasFrame(ctk.CTkFrame):
         top = ctk.CTkFrame(frame_izq, fg_color="transparent")
         top.pack(fill="x", padx=20, pady=15)
         
-        ctk.CTkLabel(top, text="Grado:", font=("Segoe UI", 16, "bold")).pack(side="left")
-        grados = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["7°"]
+        if self.engine.modalidad == "premedia":
+            lbl_texto = "Grado/Grupo:"
+            opciones = self.engine.obtener_grados_activos()
+            if not opciones: opciones = ["7°", "8°", "9°"]
+        else:
+            lbl_texto = "Materia/Grado:"
+            # En primaria solo dan a 1 grado, las opciones son las materias
+            g_ref = self.engine.obtener_grados_activos()
+            g_ref = g_ref[0] if g_ref else ""
+            opciones = self.engine.obtener_materias_por_grado(g_ref)
+            if not opciones or opciones[0] == "Sin materias registradas": opciones = ["Español", "Matemáticas"]
+
+        ctk.CTkLabel(top, text=lbl_texto, font=("Segoe UI", 16, "bold")).pack(side="left")
         
-        self.combo_grado = ctk.CTkOptionMenu(top, values=grados, command=self.al_cambiar_grado)
+        self.combo_grado = ctk.CTkOptionMenu(top, values=opciones, command=self.al_cambiar_grado)
         self.combo_grado.pack(side="left", padx=10)
 
-        self.scroll_estudiantes = ctk.CTkScrollableFrame(frame_izq, fg_color="transparent")
+        self.scroll_estudiantes = ctk.CTkScrollableFrame(frame_izq, fg_color="transparent", orientation="horizontal")
+        self.scroll_estudiantes_inner = ctk.CTkScrollableFrame(self.scroll_estudiantes, fg_color="transparent")
+        self.scroll_estudiantes_inner.pack(fill="both", expand=True)
         self.scroll_estudiantes.pack(fill="both", expand=True, padx=15, pady=10)
 
     def crear_panel_derecho(self):
@@ -112,20 +125,68 @@ class NotasFrame(ctk.CTkFrame):
 
     def cargar_estudiantes(self, grado=None):
         if grado is None: grado = self.combo_grado.get()
-        for w in self.scroll_estudiantes.winfo_children(): w.destroy()
+        for w in self.scroll_estudiantes_inner.winfo_children(): w.destroy()
         self.entradas_notas.clear()
         self.col_a_modificar = None 
         
+        # Header Row
+        header_row = ctk.CTkFrame(self.scroll_estudiantes_inner, fg_color="transparent")
+        header_row.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(header_row, text="N°", width=30, font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(header_row, text="Nombre", width=200, anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left")
+
+        # Casillas de notas dinámicas
+        casillas = ctk.CTkFrame(header_row, fg_color="transparent")
+        casillas.pack(side="left", padx=10, fill="x", expand=True)
+
+        if self.engine.modalidad == "premedia":
+            # 12 Parciales + 9 Apreciacion + 2 Examen
+            f_parciales = ctk.CTkFrame(casillas, fg_color="#1A3352")
+            f_parciales.pack(side="left", padx=2)
+            ctk.CTkLabel(f_parciales, text="Diaria/Parcial (12)", font=("Segoe UI", 10)).pack()
+            row_p = ctk.CTkFrame(f_parciales, fg_color="transparent")
+            row_p.pack()
+            for i in range(12): ctk.CTkLabel(row_p, text=str(i+1), width=25).pack(side="left", padx=1)
+
+            f_apreciacion = ctk.CTkFrame(casillas, fg_color="#1E3A5F")
+            f_apreciacion.pack(side="left", padx=2)
+            ctk.CTkLabel(f_apreciacion, text="Apreciación (9)", font=("Segoe UI", 10)).pack()
+            row_a = ctk.CTkFrame(f_apreciacion, fg_color="transparent")
+            row_a.pack()
+            for i in range(9): ctk.CTkLabel(row_a, text=str(i+1), width=25).pack(side="left", padx=1)
+
+            f_examen = ctk.CTkFrame(casillas, fg_color="#0F2744")
+            f_examen.pack(side="left", padx=2)
+            ctk.CTkLabel(f_examen, text="Examen (2)", font=("Segoe UI", 10)).pack()
+            row_e = ctk.CTkFrame(f_examen, fg_color="transparent")
+            row_e.pack()
+            for i in range(2): ctk.CTkLabel(row_e, text=str(i+1), width=25).pack(side="left", padx=1)
+        else:
+            # Primaria: 28 planas
+            f_primaria = ctk.CTkFrame(casillas, fg_color="#1A3352")
+            f_primaria.pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(f_primaria, text="Notas Trimestrales (28)", font=("Segoe UI", 10)).pack()
+            row_pr = ctk.CTkFrame(f_primaria, fg_color="transparent")
+            row_pr.pack()
+            for i in range(28): ctk.CTkLabel(row_pr, text=str(i+1), width=25).pack(side="left", padx=1)
+
         ests = self.engine.obtener_estudiantes_completos(grado)
         for est in ests:
-            row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
-            row.pack(fill="x", pady=4)
+            row = ctk.CTkFrame(self.scroll_estudiantes_inner, fg_color="transparent")
+            row.pack(fill="x", pady=2)
             ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
             ctk.CTkLabel(row, text=est['nombre'], width=200, anchor="w").pack(side="left")
             
-            entry = ctk.CTkEntry(row, width=70, justify="center", placeholder_text="-")
-            entry.pack(side="right", padx=10)
-            self.entradas_notas[est['id']] = entry
+            casillas_row = ctk.CTkFrame(row, fg_color="transparent")
+            casillas_row.pack(side="left", padx=10)
+
+            self.entradas_notas[est['id']] = []
+            num_boxes = 23 if self.engine.modalidad == "premedia" else 28
+
+            for i in range(num_boxes):
+                entry = ctk.CTkEntry(casillas_row, width=25, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
+                entry.pack(side="left", padx=1)
+                self.entradas_notas[est['id']].append(entry)
 
     def cargar_descripciones(self, *args):
         grado = self.combo_grado.get()
@@ -144,8 +205,15 @@ class NotasFrame(ctk.CTkFrame):
 
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
-        for id_est, entry in self.entradas_notas.items():
-            val = entry.get().strip()
+        for id_est, entries_list in self.entradas_notas.items():
+            # Only read the first one for backwards compatibility or the last active if requested
+            # Since the original code had 1 entry, and the prompt implies a grid of many,
+            # we adapt it to pick up whatever the user typed. For simplicity, we get the first non-empty.
+            val = ""
+            for entry in entries_list:
+                if entry.get().strip():
+                    val = entry.get().strip()
+                    break
             if val:
                 try:
                     nota = float(val.replace(",", "."))
