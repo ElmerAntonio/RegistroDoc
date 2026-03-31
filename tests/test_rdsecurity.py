@@ -72,15 +72,6 @@ def test_validar_nota_meduca_edge_cases():
 
 def test_validar_nota_meduca_invalid_inputs():
     """Test invalid inputs for MEDUCA grade validation."""
-    # Empty inputs
-    ok, _, msg = validar_nota_meduca("")
-    assert ok is False
-    assert "vacía" in msg
-
-    ok, _, msg = validar_nota_meduca("   ")
-    assert ok is False
-    assert "vacía" in msg
-
     # Non-numeric
     ok, _, msg = validar_nota_meduca("abc")
     assert ok is False
@@ -91,9 +82,13 @@ def test_validar_nota_meduca_invalid_inputs():
     assert ok is False
     assert "no es un número válido" in msg
 
-    # None input
-    ok, _, msg = validar_nota_meduca(None)
+
+@pytest.mark.parametrize("empty_value", ["", "   ", None, 0, 0.0, False, []])
+def test_validar_nota_meduca_empty_and_edge_cases(empty_value):
+    """Test empty and falsy values, representing unexpected Excel data types."""
+    ok, nota, msg = validar_nota_meduca(empty_value)
     assert ok is False
+    assert nota == 0.0
     assert "vacía" in msg
 
 import os
