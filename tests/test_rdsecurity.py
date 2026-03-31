@@ -1,6 +1,11 @@
 import sys
+import os
 import cryptography
 import pytest
+
+# Mock environment variable for tests
+os.environ["REGISTRODOC_MASTER_SALT"] = "test_salt_for_pytest"
+
 from src.rdsecurity import validar_nota_meduca
 from src.rdsecurity import generar_codigo_licencia
 
@@ -91,9 +96,44 @@ def test_validar_nota_meduca_invalid_inputs():
     assert ok is False
     assert "vacía" in msg
 
+def test_missing_master_salt():
+    """Test that importing rdsecurity without REGISTRODOC_MASTER_SALT raises an error."""
+    import sys
+    import importlib
+    import os
+    import pytest
+
+    # Store old environment variable
+    old_val = os.environ.get("REGISTRODOC_MASTER_SALT")
+
+    try:
+        # Remove from env
+        if "REGISTRODOC_MASTER_SALT" in os.environ:
+            del os.environ["REGISTRODOC_MASTER_SALT"]
+
+        # Remove from sys.modules to force reload
+        if "src.rdsecurity" in sys.modules:
+            del sys.modules["src.rdsecurity"]
+
+        # Import should fail
+        with pytest.raises(RuntimeError) as excinfo:
+            import src.rdsecurity
+
+        assert "CRITICAL ERROR: REGISTRODOC_MASTER_SALT no encontrada" in str(excinfo.value)
+
+    finally:
+        # Restore env
+        if old_val is not None:
+            os.environ["REGISTRODOC_MASTER_SALT"] = old_val
+
+        # Re-import for other tests just in case
+        if "src.rdsecurity" in sys.modules:
+            del sys.modules["src.rdsecurity"]
+        import src.rdsecurity
 
 def test_generar_codigo_licencia_determinism():
     """Test that generating a code for the same cedula always yields the exact same code."""
+    from src.rdsecurity import generar_codigo_licencia # Aseguramos la importación
     cedula = "8-765-4321"
     codigo1 = generar_codigo_licencia(cedula)
     codigo2 = generar_codigo_licencia(cedula)
@@ -104,6 +144,8 @@ def test_generar_codigo_licencia_determinism():
 
 def test_generar_codigo_licencia_format():
     """Test that the generated code has the correct length and format."""
+    from src.rdsecurity import generar_codigo_licencia
+    import re
     cedula = "4-123-456"
     codigo = generar_codigo_licencia(cedula)
 
@@ -115,6 +157,7 @@ def test_generar_codigo_licencia_format():
 
 def test_generar_codigo_licencia_uniqueness():
     """Test that different cedulas generate completely different codes."""
+    from src.rdsecurity import generar_codigo_licencia
     cedula1 = "8-111-222"
     cedula2 = "8-111-223"
 
@@ -125,6 +168,7 @@ def test_generar_codigo_licencia_uniqueness():
 
 def test_generar_codigo_licencia_whitespace_handling():
     """Test that leading and trailing whitespaces in the cedula are ignored."""
+    from src.rdsecurity import generar_codigo_licencia
     cedula = " 3-888-999 "
     codigo_with_spaces = generar_codigo_licencia(cedula)
     codigo_without_spaces = generar_codigo_licencia(cedula.strip())
@@ -133,6 +177,8 @@ def test_generar_codigo_licencia_whitespace_handling():
 
 def test_generar_codigo_licencia_empty_string():
     """Test generating a code for an empty string (should still work deterministically)."""
+    from src.rdsecurity import generar_codigo_licencia
+    import re
     cedula = ""
     codigo = generar_codigo_licencia(cedula)
 
