@@ -7,7 +7,7 @@ Compatible con Microsoft Excel y LibreOffice Calc.
 © 2026 RegistroDoc Pro — Elmer Tugri — Panamá
 """
 
-import os, sys, subprocess, platform
+import os, sys, subprocess, platform, tempfile
 from tkinter import messagebox
 
 def _ruta_excel():
@@ -95,12 +95,17 @@ objWB.Close False
 objExcel.Quit
 Set objExcel = Nothing
 """
-        vbs_path = os.path.join(os.environ.get("TEMP", "."), "rd_print.vbs")
-        with open(vbs_path, "w", encoding="utf-8") as f:
-            f.write(vbs)
-        subprocess.run(["cscript", "//Nologo", vbs_path],
-                       capture_output=True, timeout=30)
-        os.remove(vbs_path)
+        fd, vbs_path = tempfile.mkstemp(suffix=".vbs", text=True)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(vbs)
+            subprocess.run(["cscript", "//Nologo", vbs_path],
+                           capture_output=True, timeout=30)
+        finally:
+            try:
+                os.remove(vbs_path)
+            except OSError:
+                pass
         return True, f"Hoja '{nombre_hoja}' enviada a la impresora."
     except Exception as e:
         # Fallback: abrir normalmente
