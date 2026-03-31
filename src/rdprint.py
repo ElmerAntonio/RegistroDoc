@@ -7,7 +7,7 @@ Compatible con Microsoft Excel y LibreOffice Calc.
 © 2026 RegistroDoc Pro — Elmer Tugri — Panamá
 """
 
-import os, sys, subprocess, platform
+import os, sys, subprocess, platform, tempfile
 from tkinter import messagebox
 
 def _ruta_excel():
@@ -83,7 +83,7 @@ def imprimir_hoja_directo(nombre_hoja: str = "Portada") -> tuple[bool, str]:
         return abrir_para_imprimir(nombre_hoja)
 
     try:
-        # Import win32com here to prevent loading errors on non-Windows systems
+# Import win32com here to prevent loading errors on non-Windows systems
         import win32com.client
 
         # Absolute path ensures we only use trusted, absolute file locations
@@ -117,7 +117,7 @@ def imprimir_hoja_directo(nombre_hoja: str = "Portada") -> tuple[bool, str]:
             excel.Quit()
 
         return exito, mensaje
-
+      
     except Exception as e:
         # Fallback: abrir normalmente
         return abrir_para_imprimir(nombre_hoja)
