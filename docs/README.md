@@ -1,6 +1,6 @@
-# RegistroDoc Pro v3.0
+# RegistroDoc Pro (Actualizado con Motor de Primaria/Premedia) (Actualizado con Motor de Primaria/Premedia) v3.0
 
-RegistroDoc Pro v3.0 es un software de escritorio independiente y comercial desarrollado en Python, diseñado para facilitar la gestión académica (calificaciones, asistencia, reportes y métricas) en instituciones educativas bajo la reglamentación del sistema de Panamá, sin embargo no está afiliado con MEDUCA u organizaciones gubernamentales.
+RegistroDoc Pro (Actualizado con Motor de Primaria/Premedia) v3.0 es un software de escritorio independiente y comercial desarrollado en Python, diseñado para facilitar la gestión académica (calificaciones, asistencia, reportes y métricas) en instituciones educativas bajo la reglamentación del sistema de Panamá, sin embargo no está afiliado con MEDUCA u organizaciones gubernamentales.
 
 El software integra una arquitectura fija y fluida con customtkinter y pandas/openpyxl, además de un estricto módulo criptográfico.
 
@@ -28,7 +28,11 @@ El software integra una arquitectura fija y fluida con customtkinter y pandas/op
 └── requirements.txt        # Dependencias Python
 ```
 
-## Arquitectura de la Interfaz
+## Arquitectura
+- **Protección de Datos (Caché):** Manejador inteligente de PermissionError que avisa si el Excel está abierto.
+- **Lógica Bimodal Dinámica:** Diferenciación estructural entre la Libreta de Primaria (casillas continuas de 28) y Premedia.
+- **Protección de Datos (Caché):** Manejador inteligente de PermissionError que avisa si el Excel está abierto.
+- **Lógica Bimodal Dinámica:** Diferenciación estructural entre la Libreta de Primaria (casillas continuas de 28) y Premedia. de la Interfaz
 
 La versión 3.0 introdujo una recodificación principal en `app.py`. En lugar de destruir la pantalla completa en cada navegación de módulo, se estableció `MainApplication` como un **contenedor estático** que retiene:
 
@@ -83,3 +87,8 @@ El proyecto ha sido desarrollado independientemente por el Autor original junto 
 - **Autor Principal:** Creador Independiente (Panamá)
 - **Codex / Claude:** Asistencia algorítmica y de lógica base
 - **Jules:** Refactorización Arquitectónica, Estabilidad de Interfaz y Auditoría de Código (V3.0)
+
+
+## Refactorización Primaria/Premedia (v2.0)
+- **Protección de Datos (Caché):** Manejador inteligente de `PermissionError` que avisa si el Excel está abierto, evitando cierres.
+- **Lógica Bimodal Dinámica:** Diferenciación estructural entre la Libreta de Primaria (casillas continuas de 28) y Premedia.
