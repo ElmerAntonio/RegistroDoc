@@ -20,6 +20,7 @@ Algoritmos utilizados:
 """
 
 import os, json, time, hashlib, hmac, struct, base64, platform, uuid, re
+from dotenv import load_dotenv
 import datetime
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -372,10 +373,18 @@ def actualizar_hash_excel(ruta_excel: str) -> None:
 #  SISTEMA DE LICENCIAS SEGURO
 # ══════════════════════════════════════════════════════════════
 
-# Clave maestra interna (ofuscada — no es la clave real de cifrado)
-_K1 = b"Rd2026\x50\x61\x6e\x61\x6d\x61\x4d\x45\x44\x55\x43\x41"
-_K2 = b"\x49\x53\x4f\x32\x37\x30\x30\x31\x4c\x65\x79\x38\x31"
-_MASTER_SALT = _K1 + _K2 + b"_RegistroDocPro_Comercial_2026"
+# Cargar configuración segura desde .env
+load_dotenv()
+
+# Clave maestra interna (Cargada desde variable de entorno de forma segura)
+_master_salt_env = os.environ.get("REGISTRODOC_MASTER_SALT")
+if not _master_salt_env:
+    raise RuntimeError(
+        "CRITICAL ERROR: REGISTRODOC_MASTER_SALT no encontrada en el entorno o archivo .env. "
+        "El programa no puede iniciar de forma segura."
+    )
+
+_MASTER_SALT = _master_salt_env.encode("utf-8")
 
 def _clave_licencia(cedula: str) -> bytes:
     """
