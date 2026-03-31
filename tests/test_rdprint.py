@@ -11,11 +11,11 @@ sys.modules['tkinter'] = MagicMock()
 sys.modules['tkinter.ttk'] = MagicMock()
 sys.modules['tkinter.messagebox'] = MagicMock()
 
-from src.rdprint import imprimir_hoja_directo, abrir_para_imprimir
+from rdprint import imprimir_hoja_directo, abrir_para_imprimir
 
 @pytest.fixture
 def mock_platform_windows():
-    with patch('src.rdprint.platform.system', return_value="Windows"):
+    with patch('rdprint.platform.system', return_value="Windows"):
         yield
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def mock_ruta_excel(tmp_path):
     # Create a dummy excel file in a temp directory
     fake_excel = tmp_path / "Registro_2026.xlsx"
     fake_excel.touch()
-    with patch('src.rdprint._ruta_excel', return_value=str(fake_excel)):
+    with patch('rdprint._ruta_excel', return_value=str(fake_excel)):
         yield str(fake_excel)
 
 def test_imprimir_hoja_directo_success(mock_platform_windows, mock_ruta_excel):
@@ -64,14 +64,14 @@ def test_imprimir_hoja_directo_success(mock_platform_windows, mock_ruta_excel):
         mock_excel_app.Quit.assert_called_once()
 
 def test_imprimir_hoja_directo_file_not_found():
-    with patch('src.rdprint._ruta_excel', return_value="invalid_path.xlsx"):
+    with patch('rdprint._ruta_excel', return_value="invalid_path.xlsx"):
         exito, mensaje = imprimir_hoja_directo("Portada")
         assert exito is False
         assert "No se encontró el archivo Excel" in mensaje
 
 def test_imprimir_hoja_directo_non_windows(mock_ruta_excel):
-    with patch('src.rdprint.platform.system', return_value="Linux"):
-        with patch('src.rdprint.abrir_para_imprimir', return_value=(True, "Abierto en Linux")):
+    with patch('rdprint.platform.system', return_value="Linux"):
+        with patch('rdprint.abrir_para_imprimir', return_value=(True, "Abierto en Linux")):
             exito, mensaje = imprimir_hoja_directo("Portada")
             assert exito is True
             assert mensaje == "Abierto en Linux"
@@ -82,7 +82,7 @@ def test_imprimir_hoja_directo_com_error(mock_platform_windows, mock_ruta_excel)
     mock_win32com.client.Dispatch.side_effect = Exception("COM Error")
 
     with patch.dict('sys.modules', {'win32com': mock_win32com, 'win32com.client': mock_win32com.client}):
-        with patch('src.rdprint.abrir_para_imprimir', return_value=(True, "Fallback Abierto")):
+        with patch('rdprint.abrir_para_imprimir', return_value=(True, "Fallback Abierto")):
             exito, mensaje = imprimir_hoja_directo("Portada")
             assert exito is True
             assert mensaje == "Fallback Abierto"
