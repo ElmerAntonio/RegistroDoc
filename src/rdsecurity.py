@@ -608,7 +608,7 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     
     Retorna (válida: bool, valor_float: float, mensaje: str)
     """
-    if not valor or not str(valor).strip():
+    if valor is None or not str(valor).strip():
         return False, 0.0, "Nota vacía."
     
     # Normalizar separador decimal
