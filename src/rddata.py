@@ -14,6 +14,12 @@ class DataEngine:
         self._cargar_en_memoria()
 
     def _cargar_en_memoria(self):
+        if self._wb_cache:
+            try:
+                self._wb_cache.close()
+            except Exception:
+                pass
+            self._wb_cache = None
         if os.path.exists(self.ruta):
             try:
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
@@ -198,6 +204,7 @@ class DataEngine:
                     idx += 1
                     
             wb.save(self.ruta)
+            self._cargar_en_memoria()
             wb.close()
             return True
         return False
@@ -317,6 +324,7 @@ class DataEngine:
                         except: pass
 
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -414,6 +422,7 @@ class DataEngine:
                     ws_p = wb[sheet]
                     ws_p.cell(row=15+id_est, column=5).value = cedula
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -433,6 +442,7 @@ class DataEngine:
                         ws_p = wb[sheet]
                         ws_p.cell(row=15+int(id_est), column=5).value = datos["cedula"]
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -517,6 +527,7 @@ class DataEngine:
             try: ws.cell(row=fila_excel, column=col_vacia).value = nota
             except AttributeError: pass
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True, ""
 
@@ -590,6 +601,7 @@ class DataEngine:
             try: ws.cell(row=fila_excel, column=columna).value = nota
             except AttributeError: continue
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -668,6 +680,7 @@ class DataEngine:
             celda.value = datos["estado"]
             celda.font = fuente_meduca
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True, ""
 
@@ -688,6 +701,7 @@ class DataEngine:
             celda.value = datos["estado"]
             celda.font = fuente_meduca
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -700,6 +714,7 @@ class DataEngine:
             nuevo_titulo = re.sub(r'20\d{2}', str(ano_lectivo), titulo_actual)
             ws_m.cell(row=1, column=1).value = nuevo_titulo
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -755,6 +770,7 @@ class DataEngine:
                                     ws.cell(row=r, column=c+2).value = nuevo_consejero.upper()
                         except AttributeError: pass
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -813,6 +829,7 @@ class DataEngine:
                     except AttributeError: pass
         
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True, "Grado creado exitosamente."
 
@@ -843,6 +860,7 @@ class DataEngine:
                         except AttributeError: pass
                     break
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True
 
@@ -940,6 +958,7 @@ class DataEngine:
                         break
 
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True, "Materia clonada y agregada al Resumen."
 
@@ -976,5 +995,6 @@ class DataEngine:
                         ws_res.cell(row=r, column=c).value = None
 
         wb.save(self.ruta)
+        self._cargar_en_memoria()
         wb.close()
         return True

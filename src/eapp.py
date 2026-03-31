@@ -205,6 +205,7 @@ class NotasFrame(ctk.CTkFrame):
 
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
+        import math
         for id_est, entries_list in self.entradas_notas.items():
             # Only read the first one for backwards compatibility or the last active if requested
             # Since the original code had 1 entry, and the prompt implies a grid of many,
@@ -217,12 +218,17 @@ class NotasFrame(ctk.CTkFrame):
             if val:
                 try:
                     nota = float(val.replace(",", "."))
-                    if 1.0 <= nota <= 5.0: notas_guardar[id_est] = nota
+                    if math.isnan(nota) or math.isinf(nota):
+                        raise ValueError("Número inválido")
+
+                    nota = round(nota, 1)
+                    if 1.0 <= nota <= 5.0:
+                        notas_guardar[id_est] = nota
                     else:
-                        messagebox.showerror("Error", f"Nota inválida: {val}")
+                        messagebox.showerror("Error", f"Nota inválida: {val}. Debe estar entre 1.0 y 5.0.")
                         return None
-                except:
-                    messagebox.showerror("Error", f"Formato incorrecto: {val}")
+                except ValueError:
+                    messagebox.showerror("Error", f"Formato incorrecto: {val}. Use números válidos.")
                     return None
         return notas_guardar
 

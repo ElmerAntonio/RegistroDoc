@@ -1,7 +1,11 @@
 import os
+import sys
 import json
 import tkinter as tk
 import customtkinter as ctk
+
+# Insert local directory into sys.path to allow local module imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Matplotlib
 import matplotlib
