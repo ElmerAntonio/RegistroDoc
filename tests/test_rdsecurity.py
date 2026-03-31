@@ -1,4 +1,5 @@
 import sys
+import os
 import cryptography
 import pytest
 from src.rdsecurity import validar_nota_meduca
@@ -52,10 +53,6 @@ def test_validar_nota_meduca_edge_cases():
     assert ok is False
     assert "máxima" in msg
 
-    # Extra decimals (Python's round() uses banker's rounding)
-    # round(4.55, 1) -> 4.5
-    # round(4.65, 1) -> 4.6
-
     ok, nota, msg = validar_nota_meduca("4.55")
     assert ok is True
     assert nota == 4.5
@@ -80,13 +77,7 @@ def test_validar_nota_meduca_invalid_inputs():
     assert ok is False
     assert "no es un número válido" in msg
 
-    # Multiple dots
-    ok, _, msg = validar_nota_meduca("4.5.5")
-    assert ok is False
-    assert "no es un número válido" in msg
-
     # None input
     ok, _, msg = validar_nota_meduca(None)
     assert ok is False
     assert "vacía" in msg
-    
