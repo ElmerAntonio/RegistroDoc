@@ -22,6 +22,8 @@ class DataEngine:
             self._wb_cache = None
         if os.path.exists(self.ruta):
             try:
+                if self._wb_cache is not None:
+                    self._wb_cache.close()
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
             except Exception:
                 self._wb_cache = None
@@ -206,6 +208,7 @@ class DataEngine:
             wb.save(self.ruta)
             self._cargar_en_memoria()
             wb.close()
+            self._cargar_en_memoria()
             return True
         return False
 
@@ -326,6 +329,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def obtener_grados_activos(self, wb=None):
@@ -424,6 +428,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def guardar_cambios_estudiantes(self, grado, datos_modificados):
@@ -444,6 +449,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def get_dashboard_stats(self):
@@ -529,6 +535,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True, ""
 
     def obtener_descripciones_notas(self, grado, materia, trimestre, tipo_nota):
@@ -603,6 +610,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def _encontrar_hoja_asistencia(self, wb, grado):
@@ -682,6 +690,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True, ""
 
     def actualizar_asistencia(self, grado, trimestre, columna, dic_asistencia):
@@ -703,6 +712,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def actualizar_datos_generales(self, nombre_docente, ano_lectivo):
@@ -716,6 +726,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def obtener_consejero_actual(self, grado):
@@ -772,6 +783,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def agregar_grado(self, nuevo_grado, consejero, jornada):
@@ -831,6 +843,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True, "Grado creado exitosamente."
 
     def eliminar_grado(self, grado):
@@ -862,6 +875,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True
 
     def clonar_materia(self, grado, materia_origen, nueva_materia, jornada):
@@ -960,6 +974,7 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True, "Materia clonada y agregada al Resumen."
 
     def eliminar_materia(self, grado, materia):
@@ -997,4 +1012,5 @@ class DataEngine:
         wb.save(self.ruta)
         self._cargar_en_memoria()
         wb.close()
+        self._cargar_en_memoria()
         return True

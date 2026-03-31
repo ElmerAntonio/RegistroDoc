@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import datetime
 import threading
+from rdsecurity import validar_nota_meduca
 
 class NotasFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
@@ -215,21 +216,15 @@ class NotasFrame(ctk.CTkFrame):
                 if entry.get().strip():
                     val = entry.get().strip()
                     break
+            
             if val:
-                try:
-                    nota = float(val.replace(",", "."))
-                    if math.isnan(nota) or math.isinf(nota):
-                        raise ValueError("Número inválido")
-
-                    nota = round(nota, 1)
-                    if 1.0 <= nota <= 5.0:
-                        notas_guardar[id_est] = nota
-                    else:
-                        messagebox.showerror("Error", f"Nota inválida: {val}. Debe estar entre 1.0 y 5.0.")
-                        return None
-                except ValueError:
-                    messagebox.showerror("Error", f"Formato incorrecto: {val}. Use números válidos.")
+                valido, nota, msj = validar_nota_meduca(val)
+                if valido:
+                    notas_guardar[id_est] = nota
+                else:
+                    messagebox.showerror("Error", f"Error en la nota: {msj}")
                     return None
+                    
         return notas_guardar
 
     # ==============================================================
@@ -253,7 +248,8 @@ class NotasFrame(ctk.CTkFrame):
             return
 
         # 1. Limpiamos la pantalla inmediatamente para fluidez
-        for entry in self.entradas_notas.values(): entry.delete(0, 'end')
+        for entries_list in self.entradas_notas.values():
+            for entry in entries_list: entry.delete(0, 'end')
         if tipo != "Examen": self.entry_desc.delete(0, 'end')
         
         self.btn_guardar_nueva.configure(text="Procesando en fondo...", state="disabled")
@@ -294,10 +290,10 @@ class NotasFrame(ctk.CTkFrame):
         self.col_a_modificar = resultado["columna"]
         notas_existentes = resultado["notas"]
         
-        for id_est, entry in self.entradas_notas.items():
-            entry.delete(0, 'end')
+        for id_est, entries_list in self.entradas_notas.items():
+            for entry in entries_list: entry.delete(0, 'end')
             if id_est in notas_existentes:
-                entry.insert(0, str(notas_existentes[id_est]))
+                entries_list[0].insert(0, str(notas_existentes[id_est]))
 
     def actualizar_notas(self):
         if not self.col_a_modificar:
@@ -308,7 +304,8 @@ class NotasFrame(ctk.CTkFrame):
         notas_guardar = self._recopilar_notas_validadas()
         if notas_guardar is None: return
         
-        for entry in self.entradas_notas.values(): entry.delete(0, 'end')
+        for entries_list in self.entradas_notas.values():
+            for entry in entries_list: entry.delete(0, 'end')
         self.btn_actualizar.configure(text="Actualizando en fondo...", state="disabled")
         
         def tarea_fondo_act():
