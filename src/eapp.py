@@ -247,7 +247,8 @@ class NotasFrame(ctk.CTkFrame):
             return
 
         # 1. Limpiamos la pantalla inmediatamente para fluidez
-        for entry in self.entradas_notas.values(): entry.delete(0, 'end')
+        for entries_list in self.entradas_notas.values():
+            for entry in entries_list: entry.delete(0, 'end')
         if tipo != "Examen": self.entry_desc.delete(0, 'end')
         
         self.btn_guardar_nueva.configure(text="Procesando en fondo...", state="disabled")
@@ -288,10 +289,10 @@ class NotasFrame(ctk.CTkFrame):
         self.col_a_modificar = resultado["columna"]
         notas_existentes = resultado["notas"]
         
-        for id_est, entry in self.entradas_notas.items():
-            entry.delete(0, 'end')
+        for id_est, entries_list in self.entradas_notas.items():
+            for entry in entries_list: entry.delete(0, 'end')
             if id_est in notas_existentes:
-                entry.insert(0, str(notas_existentes[id_est]))
+                entries_list[0].insert(0, str(notas_existentes[id_est]))
 
     def actualizar_notas(self):
         if not self.col_a_modificar:
@@ -302,7 +303,8 @@ class NotasFrame(ctk.CTkFrame):
         notas_guardar = self._recopilar_notas_validadas()
         if notas_guardar is None: return
         
-        for entry in self.entradas_notas.values(): entry.delete(0, 'end')
+        for entries_list in self.entradas_notas.values():
+            for entry in entries_list: entry.delete(0, 'end')
         self.btn_actualizar.configure(text="Actualizando en fondo...", state="disabled")
         
         def tarea_fondo_act():
