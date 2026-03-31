@@ -43,3 +43,17 @@ def test_obtener_datos_generales_missing_file():
 
     # Strict equality assertion
     assert resultado == expected_datos
+
+def test_obtener_grados_activos_missing_file():
+    """
+    Test that obtener_grados_activos returns an empty list
+    when initialized with a non-existent file path.
+    """
+    # Create an instance with a non-existent path
+    engine = DataEngine(ruta_excel="ruta_inexistente_grados.xlsx")
+
+    # Call the method
+    resultado = engine.obtener_grados_activos()
+
+    # Expected empty list
+    assert resultado == []
