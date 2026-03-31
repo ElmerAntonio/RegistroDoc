@@ -10,17 +10,29 @@ class DataEngine:
         self.modalidad = modalidad.lower()
         self.cleaner = ExcelCleaner()
         self.fila_desc = 39 if self.modalidad == "primaria" else 42
+        self._wb_cache = None
+        self._cargar_en_memoria()
+
+    def _cargar_en_memoria(self):
+        if os.path.exists(self.ruta):
+            try:
+                self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
+            except Exception:
+                self._wb_cache = None
 
     def reiniciar_libreta(self):
         return self.cleaner.limpiar_todo(self.ruta, self.modalidad)
 
     def _obtener_columna_nombres(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and wb is None: return 2
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return 2
 
         should_close = False
         if wb is None:
-            wb = openpyxl.load_workbook(self.ruta, data_only=True)
-            should_close = True
+            if self._wb_cache:
+                wb = self._wb_cache
+            else:
+                wb = openpyxl.load_workbook(self.ruta, data_only=True)
+                should_close = True
 
         if "MAESTRO" not in wb.sheetnames: 
             if should_close: wb.close()
@@ -55,8 +67,9 @@ class DataEngine:
             "coordinador_nombre": "", "telefono": "", "correo": "", "ano_lectivo": "2026",
             "jornada": "", "fecha_t1": "", "fecha_t2": "", "fecha_t3": ""
         }
-        if not os.path.exists(self.ruta): return datos
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return datos
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
         
         # 1. EXTRACCIÓN EN "PORTADA"
         if "Portada" in wb.sheetnames:
@@ -96,14 +109,15 @@ class DataEngine:
                 datos["fecha_t3"] = extraer_fecha("C87")
                 break
                 
-        wb.close()
+        if should_close: wb.close()
         return datos
 
     def obtener_horario(self):
         horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "", "jueves": "", "viernes": ""} for _ in range(8)]
-        if not os.path.exists(self.ruta): return horario
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return horario
         
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
         hoja_horario = next((s for s in wb.sheetnames if "HORARIO" in s.upper()), None)
         
         if hoja_horario:
@@ -142,7 +156,7 @@ class DataEngine:
                     horario[idx]["viernes"] = atrapar_texto(19)
                     idx += 1
                     
-        wb.close()
+        if should_close: wb.close()
         return horario
 
     def guardar_horario(self, datos_horario):
@@ -307,12 +321,15 @@ class DataEngine:
         return True
 
     def obtener_grados_activos(self, wb=None):
-        if not os.path.exists(self.ruta) and wb is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
 
         should_close = False
         if wb is None:
-            wb = openpyxl.load_workbook(self.ruta, read_only=True)
-            should_close = True
+            if self._wb_cache:
+                wb = self._wb_cache
+            else:
+                wb = openpyxl.load_workbook(self.ruta, read_only=True)
+                should_close = True
 
         grados = []
         for sheet in wb.sheetnames:
@@ -324,8 +341,9 @@ class DataEngine:
         return sorted(list(set(grados))) if grados else ["7°", "8°", "9°"]
 
     def obtener_materias_por_grado(self, grado):
-        if not os.path.exists(self.ruta): return []
-        wb = openpyxl.load_workbook(self.ruta, read_only=True)
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, read_only=True)
+        should_close = False if self._wb_cache else True
         materias = []
         grado_num = grado.replace("°", "")
         for sheet in wb.sheetnames:
@@ -340,12 +358,15 @@ class DataEngine:
         return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
 
     def obtener_estudiantes_completos(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and wb is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
 
         should_close = False
         if wb is None:
-            wb = openpyxl.load_workbook(self.ruta, data_only=True)
-            should_close = True
+            if self._wb_cache:
+                wb = self._wb_cache
+            else:
+                wb = openpyxl.load_workbook(self.ruta, data_only=True)
+                should_close = True
 
         ws_m = wb["MAESTRO"]
         col_nom = self._obtener_columna_nombres(grado, wb=wb)
@@ -416,15 +437,16 @@ class DataEngine:
         return True
 
     def get_dashboard_stats(self):
-        if not os.path.exists(self.ruta): return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
 
         # Optimization: Use a single workbook load for all dashboard stats
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
         try:
             grados = self.obtener_grados_activos(wb=wb)
             total = sum(len(self.obtener_estudiantes_completos(g, wb=wb)) for g in grados)
         finally:
-            wb.close()
+            if should_close: wb.close()
 
         return {"total": total, "riesgo": 0, "honor": "SANTOS FIDEL (4.9)", "asistencia": "98%"}
 

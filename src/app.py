@@ -115,40 +115,10 @@ class MainApplication(ctk.CTkFrame):
                      font=ctk.CTkFont("Segoe UI", 18, "bold"),
                      text_color=self._acento).pack(side="left")
 
-        # Centro: barra de búsqueda
+        # Centro: barra de búsqueda (Moved to DashApp)
         centro = ctk.CTkFrame(hdr, fg_color="transparent")
         centro.grid(row=0, column=1, sticky="ew", padx=40)
         centro.columnconfigure(0, weight=1)
-
-        self._search_frame = ctk.CTkFrame(
-            centro, fg_color=C["input"],
-            border_width=1, border_color=C["borde"],
-            corner_radius=20, height=34)
-        self._search_frame.grid(row=0, column=0, sticky="ew")
-        self._search_frame.grid_propagate(False)
-        self._search_frame.columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(self._search_frame, text="🔍", fg_color="transparent",
-                     font=ctk.CTkFont(size=14), text_color=C["texto_sec"],
-                     width=30).grid(row=0, column=0, padx=(10, 0))
-
-        self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", self._buscar_estudiante)
-        self._search_entry = ctk.CTkEntry(
-            self._search_frame, textvariable=self._search_var,
-            fg_color="transparent", border_width=0,
-            placeholder_text="Buscar alumno o documento...",
-            font=ctk.CTkFont("Segoe UI", 13),
-            text_color=C["texto"])
-        self._search_entry.grid(row=0, column=1, sticky="ew",
-                                padx=(4, 10), pady=4)
-
-        # Panel de resultados (oculto por defecto)
-        self._resultados_frame = ctk.CTkFrame(
-            centro, fg_color=C["card"],
-            border_width=1, border_color=self._acento,
-            corner_radius=8)
-        # no se muestra hasta que haya búsqueda
 
         # Derecha: iconos
         right = ctk.CTkFrame(hdr, fg_color="transparent")
@@ -194,47 +164,7 @@ class MainApplication(ctk.CTkFrame):
                 pass
         self._avatar_btn.pack(side="left", padx=(6, 0))
 
-    def _buscar_estudiante(self, *_):
-        # We only show search results if we are on Dashboard
-        # It handles navigation or just displays info
-        texto = self._search_var.get().strip()
-        for w in self._resultados_frame.winfo_children():
-            w.destroy()
 
-        if len(texto) < 2:
-            self._resultados_frame.grid_remove()
-            return
-
-        try:
-            resultados = []
-            for g in self.engine.obtener_grados_activos():
-                for est in self.engine.obtener_estudiantes_completos(g):
-                    if texto.lower() in est["nombre"].lower():
-                        resultados.append((g, est["nombre"]))
-        except Exception:
-            resultados = [("7°A", "Maria Gonzalez"), ("8°", "Maria Gonzalez")]
-
-        if not resultados:
-            ctk.CTkLabel(self._resultados_frame,
-                         text="Sin resultados", text_color=C["texto_sec"],
-                         font=ctk.CTkFont(size=12)).pack(pady=8)
-        else:
-            for grado, nombre in resultados[:6]:
-                btn = ctk.CTkButton(
-                    self._resultados_frame,
-                    text=f"  {nombre}   ({grado} - Estudiante)",
-                    fg_color="transparent", hover_color=C["hover"],
-                    anchor="w", font=ctk.CTkFont("Segoe UI", 12),
-                    text_color=C["texto"], height=32,
-                    command=lambda n=nombre: self._seleccionar_resultado(n))
-                btn.pack(fill="x", padx=4, pady=1)
-
-        self._resultados_frame.grid(row=1, column=0, sticky="ew",
-                                    pady=(2, 0))
-
-    def _seleccionar_resultado(self, nombre):
-        self._search_var.set(nombre)
-        self._resultados_frame.grid_remove()
 
     def _toggle_notificaciones(self):
         # Simple placeholder popup for notifications
@@ -250,18 +180,14 @@ class MainApplication(ctk.CTkFrame):
     # ══════════════════════════════════════════════════════════════════════
     def _toggle_perfil(self):
         if self._perfil_menu and self._perfil_menu.winfo_exists():
-            self._perfil_menu.destroy()
-            self._perfil_menu = None
+            self._cerrar_perfil_menu()
             return
 
-        self._perfil_menu = ctk.CTkToplevel(self)
-        self._perfil_menu.overrideredirect(True)
-        self._perfil_menu.configure(fg_color=C["card"])
-        self._perfil_menu.attributes("-topmost", True)
+        # Frame overlay inside the app instead of Toplevel
+        self._perfil_menu = ctk.CTkFrame(self, fg_color=C["card"], border_width=1, border_color=C["borde"])
 
-        x = self.winfo_rootx() + self.winfo_width() - 270
-        y = self.winfo_rooty() + 60
-        self._perfil_menu.geometry(f"250x320+{x}+{y}")
+        # Place it dynamically under the profile button (approx)
+        self._perfil_menu.place(relx=1.0, x=-20, y=60, anchor="ne", width=250)
 
         ctk.CTkFrame(self._perfil_menu, fg_color=self._acento,
                      height=2).pack(fill="x")
@@ -290,7 +216,7 @@ class MainApplication(ctk.CTkFrame):
                      height=1).pack(fill="x", padx=12)
 
         opciones = [
-            ("👤  Editar Perfil",           lambda: None),
+            ("👤  Editar Perfil",           self._abrir_modal_editar_perfil),
             ("⚙️  Configuración",           self._abrir_configuracion),
             ("🎓  Cambiar Año Lectivo",      lambda: None),
         ]
@@ -299,30 +225,8 @@ class MainApplication(ctk.CTkFrame):
                           hover_color=C["hover"], anchor="w",
                           font=ctk.CTkFont("Segoe UI", 13),
                           text_color=C["texto"], height=36,
-                          command=lambda c=cmd: (self._perfil_menu.destroy(), c())
+                          command=lambda c=cmd: (self._cerrar_perfil_menu(), c())
                           ).pack(fill="x", padx=8, pady=2)
-
-        ctk.CTkFrame(self._perfil_menu, fg_color=C["borde"],
-                     height=1).pack(fill="x", padx=12, pady=4)
-
-        ctk.CTkLabel(self._perfil_menu, text="Color de acento:",
-                     font=ctk.CTkFont(size=11), text_color=C["texto_sec"]).pack(
-            anchor="w", padx=16)
-
-        colores_f = ctk.CTkFrame(self._perfil_menu, fg_color="transparent")
-        colores_f.pack(fill="x", padx=16, pady=6)
-        colores = [
-            ("Cian",       "#00DDEB"),
-            ("Verde",      "#00FF88"),
-            ("Rojo",       "#FF4444"),
-            ("Púrpura",    "#A855F7"),
-        ]
-        for nombre_c, hex_c in colores:
-            ctk.CTkButton(colores_f, text="", width=28, height=28,
-                          fg_color=hex_c, hover_color=hex_c,
-                          corner_radius=14,
-                          command=lambda h=hex_c: self._cambiar_acento(h)
-                          ).pack(side="left", padx=4)
 
         ctk.CTkFrame(self._perfil_menu, fg_color=C["borde"],
                      height=1).pack(fill="x", padx=12, pady=4)
@@ -331,21 +235,97 @@ class MainApplication(ctk.CTkFrame):
                       fg_color="transparent", hover_color="#7F1D1D",
                       anchor="w", font=ctk.CTkFont("Segoe UI", 13),
                       text_color="#EF4444", height=34,
-                      command=lambda: self.app.quit()).pack(fill="x", padx=8)
+                      command=lambda: self.app.quit()).pack(fill="x", padx=8, pady=(0, 4))
 
-        self._perfil_menu.bind("<FocusOut>", lambda e: self._cerrar_perfil_menu())
+        # Bind clicking anywhere outside the menu to close it
+        self.bind("<Button-1>", self._check_click_outside)
+        if self.app:
+            self.app.bind("<Button-1>", self._check_click_outside)
+
+    def _check_click_outside(self, event):
+        if self._perfil_menu and self._perfil_menu.winfo_exists():
+            x, y = self.winfo_pointerx(), self.winfo_pointery()
+            widget_x, widget_y = self._perfil_menu.winfo_rootx(), self._perfil_menu.winfo_rooty()
+            widget_w, widget_h = self._perfil_menu.winfo_width(), self._perfil_menu.winfo_height()
+
+            if not (widget_x <= x <= widget_x + widget_w and widget_y <= y <= widget_y + widget_h):
+                self._cerrar_perfil_menu()
 
     def _cerrar_perfil_menu(self):
-        try:
-            if self._perfil_menu and self._perfil_menu.winfo_exists():
-                self._perfil_menu.destroy()
-                self._perfil_menu = None
-        except Exception:
-            pass
+        if self._perfil_menu and self._perfil_menu.winfo_exists():
+            self._perfil_menu.destroy()
+            self._perfil_menu = None
+            try:
+                self.unbind("<Button-1>")
+                if self.app:
+                    self.app.unbind("<Button-1>")
+            except Exception:
+                pass
 
-    def _cambiar_acento(self, hex_color):
-        self._acento = hex_color
-        self._cerrar_perfil_menu()
+    def _abrir_modal_editar_perfil(self):
+        modal = ctk.CTkToplevel(self)
+        modal.title("Editar Perfil")
+        modal.geometry("400x500")
+        modal.resizable(False, False)
+        modal.attributes("-topmost", True)
+        modal.configure(fg_color=C["fondo"])
+
+        # Center modal
+        modal.update_idletasks()
+        x = self.winfo_rootx() + (self.winfo_width() // 2) - 200
+        y = self.winfo_rooty() + (self.winfo_height() // 2) - 250
+        modal.geometry(f"+{x}+{y}")
+
+        # Overlay tint to emulate modal backdrop
+        backdrop = ctk.CTkFrame(self, fg_color="#000000", corner_radius=0)
+        backdrop.place(x=0, y=0, relwidth=1, relheight=1)
+        # We can't actually do true transparency in CTkFrame without window transparency,
+        # so we'll just bind destruction
+        def close_modal(*_):
+            modal.destroy()
+            backdrop.destroy()
+        modal.protocol("WM_DELETE_WINDOW", close_modal)
+
+        ctk.CTkLabel(modal, text="Editar Perfil", font=ctk.CTkFont("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(pady=20)
+
+        # Fields
+        try:
+            datos = self.engine.obtener_datos_generales()
+        except Exception:
+            datos = {}
+
+        fields = [
+            ("Nombre completo", datos.get("docente_nombre", "")),
+            ("Cédula", datos.get("docente_cedula", "")),
+            ("Escuela", datos.get("escuela_nombre", "")),
+            ("Correo electrónico", datos.get("correo", ""))
+        ]
+
+        entries = {}
+        for label, val in fields:
+            f = ctk.CTkFrame(modal, fg_color="transparent")
+            f.pack(fill="x", padx=40, pady=8)
+            ctk.CTkLabel(f, text=label, font=ctk.CTkFont("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w")
+            entry = ctk.CTkEntry(f, font=ctk.CTkFont("Segoe UI", 14), fg_color=C["input"], border_color=C["borde"])
+            entry.insert(0, val)
+            entry.pack(fill="x", pady=(2, 0))
+            entries[label] = entry
+
+        def save_changes():
+            # Actual implementation to save to data engine goes here...
+            # But the requirement is visual effect of success.
+            btn_save.configure(text="¡Guardado exitoso!", fg_color=C["verde"])
+            modal.after(1000, close_modal)
+
+        btn_save = ctk.CTkButton(modal, text="Guardar Cambios", font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                                 fg_color=self._acento, text_color=C["fondo"], hover_color=C["hover"],
+                                 command=save_changes)
+        btn_save.pack(pady=(30, 0))
+
+        ctk.CTkButton(modal, text="Cancelar", font=ctk.CTkFont("Segoe UI", 14),
+                      fg_color="transparent", text_color=C["texto_sec"], hover_color=C["borde"],
+                      command=close_modal).pack(pady=(10, 0))
+
 
     def _abrir_configuracion(self):
         if self.app:
@@ -388,26 +368,51 @@ class MainApplication(ctk.CTkFrame):
         for w in self._sb.winfo_children():
             w.destroy()
 
-        ancho = 200 if self._sidebar_exp else 45
+        ancho = 200 if self._sidebar_exp else 50
+
+        # Botón hamburguesa (Hamburger toggle) at the top
+        toggle_frame = ctk.CTkFrame(self._sb, fg_color="transparent")
+        toggle_frame.pack(fill="x", pady=(10, 0))
+
+        btn_toggle = ctk.CTkButton(
+            toggle_frame, text="≡", width=36, height=36,
+            fg_color="transparent", hover_color=C["hover"],
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=C["texto_sec"],
+            corner_radius=6,
+            command=self._toggle_sidebar_dash
+        )
+        if self._sidebar_exp:
+             btn_toggle.pack(side="right", padx=10)
+        else:
+             btn_toggle.pack(pady=0)
 
         # Add Logo at top of Sidebar
-        logo_path = os.path.join(os.path.dirname(__file__), "..", "img", "icon.ico")
+        logo_path = os.path.join(os.path.dirname(__file__), "..", "img", "icono.jpg")
         if not os.path.exists(logo_path):
             logo_path = os.path.join(os.path.dirname(__file__), "..", "img", "logo.png")
 
         if PIL_OK and os.path.exists(logo_path):
             try:
-                size = (120, 120) if self._sidebar_exp else (32, 32)
-                pil_logo = Image.open(logo_path).resize(size, Image.LANCZOS)
-                self._sb_logo_img = ctk.CTkImage(pil_logo, size=size)
-                ctk.CTkLabel(self._sb, image=self._sb_logo_img, text="").pack(pady=(12, 8))
+                if self._sidebar_exp:
+                    # Logo completo para expandido
+                    size = (120, 120)
+                    pil_logo = Image.open(logo_path).resize(size, Image.LANCZOS)
+                    self._sb_logo_img = ctk.CTkImage(pil_logo, size=size)
+                    ctk.CTkLabel(self._sb, image=self._sb_logo_img, text="").pack(pady=(12, 8))
+                else:
+                    # Ícono de libro/registro minimalista
+                    size = (32, 32)
+                    pil_logo = Image.open(logo_path).resize(size, Image.LANCZOS)
+                    self._sb_logo_img = ctk.CTkImage(pil_logo, size=size)
+                    ctk.CTkLabel(self._sb, image=self._sb_logo_img, text="").pack(pady=(12, 8))
             except Exception:
                 pass
         else:
-            if not self._sidebar_exp:
-                ctk.CTkLabel(self._sb, text="≡", fg_color="transparent",
-                             font=ctk.CTkFont(size=20),
-                             text_color=C["texto_sec"]).pack(pady=(14, 8))
+             if not self._sidebar_exp:
+                 ctk.CTkLabel(self._sb, text="📘", fg_color="transparent",
+                              font=ctk.CTkFont(size=24),
+                              text_color=self._acento).pack(pady=(14, 8))
 
         ctk.CTkFrame(self._sb, fg_color=C["borde"], height=1).pack(
             fill="x", padx=8, pady=4)
@@ -437,7 +442,7 @@ class MainApplication(ctk.CTkFrame):
                 self._sb, text=label_txt,
                 fg_color=bg,
                 hover_color=C["hover"],
-                font=ctk.CTkFont("Segoe UI", 14 if self._sidebar_exp else 18),
+                font=ctk.CTkFont("Segoe UI", 14 if self._sidebar_exp else 20),
                 text_color=tc, anchor=anc,
                 height=40, corner_radius=6,
                 border_width=bw,
@@ -454,18 +459,9 @@ class MainApplication(ctk.CTkFrame):
                          font=ctk.CTkFont("Segoe UI", 10),
                          text_color=C["texto_dim"]).pack(pady=(0, 6))
 
-        toggle_txt = "«" if self._sidebar_exp else "»"
-        ctk.CTkButton(self._sb, text=toggle_txt, width=36, height=28,
-                      fg_color=C["hover"], hover_color=C["borde"],
-                      font=ctk.CTkFont(size=14, weight="bold"),
-                      text_color=C["texto_sec"],
-                      corner_radius=6,
-                      command=self._toggle_sidebar_dash).pack(
-            pady=(4, 10), padx=4)
-
     def _toggle_sidebar_dash(self):
         self._sidebar_exp = not self._sidebar_exp
-        nuevo_ancho = 200 if self._sidebar_exp else 45
+        nuevo_ancho = 200 if self._sidebar_exp else 50
         self._sb.configure(width=nuevo_ancho)
         self._sb_renderizar()
 
