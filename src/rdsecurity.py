@@ -85,7 +85,7 @@ def _hw_fingerprint() -> bytes:
             uid = r[-1].strip() if len(r) > 1 else ""
             if uid and uid != "UUID":
                 componentes.append(uid)
-    except:
+    except Exception:
         pass
 
     # 2. Identificador de volumen del disco del sistema
@@ -99,7 +99,7 @@ def _hw_fingerprint() -> bytes:
             serial = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
             if serial:
                 componentes.append(serial.group())
-    except:
+    except Exception:
         pass
 
     # 3. Nombre del equipo + usuario (siempre disponible)
@@ -110,7 +110,7 @@ def _hw_fingerprint() -> bytes:
     try:
         mac = hex(uuid.getnode())
         componentes.append(mac)
-    except:
+    except Exception:
         pass
 
     raw = "|".join(c for c in componentes if c)
@@ -326,7 +326,7 @@ def calcular_hash_excel(ruta_excel: str) -> str:
                     break
                 h.update(bloque)
         return h.hexdigest()
-    except:
+    except Exception:
         return ""
 
 def guardar_hash_excel(ruta_excel: str) -> None:
@@ -574,7 +574,7 @@ def _leer_cedula_token() -> dict:
         with open("rd_token.bin", "rb") as f:
             blob = f.read()
         return json.loads(descifrar(blob, clave_token).decode())
-    except:
+    except Exception:
         return {}
 
 def activar_licencia_completa(cedula: str, codigo: str) -> tuple[bool, str]:

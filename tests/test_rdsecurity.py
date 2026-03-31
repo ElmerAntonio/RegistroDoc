@@ -8,7 +8,8 @@ os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT"
 import rdsecurity
 from rdsecurity import (
     cifrar, descifrar, guardar_cifrado, cargar_cifrado,
-    _hw_fingerprint, verificar_licencia, validar_nota_meduca
+    _hw_fingerprint, verificar_licencia, validar_nota_meduca,
+    _leer_cedula_token, _guardar_cedula_token
 )
 from unittest.mock import patch
 
@@ -75,3 +76,22 @@ def test_validar_nota_meduca(valor, esperado, esperado_val):
     valido, nota, _ = validar_nota_meduca(valor)
     assert valido == esperado
     assert nota == esperado_val
+
+def test_leer_cedula_token_corrupto(temp_file):
+    # Mockear el nombre del archivo para usar un archivo temporal
+    with patch('rdsecurity.open', create=True) as mock_open:
+        # Simular archivo que existe pero tiene basura que descifrar fallará
+        mock_open.return_value.__enter__.return_value.read.return_value = b"NOT_A_VALID_BLOB"
+        with patch('os.path.exists', return_value=True):
+            # Debería retornar {} al fallar descifrar o json.loads
+            assert _leer_cedula_token() == {}
+
+def test_cedula_token_roundtrip():
+    cedula = "8-888-888"
+    try:
+        _guardar_cedula_token(cedula)
+        datos = _leer_cedula_token()
+        assert datos["hint"] == cedula
+    finally:
+        if os.path.exists("rd_token.bin"):
+            os.remove("rd_token.bin")
