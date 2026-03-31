@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import datetime
 import threading
+from rdsecurity import validar_nota_meduca
 
 class NotasFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
@@ -215,14 +216,11 @@ class NotasFrame(ctk.CTkFrame):
                     val = entry.get().strip()
                     break
             if val:
-                try:
-                    nota = float(val.replace(",", "."))
-                    if 1.0 <= nota <= 5.0: notas_guardar[id_est] = nota
-                    else:
-                        messagebox.showerror("Error", f"Nota inválida: {val}")
-                        return None
-                except:
-                    messagebox.showerror("Error", f"Formato incorrecto: {val}")
+                valido, nota, msj = validar_nota_meduca(val)
+                if valido:
+                    notas_guardar[id_est] = nota
+                else:
+                    messagebox.showerror("Error", f"Error en la nota: {msj}")
                     return None
         return notas_guardar
 

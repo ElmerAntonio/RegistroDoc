@@ -1,7 +1,10 @@
 import os
+import sys
 import json
 import tkinter as tk
 import customtkinter as ctk
+
+sys.path.insert(0, os.path.dirname(__file__))
 
 # Matplotlib
 import matplotlib
@@ -11,6 +14,8 @@ try:
     from PIL import Image, ImageTk
     PIL_OK = True
 except ImportError:
+    Image = None
+    ImageTk = None
     PIL_OK = False
 
 from dashapp import DashboardFrame
@@ -218,7 +223,6 @@ class RegistroDocApp(ctk.CTk):
                 os.path.dirname(__file__), "..", "img", nombre_icono))
             if os.path.exists(img_path):
                 try:
-                    from PIL import Image, ImageTk
                     pil = Image.open(img_path).resize((64, 64))
                     self._icono_app = ImageTk.PhotoImage(pil)
                     self.iconphoto(True, self._icono_app)
