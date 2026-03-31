@@ -17,12 +17,6 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-# PIL para el logo
-try:
-    PIL_OK = True
-except ImportError:
-    PIL_OK = False
-
 # ─── PALETA PRINCIPAL CORREGIDA ──────────────────────────────────────────────
 C = {
     "fondo":        "#0A1628",
@@ -389,8 +383,8 @@ class DashboardFrame(ctk.CTkFrame):
         valores  = [3.8, 3.5, 4.2, 3.1, 3.7]
         colores  = [self._acento] * len(grupos)
 
-        bars = ax2.bar(grupos, valores, color=colores, width=0.6,
-                       edgecolor=C["fondo"], linewidth=0.8)
+        ax2.bar(grupos, valores, color=colores, width=0.6,
+                edgecolor=C["fondo"], linewidth=0.8)
 
         ax2.set_ylim(1, 5.3)
         ax2.tick_params(colors=C["texto_sec"], labelsize=8)
@@ -487,7 +481,6 @@ if __name__ == "__main__":
     ctk.set_default_color_theme("blue")
 
     class MockEngine:
-        modalidad = "premedia"
         def get_dashboard_stats(self):
             return {"total": 92, "riesgo": 7,
                     "honor": "SANTOS FIDEL", "honor_prom": "4.9",
