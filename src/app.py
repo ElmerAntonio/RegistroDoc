@@ -26,6 +26,7 @@ from eapp   import NotasFrame
 from fapp   import AsistenciaFrame
 from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
+from grapp  import GraficosFrame
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -126,6 +127,7 @@ class MainApplication(ctk.CTkFrame):
             ("📝", "Notas",         self._ir_notas,        False),
             ("📅", "Asistencia",    self._ir_asistencia,   False),
             ("📋", "Reportes",      self._ir_reportes,     False),
+            ("📊", "Gráficos",      self._ir_graficos,     False),
             ("⚙️", "Configuración", self._ir_configuracion, False)
         ]
 
@@ -181,6 +183,11 @@ class MainApplication(ctk.CTkFrame):
     def _ir_reportes(self):
         pass
 
+    def _ir_graficos(self):
+        if self.app:
+            try: self.app.mostrar_graficos()
+            except Exception: pass
+
     def _ir_configuracion(self):
         if self.app:
             try: self.app.mostrar_configuracion()
@@ -197,11 +204,6 @@ class RegistroDocApp(ctk.CTk):
         self.minsize(1024, 600)  # Tamaño mínimo para que no se deforme
         self.resizable(True, True) # Permite maximizar y achicar
 
-        # Intentar iniciar maximizado en Windows
-        try:
-            self.state("zoomed")
-        except Exception:
-            pass
 
         # Iconos de la ventana
         icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "img", "icon.ico"))
@@ -270,6 +272,11 @@ class RegistroDocApp(ctk.CTk):
         self.limpiar_pantalla()
         ObservacionesFrame(self.main_app.main_content_frame,
                            self.engine).pack(fill="both", expand=True)
+
+    def mostrar_graficos(self):
+        self.limpiar_pantalla()
+        GraficosFrame(self.main_app.main_content_frame,
+                      self.engine).pack(fill="both", expand=True)
 
     def mostrar_configuracion(self):
         self.limpiar_pantalla()
