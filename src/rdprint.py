@@ -7,11 +7,14 @@ Compatible con Microsoft Excel y LibreOffice Calc.
 © 2026 RegistroDoc Pro — Elmer Tugri — Panamá
 """
 
-import os, sys, subprocess, platform, tempfile
+import os
+import subprocess
+import platform
 from tkinter import messagebox
 
 def _ruta_excel():
-    base = os.path.dirname(os.path.abspath(__file__))
+    from config import BASE_DIR
+    base = BASE_DIR
     return os.path.join(base, "Registro_2026.xlsx")
 
 def _excel_disponible() -> bool:
@@ -130,7 +133,6 @@ class PanelImpresion:
     """
     def __new__(cls, parent, app):
         import tkinter as tk
-        from tkinter import ttk
 
         C = {
             "azul_osc":"#1C3557","azul_med":"#2E6DA4","azul_clar":"#D6E8FA",

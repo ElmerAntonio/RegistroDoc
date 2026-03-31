@@ -9,21 +9,16 @@ Diseño basado en la imagen de referencia:
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import font as tkfont
-import os
 import datetime
 
 # Matplotlib para las gráficas
 import matplotlib
 matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 # PIL para el logo
 try:
-    from PIL import Image, ImageTk, ImageFilter, ImageDraw
     PIL_OK = True
 except ImportError:
     PIL_OK = False

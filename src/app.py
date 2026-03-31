@@ -1,11 +1,11 @@
 import os
+from config import BASE_DIR, CONFIG_FILE
 import sys
 import json
-import tkinter as tk
 import customtkinter as ctk
 
 # Usamos abspath para asegurar que las rutas sean correctas sin importar desde dónde se ejecute el script.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
 # Matplotlib
 import matplotlib
@@ -37,8 +37,7 @@ from grapp  import GraficosFrame
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-CONFIG_FILE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "perfil.json"))
+
 
 # ─── PALETA PRINCIPAL ──────────────────────────────────────────────
 C = {
@@ -108,12 +107,12 @@ class MainApplication(ctk.CTkFrame):
             w.destroy()
 
         # Cargar Logo en Sidebar (Grande y centrado)
-        logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "img", "icono.png"))
+        logo_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
 
         if PIL_OK and os.path.exists(logo_path):
             try:
                 size = (140, 140)
-                pil_logo = Image.open(logo_path).resize(size, Image.LANCZOS)
+                pil_logo = Image.open(logo_path).resize(size, Image.Resampling.LANCZOS)
                 self._sb_logo_img = ctk.CTkImage(pil_logo, size=size)
                 ctk.CTkLabel(self._sb, image=self._sb_logo_img, text="").pack(pady=(30, 15))
             except Exception:
@@ -212,7 +211,7 @@ class RegistroDocApp(ctk.CTk):
 
 
         # Iconos de la ventana
-        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "img", "icon.ico"))
+        icon_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icon.ico"))
         if os.path.exists(icon_path):
             try:
                 self.iconbitmap(icon_path)
@@ -221,7 +220,7 @@ class RegistroDocApp(ctk.CTk):
 
         for nombre_icono in ["icon.ico", "icono.png"]:
             img_path = os.path.abspath(os.path.join(
-                os.path.dirname(__file__), "..", "img", nombre_icono))
+                BASE_DIR, "..", "img", nombre_icono))
             if os.path.exists(img_path):
                 try:
                     pil = Image.open(img_path).resize((64, 64))
@@ -235,7 +234,7 @@ class RegistroDocApp(ctk.CTk):
         archivo = ("Registro_Primaria.xlsx"
                    if modalidad_inicial == "primaria"
                    else "Registro_2026.xlsx")
-        base    = os.path.dirname(os.path.abspath(__file__))
+        base    = BASE_DIR
         ruta    = os.path.abspath(os.path.join(base, "..", archivo))
         self.engine = DataEngine(ruta, modalidad_inicial)
 

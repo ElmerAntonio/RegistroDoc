@@ -19,7 +19,14 @@ Algoritmos utilizados:
 © 2026 RegistroDoc Pro — Todos los derechos reservados
 """
 
-import os, json, time, hashlib, hmac, struct, base64, platform, uuid, re
+import os
+import json
+import time
+import hashlib
+import hmac
+import platform
+import uuid
+import re
 from dotenv import load_dotenv
 import datetime
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -373,8 +380,9 @@ def actualizar_hash_excel(ruta_excel: str) -> None:
 #  SISTEMA DE LICENCIAS SEGURO
 # ══════════════════════════════════════════════════════════════
 
-# Cargar configuración segura desde .env
-env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+# Cargar configuracion segura desde .env
+from config import BASE_DIR
+env_path = os.path.join(os.path.dirname(BASE_DIR), '.env')
 load_dotenv(dotenv_path=env_path)
 
 # Clave maestra interna (Cargada desde variable de entorno de forma segura)

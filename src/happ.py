@@ -33,9 +33,10 @@ class ReportesFrame(ctk.CTkFrame):
         # Tomar datos de pantalla y pegarlos en la plantilla oficial.
         # Infiriendo basado en columnas Cédula, Nombre, Trimestre 1, etc.
         import os
+        from config import BASE_DIR
         import openpyxl
 
-        base = os.path.dirname(os.path.abspath(__file__))
+        base = BASE_DIR
         plantilla_ruta = os.path.join(base, "..", "Registro_Oficial_MEDUCA.xlsx")
 
         if not os.path.exists(plantilla_ruta):
@@ -68,5 +69,4 @@ class ReportesFrame(ctk.CTkFrame):
             messagebox.showinfo("Éxito", f"Datos exportados a: {out_file}")
 
         except Exception as e:
-            messagebox.showerror("Error de Exportación", f"Hubo un error al exportar:
-{str(e)}")
+            messagebox.showerror("Error de Exportación", f"Hubo un error al exportar: \n{str(e)}")

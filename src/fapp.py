@@ -3,6 +3,7 @@ from tkinter import messagebox
 import datetime
 import threading
 import os
+from config import BASE_DIR
 
 try:
     from docx import Document
@@ -263,7 +264,7 @@ class AsistenciaFrame(ctk.CTkFrame):
             messagebox.showinfo("Completado", f"{mensaje_base}\n\n(Falta la librería python-docx para generar los Word).")
             return
 
-        carpeta_expedientes = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Expedientes_Estudiantes"))
+        carpeta_expedientes = os.path.abspath(os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes"))
         if not os.path.exists(carpeta_expedientes):
             os.makedirs(carpeta_expedientes)
 

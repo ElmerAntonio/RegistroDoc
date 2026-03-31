@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import datetime
 import os
+from config import BASE_DIR
 try:
     from docx import Document
     from docx.shared import Pt, RGBColor
@@ -130,7 +131,7 @@ class ObservacionesFrame(ctk.CTkFrame):
             return
 
         # Guarda en Word usando el mismo generador
-        carpeta = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Expedientes_Estudiantes"))
+        carpeta = os.path.abspath(os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes"))
         if not os.path.exists(carpeta): os.makedirs(carpeta)
 
         nombre_est = self.estudiante_seleccionado['nombre']

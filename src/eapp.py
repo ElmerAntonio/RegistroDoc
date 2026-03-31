@@ -206,7 +206,6 @@ class NotasFrame(ctk.CTkFrame):
 
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
-        import math
         for id_est, entries_list in self.entradas_notas.items():
             # Only read the first one for backwards compatibility or the last active if requested
             # Since the original code had 1 entry, and the prompt implies a grid of many,
