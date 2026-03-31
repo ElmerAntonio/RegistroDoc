@@ -78,6 +78,12 @@ class ConfigFrame(ctk.CTkFrame):
         ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#475569").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_ano = self._crear_campo(f2, r, "Año Lectivo:", data.get("ano_lectivo", "2026")); r+=1
         self.entry_jor = self._crear_campo(f2, r, "Jornada:", data.get("jornada", "")); r+=1
+
+        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color=C["texto_dim"]).grid(row=r, column=0, columnspan=2, pady=5); r+=1
+        self.entry_tit = self._crear_campo(f2, r, "Título (Carátula):", data.get("titulo_caratula", "Maestro de Grado")); r+=1
+        self.entry_gru = self._crear_campo(f2, r, "Grupos (Carátula):", data.get("grupos_caratula", "7°A, 7°B")); r+=1
+
+        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color=C["texto_dim"]).grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_t1 = self._crear_campo(f2, r, "Fecha Trimestre 1:", data.get("fecha_t1", "")); r+=1
         self.entry_t2 = self._crear_campo(f2, r, "Fecha Trimestre 2:", data.get("fecha_t2", "")); r+=1
         self.entry_t3 = self._crear_campo(f2, r, "Fecha Trimestre 3:", data.get("fecha_t3", "")); r+=1
@@ -264,7 +270,10 @@ class ConfigFrame(ctk.CTkFrame):
             "coordinador_nombre": self.entry_coo.get().strip(), "telefono": self.entry_tel.get().strip(),
             "correo": self.entry_cor.get().strip(), "ano_lectivo": self.entry_ano.get().strip(),
             "jornada": self.entry_jor.get().strip(), "fecha_t1": self.entry_t1.get().strip(),
-            "fecha_t2": self.entry_t2.get().strip(), "fecha_t3": self.entry_t3.get().strip()
+            "fecha_t2": self.entry_t2.get().strip(), "fecha_t3": self.entry_t3.get().strip(),
+            "titulo_caratula": self.entry_tit.get().strip() if hasattr(self, 'entry_tit') else "Maestro de Grado",
+            "grupos_caratula": self.entry_gru.get().strip() if hasattr(self, 'entry_gru') else "",
+            "materias_activas": [m for m, var in self.vars_materias.items() if var.get()] if hasattr(self, 'vars_materias') else [],
         }
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(datos, f, ensure_ascii=False, indent=4)
         self.btn_sinc.configure(text="⏳ Sincronizando...", state="disabled"); self.update()

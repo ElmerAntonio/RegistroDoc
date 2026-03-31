@@ -1,6 +1,6 @@
 import pytest
 import os
-from src.rddata import DataEngine
+from rddata import DataEngine
 
 def test_obtener_horario_returns_default_structure():
     """Test that obtener_horario returns the default structure when the file doesn't exist."""
