@@ -1,16 +1,28 @@
-import pytest
+import re
+
+with open("tests/test_rdsecurity.py", "r") as f:
+    content = f.read()
+
+# Replace mocks for os.path.exists and cryptography
+mock_crypto_pattern = r"""@patch\('rdsecurity\.AESGCM'\)
+@patch\('rdsecurity\.PBKDF2HMAC'\)"""
+
+# Instead of removing exactly those strings, we will just completely rewrite the test file
+# to match the very specific requirements for the security tests.
+
+new_tests = """import pytest
 import os
 import tempfile
 import json
-# Master salt dummy setup para pruebas locales DEBE IR ANTES DEL IMPORT
-os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT"
-
 import rdsecurity
 from rdsecurity import (
     cifrar, descifrar, guardar_cifrado, cargar_cifrado,
     _hw_fingerprint, verificar_licencia, validar_nota_meduca
 )
 from unittest.mock import patch
+
+# Master salt dummy setup para pruebas locales
+os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT"
 
 @pytest.fixture
 def temp_file():
@@ -53,7 +65,7 @@ def test_guardar_cargar_cifrado(mock_hw, temp_file):
 
 def test_cargar_cifrado_archivo_inexistente():
     # Sin mockear os.path.exists, usar ruta ficticia explícita
-    ruta_ficticia = "C:\ruta\totalmente\falsa\inexistente.enc"
+    ruta_ficticia = "C:\\ruta\\totalmente\\falsa\\inexistente.enc"
     resultado = cargar_cifrado(ruta_ficticia)
     assert resultado == {}  # Debería devolver {} si no existe
 
@@ -75,3 +87,7 @@ def test_validar_nota_meduca(valor, esperado, esperado_val):
     valido, nota, _ = validar_nota_meduca(valor)
     assert valido == esperado
     assert nota == esperado_val
+"""
+
+with open("tests/test_rdsecurity.py", "w") as f:
+    f.write(new_tests)

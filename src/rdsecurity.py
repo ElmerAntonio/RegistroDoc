@@ -374,7 +374,8 @@ def actualizar_hash_excel(ruta_excel: str) -> None:
 # ══════════════════════════════════════════════════════════════
 
 # Cargar configuración segura desde .env
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(dotenv_path=env_path)
 
 # Clave maestra interna (Cargada desde variable de entorno de forma segura)
 _master_salt_env = os.environ.get("REGISTRODOC_MASTER_SALT")

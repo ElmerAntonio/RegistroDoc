@@ -3,10 +3,7 @@ import sys
 import pytest
 from unittest.mock import patch, MagicMock
 
-# Mock cryptography for rdsecurity if needed during test imports
-sys.modules['cryptography'] = MagicMock()
-sys.modules['cryptography.hazmat'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives'] = MagicMock()
+
 
 # Mock tkinter and winreg before importing rdprint
 sys.modules['winreg'] = MagicMock()
