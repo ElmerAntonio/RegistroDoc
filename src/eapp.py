@@ -206,6 +206,7 @@ class NotasFrame(ctk.CTkFrame):
 
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
+        import math
         for id_est, entries_list in self.entradas_notas.items():
             # Only read the first one for backwards compatibility or the last active if requested
             # Since the original code had 1 entry, and the prompt implies a grid of many,
@@ -215,6 +216,7 @@ class NotasFrame(ctk.CTkFrame):
                 if entry.get().strip():
                     val = entry.get().strip()
                     break
+            
             if val:
                 valido, nota, msj = validar_nota_meduca(val)
                 if valido:
@@ -222,6 +224,7 @@ class NotasFrame(ctk.CTkFrame):
                 else:
                     messagebox.showerror("Error", f"Error en la nota: {msj}")
                     return None
+                    
         return notas_guardar
 
     # ==============================================================

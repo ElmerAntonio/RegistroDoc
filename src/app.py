@@ -4,7 +4,8 @@ import json
 import tkinter as tk
 import customtkinter as ctk
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Usamos abspath para asegurar que las rutas sean correctas sin importar desde dónde se ejecute el script.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Matplotlib
 import matplotlib
