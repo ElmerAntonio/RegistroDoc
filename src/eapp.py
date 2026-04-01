@@ -77,8 +77,12 @@ class NotasFrame(ctk.CTkFrame):
         self.entry_fecha.insert(0, datetime.datetime.now().strftime("%m-%d"))
         self.entry_fecha.pack(fill="x", padx=10, pady=5)
 
-        ctk.CTkLabel(tab_nueva, text="Descripción (Ej. Charla):", font=("Segoe UI", 12)).pack(anchor="w", padx=10, pady=(5,0))
-        self.entry_desc = ctk.CTkEntry(tab_nueva)
+        self.lbl_desc_counter = ctk.CTkLabel(tab_nueva, text="Descripción (Ej. Charla): (0/25)", font=("Segoe UI", 12))
+        self.lbl_desc_counter.pack(anchor="w", padx=10, pady=(5,0))
+
+        self.var_desc = ctk.StringVar()
+        self.var_desc.trace_add("write", self.actualizar_contador_desc)
+        self.entry_desc = ctk.CTkEntry(tab_nueva, textvariable=self.var_desc)
         self.entry_desc.pack(fill="x", padx=10, pady=5)
 
         self.btn_guardar_nueva = ctk.CTkButton(tab_nueva, text="💾 GUARDAR NUEVA", fg_color="#10B981", hover_color="#059669", 
@@ -102,6 +106,14 @@ class NotasFrame(ctk.CTkFrame):
         self.btn_actualizar = ctk.CTkButton(tab_mod, text="🔄 ACTUALIZAR EXCEL", fg_color="#3B82F6", hover_color="#2563EB",
                       font=("Segoe UI", 14, "bold"), height=40, command=self.actualizar_notas)
         self.btn_actualizar.pack(pady=5, padx=10, fill="x")
+
+    def actualizar_contador_desc(self, *args):
+        texto = self.var_desc.get()
+        if len(texto) > 25:
+            self.var_desc.set(texto[:25])
+            texto = texto[:25]
+        if hasattr(self, 'lbl_desc_counter'):
+            self.lbl_desc_counter.configure(text=f"Descripción (Ej. Charla): ({len(texto)}/25)")
 
     def al_cambiar_tipo_nota(self, valor):
         self.entry_desc.configure(state="normal")
@@ -179,7 +191,7 @@ class NotasFrame(ctk.CTkFrame):
             ctk.CTkLabel(row, text=est['nombre'], width=200, anchor="w").pack(side="left")
             
             casillas_row = ctk.CTkFrame(row, fg_color="transparent")
-            casillas_row.pack(side="left", padx=10)
+            casillas_row.pack(side="left", padx=10, fill="x", expand=True)
 
             self.entradas_notas[est['id']] = []
             num_boxes = 23 if self.engine.modalidad == "premedia" else 28

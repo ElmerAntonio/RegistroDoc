@@ -27,6 +27,7 @@ class GraficosFrame(ctk.CTkFrame):
         # Contenedor de gráficos con scroll
         self.scroll_canvas = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll_canvas.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        self.fig_objs = []
         self.scroll_canvas.grid_columnconfigure((0, 1), weight=1)
 
         self.fig_objs = [] # Para limpiar figuras después
@@ -46,22 +47,28 @@ class GraficosFrame(ctk.CTkFrame):
         if not grados: grados = ["Sin datos"]
 
         self.combo_grado = ctk.CTkOptionMenu(f_top, values=grados, command=self.al_cambiar_grado)
-        self.combo_grado.pack(side="left", padx=10)
+        self.combo_grado.pack(side="left", padx=5)
         self.combo_grado.set(grados[0])
 
         # Materia
         materias = self.engine.obtener_materias_por_grado(grados[0]) if grados[0] != "Sin datos" else ["Sin materias"]
         self.combo_materia = ctk.CTkOptionMenu(f_top, values=materias, command=lambda _: self.actualizar_graficos())
-        self.combo_materia.pack(side="left", padx=10)
+        self.combo_materia.pack(side="left", padx=5)
         if materias: self.combo_materia.set(materias[0])
+
+        # Estudiante
+        self.combo_estudiante = ctk.CTkOptionMenu(f_top, values=["Todos los Estudiantes"], command=lambda _: self.actualizar_graficos())
+        self.combo_estudiante.pack(side="left", padx=5)
 
         # Trimestre (si aplica)
         self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"], command=lambda _: self.actualizar_graficos())
-        self.combo_trimestre.pack(side="left", padx=10)
+        self.combo_trimestre.pack(side="left", padx=5)
 
-        ctk.CTkButton(f_top, text="🔄 Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=20)
+        ctk.CTkButton(f_top, text="🔄 Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=10)
+        self.al_cambiar_grado(grados[0])
 
     def al_cambiar_grado(self, grado):
+        if grado == "Sin datos": return
         materias = self.engine.obtener_materias_por_grado(grado)
         if materias:
             self.combo_materia.configure(values=materias)
@@ -69,6 +76,12 @@ class GraficosFrame(ctk.CTkFrame):
         else:
             self.combo_materia.configure(values=["No hay materias"])
             self.combo_materia.set("No hay materias")
+
+        estudiantes = self.engine.obtener_estudiantes_completos(grado)
+        nombres = ["Todos los Estudiantes"] + [e['nombre'] for e in estudiantes]
+        self.combo_estudiante.configure(values=nombres)
+        self.combo_estudiante.set("Todos los Estudiantes")
+
         self.actualizar_graficos()
 
     def limpiar_graficos(self):
@@ -84,60 +97,87 @@ class GraficosFrame(ctk.CTkFrame):
         grado = self.combo_grado.get()
         materia = self.combo_materia.get()
         trimestre = self.combo_trimestre.get()
+        estudiante_sel = self.combo_estudiante.get()
 
         if grado == "Sin datos" or materia == "Sin materias" or materia == "No hay materias":
             ctk.CTkLabel(self.scroll_canvas, text="No hay datos suficientes para graficar.",
                         font=("Segoe UI", 16)).grid(row=0, column=0, columnspan=2, pady=50)
             return
 
-        # Intentar obtener datos reales del engine
         estudiantes = []
         try:
-            # Primero intentamos obtener promedios reales del boletin/reporte
-            # Como no conozco la firma exacta, voy a intentar generar datos a partir de obtener_estudiantes_completos
-            # y extraer notas o usar datos de prueba si falla.
             estudiantes = self.engine.obtener_estudiantes_completos(grado)
-        except Exception:
-            pass
+        except Exception: pass
 
-        # Generar datos simulados basados en los estudiantes reales si no hay notas
-        aprobados = 0
-        reprobados = 0
-        en_riesgo = 0
-        promedios_por_est = {}
+        aprobados = 0; reprobados = 0; en_riesgo = 0
 
-        if estudiantes:
-            # Simularemos promedios para demostración visual de las capacidades,
-            # ya que la extracción exacta de Excel requeriría `rddata.py` específico de notas
-            import random
-            random.seed(grado + materia) # Pseudo-deterministico
+        promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, trimestre)
 
+        if not promedios_por_est and estudiantes:
+            # Fallback a 1.0 si no hay calificaciones válidas registradas aún
             for est in estudiantes:
-                # Simular un promedio entre 2.0 y 5.0
-                promedio = round(random.uniform(2.5, 5.0), 1)
-                promedios_por_est[est['nombre']] = promedio
+                promedios_por_est[est['nombre']] = 1.0
 
-                if promedio >= 3.0:
-                    aprobados += 1
-                elif promedio >= 2.5:
-                    en_riesgo += 1
-                else:
-                    reprobados += 1
+        for nom, promedio in promedios_por_est.items():
+            if promedio >= 3.0: aprobados += 1
+            elif promedio >= 2.5: en_riesgo += 1
+            else: reprobados += 1
+
+        if estudiante_sel != "Todos los Estudiantes":
+            # Vista individual
+            historial = getattr(self.engine, 'obtener_historial_real', lambda g,m,e: [3.0, 3.0])(grado, materia, estudiante_sel)
+            if len(historial) < 2: historial = [3.0, 3.0] # Fallback minimo de regresion
+            self.dibujar_proyeccion(estudiante_sel, historial, 0, 0, colspan=2)
         else:
-            # Fallback
-            aprobados, en_riesgo, reprobados = 15, 5, 2
-            promedios_por_est = {"Ejemplo 1": 4.5, "Ejemplo 2": 2.8, "Ejemplo 3": 3.2}
+            # Vista general
+            self.dibujar_pastel(aprobados, en_riesgo, reprobados, 0, 0)
+            self.dibujar_barras(promedios_por_est, 0, 1)
+            self.dibujar_tendencia(list(promedios_por_est.values()), 1, 0, colspan=2)
 
-        # 1. Gráfico de Pastel (Distribución)
-        self.dibujar_pastel(aprobados, en_riesgo, reprobados, 0, 0)
+    def dibujar_proyeccion(self, nombre, historial, row, col, colspan=1):
+        import numpy as np
+        from scipy.stats import linregress
 
-        # 2. Gráfico de Barras (Promedios)
-        self.dibujar_barras(promedios_por_est, 0, 1)
+        f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
+        f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
 
-        # 3. Gráfico de Dispersión / Tendencia (Campana)
-        self.dibujar_tendencia(list(promedios_por_est.values()), 1, 0, colspan=2)
+        fig, ax = plt.subplots(figsize=(10, 4), dpi=100)
+        fig.patch.set_facecolor(self.C["card"])
+        ax.set_facecolor(self.C["fondo"])
+        self.fig_objs.append(fig)
 
+        x = np.arange(1, len(historial) + 1)
+        y = np.array(historial)
 
+        # Regresion lineal
+        slope, intercept, r_value, p_value, std_err = linregress(x, y)
+        x_pred = np.arange(1, len(historial) + 3) # Proyectar 2 periodos mas
+        y_pred = intercept + slope * x_pred
+
+        ax.plot(x, y, marker='o', color=self.C["cian"], label='Historial de Notas', linewidth=2, markersize=8)
+        ax.plot(x_pred, y_pred, linestyle='--', color=self.C["amarillo"], label='Tendencia / Predicción', linewidth=2)
+
+        ax.axhline(y=3.0, color=self.C["rojo"], linestyle=':', alpha=0.7, label='Límite Aprobación (3.0)')
+
+        ax.set_ylim(1.0, 5.2)
+        ax.set_xticks(x_pred)
+        ax.set_xticklabels([f"T{i}" for i in x] + ["Pred 1", "Pred 2"])
+
+        ax.tick_params(axis='x', colors=self.C["texto"])
+        ax.tick_params(axis='y', colors=self.C["texto"])
+
+        ax.spines['bottom'].set_color(self.C["texto"])
+        ax.spines['left'].set_color(self.C["texto"])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        ax.set_title(f"Proyección y Predicción de Rendimiento: {nombre}", color=self.C["cian"], pad=15, fontweight="bold")
+        ax.legend(facecolor=self.C["fondo"], edgecolor=self.C["card"], labelcolor="white")
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=f_grafico)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
     def dibujar_pastel(self, aprobados, riesgo, reprobados, row, col):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)

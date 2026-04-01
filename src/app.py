@@ -33,6 +33,7 @@ from fapp   import AsistenciaFrame
 from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
 from grapp  import GraficosFrame
+from happ   import ReportesFrame
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -62,17 +63,7 @@ C = {
 }
 
 class MainApplication(ctk.CTkFrame):
-    def __init__(self, master, engine, app_principal, **kwargs):
-        super().__init__(master, fg_color=C["fondo"], corner_radius=0, **kwargs)
-        self.engine = engine
-        self.app = app_principal
-        self._acento = C["cian"]
 
-        self.pack_propagate(False)
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)   # El cuerpo ahora toma toda la pantalla
-
-        self._cuerpo()
 
     # ══════════════════════════════════════════════════════════════════════
     #  CUERPO: SIDEBAR + PANEL PRINCIPAL
@@ -102,11 +93,23 @@ class MainApplication(ctk.CTkFrame):
 
         self._sb_renderizar()
 
+    def __init__(self, master, engine, app_principal, **kwargs):
+        super().__init__(master, fg_color=C["fondo"], corner_radius=0, **kwargs)
+        self.engine = engine
+        self.app = app_principal
+        self._acento = C["cian"]
+        self.menu_activo = "Inicio"
+
+        self.pack_propagate(False)
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)   # El cuerpo ahora toma toda la pantalla
+
+        self._cuerpo()
+
     def _sb_renderizar(self):
         for w in self._sb.winfo_children():
             w.destroy()
 
-        # Cargar Logo en Sidebar (Grande y centrado)
         logo_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
 
         if PIL_OK and os.path.exists(logo_path):
@@ -125,23 +128,31 @@ class MainApplication(ctk.CTkFrame):
         ctk.CTkFrame(self._sb, fg_color=C["borde"], height=1).pack(
             fill="x", padx=15, pady=10)
 
-        # Items del menú (Agregamos Configuración al final)
         items = [
-            ("🏠", "Inicio",        self._ir_inicio,       True),
-            ("👤", "Estudiantes",   self._ir_estudiantes,  False),
-            ("📝", "Notas",         self._ir_notas,        False),
-            ("📅", "Asistencia",    self._ir_asistencia,   False),
-            ("📋", "Reportes",      self._ir_reportes,     False),
-            ("📊", "Gráficos",      self._ir_graficos,     False),
-            ("⚙️", "Configuración", self._ir_configuracion, False)
+            ("🏠", "Inicio",        self._ir_inicio),
+            ("👤", "Estudiantes",   self._ir_estudiantes),
+            ("📝", "Notas",         self._ir_notas),
+            ("📅", "Asistencia",    self._ir_asistencia),
+            ("📋", "Reportes",      self._ir_reportes),
+            ("📊", "Gráficos",      self._ir_graficos),
+            ("⚙️", "Configuración", self._ir_configuracion)
         ]
 
-        for icono, texto, cmd, activo in items:
+        self.nav_buttons = {}
+        for icono, texto, cmd in items:
+            activo = (self.menu_activo == texto)
             bg = C["activo"] if activo else "transparent"
             tc = self._acento if activo else C["texto_sec"]
             bw = 2 if activo else 0
 
             label_txt = f"  {icono}   {texto}"
+
+            def make_cmd(c=cmd, t=texto):
+                def wrapper():
+                    self.menu_activo = t
+                    self._sb_renderizar()
+                    c()
+                return wrapper
 
             btn = ctk.CTkButton(
                 self._sb, text=label_txt,
@@ -152,11 +163,10 @@ class MainApplication(ctk.CTkFrame):
                 height=45, corner_radius=6,
                 border_width=bw,
                 border_color=self._acento,
-                command=cmd)
+                command=make_cmd())
             
             btn.pack(fill="x", padx=12, pady=4)
 
-        # Espacio flexible inferior
         ctk.CTkFrame(self._sb, fg_color="transparent").pack(
             fill="both", expand=True)
 
@@ -186,7 +196,9 @@ class MainApplication(ctk.CTkFrame):
             except Exception: pass
 
     def _ir_reportes(self):
-        pass
+        if self.app:
+            try: self.app.mostrar_reportes()
+            except Exception: pass
 
     def _ir_graficos(self):
         if self.app:
@@ -218,17 +230,14 @@ class RegistroDocApp(ctk.CTk):
             except Exception:
                 pass
 
-        for nombre_icono in ["icon.ico", "icono.png"]:
-            img_path = os.path.abspath(os.path.join(
-                BASE_DIR, "..", "img", nombre_icono))
-            if os.path.exists(img_path):
-                try:
-                    pil = Image.open(img_path).resize((64, 64))
-                    self._icono_app = ImageTk.PhotoImage(pil)
-                    self.iconphoto(True, self._icono_app)
-                    break
-                except Exception:
-                    pass
+        img_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
+        if os.path.exists(img_path):
+            try:
+                pil = Image.open(img_path).resize((64, 64))
+                self._icono_app = ImageTk.PhotoImage(pil)
+                self.iconphoto(True, self._icono_app)
+            except Exception:
+                pass
 
         # Motor de datos
         archivo = ("Registro_Primaria.xlsx"
@@ -276,6 +285,11 @@ class RegistroDocApp(ctk.CTk):
         self.limpiar_pantalla()
         ObservacionesFrame(self.main_app.main_content_frame,
                            self.engine).pack(fill="both", expand=True)
+
+    def mostrar_reportes(self):
+        self.limpiar_pantalla()
+        ReportesFrame(self.main_app.main_content_frame,
+                      self.engine).pack(fill="both", expand=True)
 
     def mostrar_graficos(self):
         self.limpiar_pantalla()
