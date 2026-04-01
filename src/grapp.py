@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class GraficosFrame(ctk.CTkFrame):
@@ -101,8 +102,7 @@ class GraficosFrame(ctk.CTkFrame):
     def limpiar_graficos(self):
         for w in self.scroll_canvas.winfo_children():
             w.destroy()
-        for fig in self.fig_objs:
-            plt.close(fig)
+        self.fig_objs.clear()
         self.fig_objs.clear()
 
     def actualizar_graficos(self):
@@ -157,7 +157,8 @@ class GraficosFrame(ctk.CTkFrame):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
 
-        fig, ax = plt.subplots(figsize=(10, 4), dpi=100)
+        fig = Figure(figsize=(10, 4), dpi=100)
+        ax = fig.add_subplot(111)
         fig.patch.set_facecolor(self.C["card"])
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
@@ -202,7 +203,8 @@ class GraficosFrame(ctk.CTkFrame):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)
 
-        fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
+        fig = Figure(figsize=(5, 4), dpi=100)
+        ax = fig.add_subplot(111)
         fig.patch.set_facecolor(self.C["card"])
         ax.set_facecolor(self.C["card"])
         self.fig_objs.append(fig)
@@ -236,7 +238,8 @@ class GraficosFrame(ctk.CTkFrame):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)
 
-        fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+        fig = Figure(figsize=(6, 4), dpi=100)
+        ax = fig.add_subplot(111)
         fig.patch.set_facecolor(self.C["card"])
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
@@ -278,7 +281,8 @@ class GraficosFrame(ctk.CTkFrame):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
 
-        fig, ax = plt.subplots(figsize=(10, 3.5), dpi=100)
+        fig = Figure(figsize=(10, 3.5), dpi=100)
+        ax = fig.add_subplot(111)
         fig.patch.set_facecolor(self.C["card"])
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
