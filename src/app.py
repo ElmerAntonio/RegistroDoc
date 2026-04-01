@@ -1,6 +1,7 @@
 import os
 from config import BASE_DIR, CONFIG_FILE
 import sys
+import ctypes
 import json
 import customtkinter as ctk
 
@@ -248,13 +249,22 @@ class RegistroDocApp(ctk.CTk):
         self.geometry("1280x720")
         self.minsize(1024, 600)  # Tamaño mínimo para que no se deforme
         self.resizable(True, True) # Permite maximizar y achicar
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
 
-        # Iconos de la ventana
-        icon_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
+        # Iconos de la ventana (resolución para Windows / Barra de tareas)
+        icon_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icon.ico"))
         if os.path.exists(icon_path):
             try:
-                pil = Image.open(icon_path).resize((64, 64))
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
+
+        # Fallback multi-plataforma
+        png_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
+        if os.path.exists(png_path) and getattr(self, "iconphoto", None):
+            try:
+                pil = Image.open(png_path).resize((64, 64))
                 self._icono_app = ImageTk.PhotoImage(pil)
                 self.iconphoto(True, self._icono_app)
             except Exception:
@@ -335,6 +345,12 @@ class RegistroDocApp(ctk.CTk):
         self.main_app.engine = self.engine
         self.mostrar_dashboard()
 
+
+    def on_closing(self):
+        """Limpieza segura y salida completa del programa."""
+        self.destroy()
+        sys.exit(0)
+
     def destroy(self):
         """Override destroy para marcar la aplicación como destruida y limpiar recursos."""
         self._destroyed = True
@@ -342,6 +358,12 @@ class RegistroDocApp(ctk.CTk):
 
 
 def iniciar_programa_principal():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("registrodoc.pro.v3")
+        except Exception:
+            pass
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             config = json.load(f)
