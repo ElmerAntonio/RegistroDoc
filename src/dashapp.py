@@ -62,6 +62,8 @@ class DashboardFrame(ctk.CTkFrame):
         # To support dynamic individual search
         self._current_student = None
 
+        self._student_cache = None
+
         # Stats una sola vez
         self._stats = self._cargar_stats()
 
@@ -184,12 +186,22 @@ class DashboardFrame(ctk.CTkFrame):
 
         encontrado = None
         try:
-            for g in self.engine.obtener_grados_activos():
-                for est in self.engine.obtener_estudiantes_completos(g):
-                    if texto in est["nombre"].lower():
-                        encontrado = {"grado": g, "nombre": est["nombre"]}
-                        break
-                if encontrado: break
+            if self._student_cache is None:
+                import time
+                start_cache = time.perf_counter()
+                self._student_cache = []
+                for g in self.engine.obtener_grados_activos():
+                    for est in self.engine.obtener_estudiantes_completos(g):
+                        self._student_cache.append({"grado": g, "nombre": est["nombre"]})
+                print(f"[*] Built student cache in {time.perf_counter() - start_cache:.4f}s")
+
+            start_search = time.perf_counter()
+            for cached_est in self._student_cache:
+                if texto in cached_est["nombre"].lower():
+                    encontrado = cached_est
+                    break
+            print(f"[*] Search completed in {time.perf_counter() - start_search:.6f}s")
+
         except Exception:
             # Fallback mock for UI test
             if "maria" in texto:
