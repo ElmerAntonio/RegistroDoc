@@ -3,6 +3,7 @@ import re
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from utils.cleaner import ExcelCleaner
+from rdsecurity import validar_nota_meduca
 
 class DataEngine:
     def __init__(self, ruta_excel, modalidad="premedia"):
@@ -338,7 +339,7 @@ class DataEngine:
             if self._wb_cache:
                 wb = self._wb_cache
             else:
-                wb = openpyxl.load_workbook(self.ruta, read_only=True)
+                wb = openpyxl.load_workbook(self.ruta, data_only=True)
                 should_close = True
 
         grados = []
@@ -352,7 +353,7 @@ class DataEngine:
 
     def obtener_materias_por_grado(self, grado):
         if not os.path.exists(self.ruta) and self._wb_cache is None: return []
-        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, read_only=True)
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
         should_close = False if self._wb_cache else True
         materias = []
         grado_num = grado.replace("°", "")
@@ -520,10 +521,10 @@ class DataEngine:
                 for r in range(10, 50):
                     nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
                     if nom:
-                        try:
-                            nota = float(ws_res.cell(row=r, column=col_nota).value)
+                        valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
+                        if valido:
                             datos[nom] = nota
-                        except (ValueError, TypeError):
+                        else:
                             datos[nom] = 1.0 # Default if empty or invalid
 
         if should_close: wb.close()
@@ -576,10 +577,9 @@ class DataEngine:
                                 cols_trimestres.append(c)
 
                         for c in cols_trimestres:
-                            try:
-                                nota = float(ws_res.cell(row=fila_estudiante, column=c).value)
+                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                            if valido:
                                 historial.append(nota)
-                            except (ValueError, TypeError): pass
                 else:
                     cols_promedios = []
                     for c in range(5, 40):
@@ -589,10 +589,9 @@ class DataEngine:
                             cols_promedios.append(c)
 
                     for c in cols_promedios:
-                        try:
-                            nota = float(ws_res.cell(row=fila_estudiante, column=c).value)
+                        valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                        if valido:
                             historial.append(nota)
-                        except (ValueError, TypeError): pass
 
         if should_close: wb.close()
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
@@ -1224,10 +1223,9 @@ class DataEngine:
                 # Calcular anual
                 notas = []
                 for c in cols_promedios:
-                    try:
-                        nota = float(ws_res.cell(row=r, column=c).value)
+                    valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=c).value)
+                    if valido:
                         notas.append(nota)
-                    except (ValueError, TypeError): pass
 
                 if notas:
                     anual = sum(notas) / len(notas)

@@ -110,7 +110,7 @@ class MainApplication(ctk.CTkFrame):
         for w in self._sb.winfo_children():
             w.destroy()
 
-        logo_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
+        logo_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
 
         if PIL_OK and os.path.exists(logo_path):
             try:
@@ -223,14 +223,14 @@ class RegistroDocApp(ctk.CTk):
 
 
         # Iconos de la ventana
-        icon_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icon.ico"))
+        icon_path = os.path.join(BASE_DIR, "..", "img", "icon.ico")
         if os.path.exists(icon_path):
             try:
                 self.iconbitmap(icon_path)
             except Exception:
                 pass
 
-        img_path = os.path.abspath(os.path.join(BASE_DIR, "..", "img", "icono.png"))
+        img_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
         if os.path.exists(img_path):
             try:
                 pil = Image.open(img_path).resize((64, 64))
@@ -244,7 +244,7 @@ class RegistroDocApp(ctk.CTk):
                    if modalidad_inicial == "primaria"
                    else "Registro_2026.xlsx")
         base    = BASE_DIR
-        ruta    = os.path.abspath(os.path.join(base, "..", archivo))
+        ruta    = os.path.join(base, "..", archivo)
         self.engine = DataEngine(ruta, modalidad_inicial)
 
         # Contenedor raíz
