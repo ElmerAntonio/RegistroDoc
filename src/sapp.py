@@ -13,7 +13,7 @@ class ConfigFrame(ctk.CTkFrame):
         self.engine = engine
         self.app_principal = app_principal 
 
-        ctk.CTkLabel(self, text="Panel de Control Maestro", font=("Segoe UI", 24, "bold"), text_color="#3B82F6").pack(anchor="w", pady=(0, 10))
+        ctk.CTkLabel(self, text="Panel de Control Maestro", font=("Segoe UI", 24, "bold"), text_color="#3B82F6").pack(anchor="center", pady=(0, 5))
         
         self.tabs = ctk.CTkTabview(self)
         self.tabs.pack(fill="both", expand=True, pady=10)
@@ -62,22 +62,17 @@ class ConfigFrame(ctk.CTkFrame):
         self.entry_ss = self._crear_campo(f2, r, "N° Seguro Social:", data.get("seguro_social", "")); r+=1
         self.entry_pos = self._crear_campo(f2, r, "N° Posición:", data.get("numero_posicion", "")); r+=1
 
-        
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#475569").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_esc = self._crear_campo(f2, r, "Escuela:", data.get("escuela_nombre", "")); r+=1
         self.entry_reg = self._crear_campo(f2, r, "Región Escolar:", data.get("escuela_region", "")); r+=1
         self.entry_dis = self._crear_campo(f2, r, "Distrito:", data.get("distrito", "")); r+=1
         self.entry_cor = self._crear_campo(f2, r, "Corregimiento:", data.get("corregimiento", "")); r+=1
         self.entry_zon = self._crear_campo(f2, r, "Zona Escolar:", data.get("zona_escolar", "")); r+=1
         
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#475569").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_dir = self._crear_campo(f2, r, "Director(a):", data.get("director_nombre", "")); r+=1
         self.entry_sub = self._crear_campo(f2, r, "Subdirector(a):", data.get("subdirector_nombre", "")); r+=1
         self.entry_coo = self._crear_campo(f2, r, "Coordinador:", data.get("coordinador_nombre", "")); r+=1
         self.entry_tel = self._crear_campo(f2, r, "Teléfono:", data.get("telefono", "")); r+=1
         self.entry_cor = self._crear_campo(f2, r, "Correo:", data.get("correo", "")); r+=1
-        
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#475569").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_ano = self._crear_campo(f2, r, "Año Lectivo:", data.get("ano_lectivo", "2026")); r+=1
         self.entry_jor = self._crear_campo(f2, r, "Jornada:", data.get("jornada", "")); r+=1
 

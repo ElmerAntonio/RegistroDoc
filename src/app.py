@@ -34,6 +34,7 @@ from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
 from grapp  import GraficosFrame
 from happ   import ReportesFrame
+from splash import SplashScreen
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -104,6 +105,7 @@ class MainApplication(ctk.CTkFrame):
         self.app = app_principal
         self._acento = C["cian"]
         self.menu_activo = "Inicio"
+        self._destroyed = False  # Bandera para prevenir operaciones después de destrucción
 
         self.pack_propagate(False)
         self.columnconfigure(0, weight=1)
@@ -113,6 +115,10 @@ class MainApplication(ctk.CTkFrame):
         self._cuerpo()
 
     def _sb_renderizar(self):
+        # Prevenir operaciones si la aplicación ya fue destruida
+        if self._destroyed or not self.winfo_exists():
+            return
+            
         for w in self._sb.winfo_children():
             w.destroy()
 
@@ -156,6 +162,9 @@ class MainApplication(ctk.CTkFrame):
 
             def make_cmd(c=cmd, t=texto):
                 def wrapper():
+                    # Prevenir ejecución si la aplicación fue destruida
+                    if self._destroyed or not self.winfo_exists():
+                        return
                     self.menu_activo = t
                     self._sb_renderizar()
                     c()
@@ -180,6 +189,11 @@ class MainApplication(ctk.CTkFrame):
         ctk.CTkLabel(self._sb, text="v.Prov.22:6",
                      font=ctk.CTkFont("Segoe UI", 11),
                      text_color=C["texto_dim"]).pack(pady=(0, 15))
+
+    def destroy(self):
+        """Override destroy para marcar la aplicación como destruida."""
+        self._destroyed = True
+        super().destroy()
 
     # Rutas de navegación
     def _ir_inicio(self):
@@ -226,6 +240,8 @@ class MainApplication(ctk.CTkFrame):
 class RegistroDocApp(ctk.CTk):
     def __init__(self, modalidad_inicial="premedia"):
         super().__init__()
+        self._destroyed = False  # Bandera para prevenir operaciones después de destrucción
+        
         self.title("RegistroDoc Pro v3.0 — MEDUCA Panamá")
 
         # ─── VENTANA REDIMENSIONABLE Y MAXIMIZABLE ───
@@ -235,17 +251,10 @@ class RegistroDocApp(ctk.CTk):
 
 
         # Iconos de la ventana
-        icon_path = os.path.join(BASE_DIR, "..", "img", "icon.ico")
+        icon_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
         if os.path.exists(icon_path):
             try:
-                self.iconbitmap(icon_path)
-            except Exception:
-                pass
-
-        img_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
-        if os.path.exists(img_path):
-            try:
-                pil = Image.open(img_path).resize((64, 64))
+                pil = Image.open(icon_path).resize((64, 64))
                 self._icono_app = ImageTk.PhotoImage(pil)
                 self.iconphoto(True, self._icono_app)
             except Exception:
@@ -326,6 +335,11 @@ class RegistroDocApp(ctk.CTk):
         self.main_app.engine = self.engine
         self.mostrar_dashboard()
 
+    def destroy(self):
+        """Override destroy para marcar la aplicación como destruida y limpiar recursos."""
+        self._destroyed = True
+        super().destroy()
+
 
 def iniciar_programa_principal():
     try:
@@ -333,6 +347,10 @@ def iniciar_programa_principal():
             config = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         config = {"modalidad": "premedia"}
+
+    # Mostrar pantalla splash
+    splash = SplashScreen()
+    splash.mostrar()
 
     app = RegistroDocApp(
         modalidad_inicial=config.get("modalidad", "premedia"))

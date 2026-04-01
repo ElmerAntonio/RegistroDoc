@@ -64,6 +64,20 @@ class GraficosFrame(ctk.CTkFrame):
         self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"], command=lambda _: self.actualizar_graficos())
         self.combo_trimestre.pack(side="left", padx=5)
 
+        # Opciones de gráficos
+        f_opciones = ctk.CTkFrame(f_top, fg_color="transparent")
+        f_opciones.pack(side="left", padx=10)
+        ctk.CTkLabel(f_opciones, text="Gráficos:", font=("Segoe UI", 12)).pack(side="top")
+        self.chk_pastel = ctk.CTkCheckBox(f_opciones, text="Pastel", command=self.actualizar_graficos)
+        self.chk_pastel.pack(side="left", padx=5)
+        self.chk_pastel.select()
+        self.chk_barras = ctk.CTkCheckBox(f_opciones, text="Barras", command=self.actualizar_graficos)
+        self.chk_barras.pack(side="left", padx=5)
+        self.chk_barras.select()
+        self.chk_tendencia = ctk.CTkCheckBox(f_opciones, text="Tendencia", command=self.actualizar_graficos)
+        self.chk_tendencia.pack(side="left", padx=5)
+        self.chk_tendencia.select()
+
         ctk.CTkButton(f_top, text="🔄 Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=10)
         self.al_cambiar_grado(grados[0])
 
@@ -99,11 +113,6 @@ class GraficosFrame(ctk.CTkFrame):
         trimestre = self.combo_trimestre.get()
         estudiante_sel = self.combo_estudiante.get()
 
-        if grado == "Sin datos" or materia == "Sin materias" or materia == "No hay materias":
-            ctk.CTkLabel(self.scroll_canvas, text="No hay datos suficientes para graficar.",
-                        font=("Segoe UI", 16)).grid(row=0, column=0, columnspan=2, pady=50)
-            return
-
         estudiantes = []
         try:
             estudiantes = self.engine.obtener_estudiantes_completos(grado)
@@ -130,9 +139,16 @@ class GraficosFrame(ctk.CTkFrame):
             self.dibujar_proyeccion(estudiante_sel, historial, 0, 0, colspan=2)
         else:
             # Vista general
-            self.dibujar_pastel(aprobados, en_riesgo, reprobados, 0, 0)
-            self.dibujar_barras(promedios_por_est, 0, 1)
-            self.dibujar_tendencia(list(promedios_por_est.values()), 1, 0, colspan=2)
+            row = 0
+            col = 0
+            if self.chk_pastel.get():
+                self.dibujar_pastel(aprobados, en_riesgo, reprobados, row, col)
+                col += 1
+            if self.chk_barras.get():
+                self.dibujar_barras(promedios_por_est, row, col)
+                col += 1
+            if self.chk_tendencia.get():
+                self.dibujar_tendencia(list(promedios_por_est.values()), row + 1, 0, colspan=2 if col == 0 else 1)
 
     def dibujar_proyeccion(self, nombre, historial, row, col, colspan=1):
         import numpy as np
@@ -146,22 +162,27 @@ class GraficosFrame(ctk.CTkFrame):
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
 
-        x = np.arange(1, len(historial) + 1)
-        y = np.array(historial)
+        if not historial or len(historial) < 2:
+            ax.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='white', fontsize=16)
+        else:
+            x = np.arange(1, len(historial) + 1)
+            y = np.array(historial)
 
-        # Regresion lineal
-        slope, intercept, r_value, p_value, std_err = linregress(x, y)
-        x_pred = np.arange(1, len(historial) + 3) # Proyectar 2 periodos mas
-        y_pred = intercept + slope * x_pred
+            # Regresion lineal
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            x_pred = np.arange(1, len(historial) + 3) # Proyectar 2 periodos mas
+            y_pred = intercept + slope * x_pred
 
-        ax.plot(x, y, marker='o', color=self.C["cian"], label='Historial de Notas', linewidth=2, markersize=8)
-        ax.plot(x_pred, y_pred, linestyle='--', color=self.C["amarillo"], label='Tendencia / Predicción', linewidth=2)
+            ax.plot(x, y, marker='o', color=self.C["cian"], label='Historial de Notas', linewidth=2, markersize=8)
+            ax.plot(x_pred, y_pred, linestyle='--', color=self.C["amarillo"], label='Tendencia / Predicción', linewidth=2)
 
-        ax.axhline(y=3.0, color=self.C["rojo"], linestyle=':', alpha=0.7, label='Límite Aprobación (3.0)')
+            ax.axhline(y=3.0, color=self.C["rojo"], linestyle=':', alpha=0.7, label='Límite Aprobación (3.0)')
 
-        ax.set_ylim(1.0, 5.2)
-        ax.set_xticks(x_pred)
-        ax.set_xticklabels([f"T{i}" for i in x] + ["Pred 1", "Pred 2"])
+            ax.set_ylim(1.0, 5.2)
+            ax.set_xticks(x_pred)
+            ax.set_xticklabels([f"T{i}" for i in x] + ["Pred 1", "Pred 2"])
+
+            ax.legend(facecolor=self.C["fondo"], edgecolor=self.C["card"], labelcolor="white")
 
         ax.tick_params(axis='x', colors=self.C["texto"])
         ax.tick_params(axis='y', colors=self.C["texto"])
@@ -172,7 +193,6 @@ class GraficosFrame(ctk.CTkFrame):
         ax.spines['right'].set_visible(False)
 
         ax.set_title(f"Proyección y Predicción de Rendimiento: {nombre}", color=self.C["cian"], pad=15, fontweight="bold")
-        ax.legend(facecolor=self.C["fondo"], edgecolor=self.C["card"], labelcolor="white")
         fig.tight_layout()
 
         canvas = FigureCanvasTkAgg(fig, master=f_grafico)

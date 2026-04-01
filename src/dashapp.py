@@ -403,7 +403,7 @@ class DashboardFrame(ctk.CTkFrame):
         self._footer_frame = ctk.CTkFrame(parent, fg_color="transparent")
         ff = self._footer_frame
         ff.pack(fill="x", padx=20, pady=(4, 20))
-        ff.columnconfigure((0, 1), weight=1, uniform="bot")
+        ff.columnconfigure((0, 1, 2), weight=1, uniform="bot")
 
         # Grados activos
         gc = ctk.CTkFrame(ff, fg_color=C["card"],
@@ -432,11 +432,42 @@ class DashboardFrame(ctk.CTkFrame):
                 padx=12, pady=6)
             pill.pack(side="left", padx=4)
 
+        # Horario sincronizado
+        hc = ctk.CTkFrame(ff, fg_color=C["card"],
+                          border_width=1, border_color=C["borde"],
+                          corner_radius=12)
+        hc.grid(row=0, column=1, padx=(0, 8), sticky="nsew", pady=4)
+
+        ctk.CTkLabel(hc, text="Horario del Día",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
+
+        hf = ctk.CTkFrame(hc, fg_color="transparent")
+        hf.pack(fill="x", padx=16, pady=(0, 14))
+
+        # Obtener horario actual
+        materia_actual, hora_actual = self._obtener_materia_actual()
+        
+        if materia_actual:
+            ctk.CTkLabel(hf, text=f"📚 {materia_actual}",
+                        font=ctk.CTkFont("Segoe UI", 16, "bold"),
+                        text_color=self._acento).pack(anchor="w")
+            ctk.CTkLabel(hf, text=f"🕐 {hora_actual}",
+                        font=ctk.CTkFont("Segoe UI", 12),
+                        text_color=C["texto_sec"]).pack(anchor="w", pady=(2, 0))
+        else:
+            ctk.CTkLabel(hf, text="📚 Fuera de horario escolar",
+                        font=ctk.CTkFont("Segoe UI", 14),
+                        text_color=C["texto_sec"]).pack(anchor="w")
+            ctk.CTkLabel(hf, text="🕐 No hay clases programadas",
+                        font=ctk.CTkFont("Segoe UI", 12),
+                        text_color=C["texto_sec"]).pack(anchor="w", pady=(2, 0))
+
         # Accesos rápidos
         ac = ctk.CTkFrame(ff, fg_color=C["card"],
                           border_width=1, border_color=C["borde"],
                           corner_radius=12)
-        ac.grid(row=0, column=1, sticky="nsew", pady=4)
+        ac.grid(row=0, column=2, sticky="nsew", pady=4)
 
         ctk.CTkLabel(ac, text="Accesos Rápidos",
                      font=ctk.CTkFont("Segoe UI", 14, "bold"),
@@ -475,6 +506,50 @@ class DashboardFrame(ctk.CTkFrame):
                 row=0, column=i, padx=5, sticky="ew")
 
 
+    def _obtener_materia_actual(self):
+        """Obtiene la materia actual basada en el día y hora actuales."""
+        try:
+            # Obtener día de la semana (0=lunes, 6=domingo)
+            dia_semana = datetime.datetime.now().weekday()
+            
+            # Mapear a nombres del horario (solo días de semana)
+            dias_horario = ["lunes", "martes", "miercoles", "jueves", "viernes"]
+            
+            if dia_semana >= 5:  # Sábado o domingo
+                return None, None
+            
+            dia_actual = dias_horario[dia_semana]
+            
+            # Obtener hora actual
+            hora_actual = datetime.datetime.now().time()
+            
+            # Obtener horario del engine
+            horario = self.engine.obtener_horario()
+            
+            # Buscar el período actual
+            for periodo in horario:
+                if not periodo["horas"] or not periodo[dia_actual]:
+                    continue
+                
+                # Parsear el rango de horas (ej: "7:00-7:45")
+                try:
+                    horas_str = periodo["horas"].strip()
+                    if "-" in horas_str:
+                        inicio_str, fin_str = horas_str.split("-")
+                        inicio = datetime.datetime.strptime(inicio_str.strip(), "%H:%M").time()
+                        fin = datetime.datetime.strptime(fin_str.strip(), "%H:%M").time()
+                        
+                        if inicio <= hora_actual <= fin:
+                            return periodo[dia_actual], periodo["horas"]
+                except (ValueError, AttributeError):
+                    continue
+            
+            return None, None
+            
+        except Exception:
+            return None, None
+
+
 # ─── MOCK PARA PRUEBA STANDALONE ─────────────────────────────────────────────
 if __name__ == "__main__":
     ctk.set_appearance_mode("dark")
@@ -493,6 +568,17 @@ if __name__ == "__main__":
         def obtener_datos_generales(self):
             return {"docente_nombre": "Prof. Elmer Tugri",
                     "correo": "elmer.tugri7@meduca.edu.pa"}
+        def obtener_horario(self):
+            return [
+                {"horas": "7:00-7:45", "lunes": "Matemáticas", "martes": "Español", "miercoles": "Ciencias", "jueves": "Historia", "viernes": "Inglés"},
+                {"horas": "7:45-8:30", "lunes": "Español", "martes": "Matemáticas", "miercoles": "Inglés", "jueves": "Ciencias", "viernes": "Historia"},
+                {"horas": "8:30-9:15", "lunes": "Ciencias", "martes": "Historia", "miercoles": "Matemáticas", "jueves": "Español", "viernes": "Ciencias"},
+                {"horas": "9:15-10:00", "lunes": "Historia", "martes": "Inglés", "miercoles": "Español", "jueves": "Matemáticas", "viernes": "Inglés"},
+                {"horas": "10:15-11:00", "lunes": "Inglés", "martes": "Ciencias", "miercoles": "Historia", "jueves": "Inglés", "viernes": "Matemáticas"},
+                {"horas": "11:00-11:45", "lunes": "Educación Física", "martes": "Arte", "miercoles": "Música", "jueves": "Computación", "viernes": "Educación Cívica"},
+                {"horas": "11:45-12:30", "lunes": "Computación", "martes": "Educación Física", "miercoles": "Arte", "jueves": "Música", "viernes": "Computación"},
+                {"horas": "12:30-13:15", "lunes": "Religión", "martes": "Computación", "miercoles": "Educación Física", "jueves": "Arte", "viernes": "Música"}
+            ]
 
     root = ctk.CTk()
     root.title("RegistroDoc Pro v3.0")

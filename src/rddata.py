@@ -573,13 +573,18 @@ class DataEngine:
                         if col_inicio_materia: break
 
                     if col_inicio_materia:
+                        # Buscar columnas de trimestre debajo de la materia
+                        fila_materias = None
+                        for rmat in range(4, 15):
+                            if materia.upper() in str(ws_res.cell(row=rmat, column=col_inicio_materia).value or "").upper():
+                                fila_materias = rmat
+                                break
                         cols_trimestres = []
                         for c in range(col_inicio_materia, col_inicio_materia + 5):
-                            val = str(ws_res.cell(row=r+1, column=c).value or "").upper()
-                            val2 = str(ws_res.cell(row=r+2, column=c).value or "").upper()
+                            val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
+                            val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
                             if "T.1" in val or "T.1" in val2 or "T.2" in val or "T.2" in val2 or "T.3" in val or "T.3" in val2:
                                 cols_trimestres.append(c)
-
                         for c in cols_trimestres:
                             try:
                                 valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
@@ -623,15 +628,15 @@ class DataEngine:
             if hoja_obj:
                 col_nom = None; col_ced = None; col_estado = None; col_anual = None
                 for c in range(1, 40):
-                    val = str(hoja_obj.cell(row=9, column=c).value or "").upper()
-                    val2 = str(hoja_obj.cell(row=8, column=c).value or "").upper()
-                    if "NOMBRE" in val: col_nom = c
-                    if "CÉDULA" in val or "CEDULA" in val: col_ced = c
-                    if "ESTADO" in val or "ESTADO" in val2: col_estado = c
-                    if "ANUAL" in val or "FINAL" in val or "ANUAL" in val2 or "FINAL" in val2: col_anual = c
+                    for r in [3, 4, 8, 9]:
+                        val = str(hoja_obj.cell(row=r, column=c).value or "").upper()
+                        if "NOMBRE" in val or "APELLIDO" in val: col_nom = c
+                        if "CÉDULA" in val or "CEDULA" in val: col_ced = c
+                        if "ESTADO" in val: col_estado = c
+                        if "ANUAL" in val or "FINAL" in val: col_anual = c
 
                 if col_nom:
-                    for r in range(10, 50):
+                    for r in range(5, 50):
                         nom = hoja_obj.cell(row=r, column=col_nom).value
                         if nom:
                             ced = hoja_obj.cell(row=r, column=col_ced).value if col_ced else ""
