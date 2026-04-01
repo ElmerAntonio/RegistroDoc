@@ -2,7 +2,6 @@ import customtkinter as ctk
 import tkinter as tk
 from PIL import Image, ImageTk, ImageOps
 import os
-import time
 from utils.frases_educacion import frase_del_dia
 
 class SplashScreen(ctk.CTkToplevel):
