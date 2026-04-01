@@ -1185,8 +1185,9 @@ class DataEngine:
 
 
     def actualizar_resumen(self, grado):
-        if not os.path.exists(self.ruta): return False
-        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return False
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
         hoja_res = None
         grado_num = grado.replace("°", "")
         for sheet in wb.sheetnames:
@@ -1195,7 +1196,7 @@ class DataEngine:
                 break
 
         if not hoja_res:
-            wb.close()
+            if should_close: wb.close()
             return False
 
         ws_res = wb[hoja_res]
@@ -1239,7 +1240,7 @@ class DataEngine:
             wb_write.save(self.ruta)
             wb_write.close()
 
-        wb.close()
+        if should_close: wb.close()
         self._cargar_en_memoria()
         return True
 
