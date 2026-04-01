@@ -97,12 +97,12 @@ def imprimir_hoja_directo(nombre_hoja: str = "Portada") -> tuple[bool, str]:
              return False, "La ruta del archivo no es válida."
 
         # Conectar a Excel de manera segura
-        excel = win32com.client.Dispatch("Excel.Application")
+        excel = win32com.client.DispatchEx("Excel.Application")
         excel.Visible = False
         excel.DisplayAlerts = False
 
         try:
-            wb = excel.Workbooks.Open(abs_ruta)
+            wb = excel.Workbooks.Open(abs_ruta, ReadOnly=True)
             try:
                 hoja = wb.Sheets(nombre_hoja)
                 hoja.PrintOut()
