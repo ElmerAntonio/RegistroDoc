@@ -403,11 +403,18 @@ class DataEngine:
 
     def agregar_estudiante(self, grado, nombre, cedula=""):
         if not os.path.exists(self.ruta): return False
+
+        # Validar limites
+        max_estudiantes = 34 if self.modalidad == "primaria" else 36
+        actuales = self.obtener_estudiantes_completos(grado)
+        if len(actuales) >= max_estudiantes:
+            return False
+
         wb = openpyxl.load_workbook(self.ruta)
         ws_m = wb["MAESTRO"]
         col_nom = self._obtener_columna_nombres(grado)
         fila_vacia = None
-        for r in range(5, 51):
+        for r in range(5, 5 + max_estudiantes):
             if not ws_m.cell(row=r, column=col_nom).value:
                 fila_vacia = r
                 break
@@ -447,6 +454,201 @@ class DataEngine:
         wb.close()
         self._cargar_en_memoria()
         return True
+
+    def obtener_promedios_reales(self, grado, materia, trimestre):
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return {}
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
+
+        datos = {}
+        grado_num = grado.replace("°", "")
+
+        if trimestre == "Trimestre 1": col_b = "T.1"
+        elif trimestre == "Trimestre 2": col_b = "T.2"
+        elif trimestre == "Trimestre 3": col_b = "T.3"
+        else: col_b = "ANUAL"
+
+        hoja_res = None
+        for s in wb.sheetnames:
+            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
+                hoja_res = s
+                break
+
+        if hoja_res:
+            ws_res = wb[hoja_res]
+            # Buscamos la fila de materias para encontrar la columna correcta de la materia y trimestre
+            # En premedia, cada materia tiene columnas de T.1, T.2, T.3, PROMEDIO
+            # Si materia="General", sacamos el promedio ANUAL final
+
+            col_nom = None
+            col_nota = None
+
+            for c in range(1, 40):
+                val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                if "NOMBRE" in val: col_nom = c
+
+            if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+                # Buscar materia
+                fila_materias = None
+                col_inicio_materia = None
+                for r in range(4, 15):
+                    for c in range(2, 40):
+                        if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
+                            fila_materias = r
+                            col_inicio_materia = c
+                            break
+                    if col_inicio_materia: break
+
+                if col_inicio_materia:
+                    # Encontrar la columna del trimestre debajo de la materia
+                    for c in range(col_inicio_materia, col_inicio_materia + 5):
+                        val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
+                        val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
+                        if col_b in val or col_b in val2:
+                            col_nota = c
+                            break
+            else:
+                # General o todas las materias -> Anual
+                for c in range(1, 40):
+                    val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                    val2 = str(ws_res.cell(row=8, column=c).value or "").upper()
+                    if "ANUAL" in val or "FINAL" in val or "ANUAL" in val2 or "FINAL" in val2:
+                        col_nota = c
+                        break
+
+            if col_nom and col_nota:
+                for r in range(10, 50):
+                    nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
+                    if nom:
+                        try:
+                            nota = float(ws_res.cell(row=r, column=col_nota).value)
+                            datos[nom] = nota
+                        except (ValueError, TypeError):
+                            datos[nom] = 1.0 # Default if empty or invalid
+
+        if should_close: wb.close()
+        return datos
+
+    def obtener_historial_real(self, grado, materia, nombre_estudiante):
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
+
+        historial = []
+        grado_num = grado.replace("°", "")
+
+        hoja_res = None
+        for s in wb.sheetnames:
+            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
+                hoja_res = s
+                break
+
+        if hoja_res:
+            ws_res = wb[hoja_res]
+            col_nom = None
+            for c in range(1, 40):
+                val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                if "NOMBRE" in val: col_nom = c
+
+            fila_estudiante = None
+            if col_nom:
+                for r in range(10, 50):
+                    if nombre_estudiante.upper() == str(ws_res.cell(row=r, column=col_nom).value or "").strip().upper():
+                        fila_estudiante = r
+                        break
+
+            if fila_estudiante:
+                if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+                    col_inicio_materia = None
+                    for r in range(4, 15):
+                        for c in range(2, 40):
+                            if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
+                                col_inicio_materia = c
+                                break
+                        if col_inicio_materia: break
+
+                    if col_inicio_materia:
+                        cols_trimestres = []
+                        for c in range(col_inicio_materia, col_inicio_materia + 5):
+                            val = str(ws_res.cell(row=r+1, column=c).value or "").upper()
+                            val2 = str(ws_res.cell(row=r+2, column=c).value or "").upper()
+                            if "T.1" in val or "T.1" in val2 or "T.2" in val or "T.2" in val2 or "T.3" in val or "T.3" in val2:
+                                cols_trimestres.append(c)
+
+                        for c in cols_trimestres:
+                            try:
+                                nota = float(ws_res.cell(row=fila_estudiante, column=c).value)
+                                historial.append(nota)
+                            except (ValueError, TypeError): pass
+                else:
+                    cols_promedios = []
+                    for c in range(5, 40):
+                        val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                        val2 = str(ws_res.cell(row=8, column=c).value or "").upper()
+                        if "PROMEDIO" in val or "T.1" in val or "T.2" in val or "T.3" in val:
+                            cols_promedios.append(c)
+
+                    for c in cols_promedios:
+                        try:
+                            nota = float(ws_res.cell(row=fila_estudiante, column=c).value)
+                            historial.append(nota)
+                        except (ValueError, TypeError): pass
+
+        if should_close: wb.close()
+        return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
+
+    def obtener_datos_reportes(self, grado):
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return {"docente": [], "aprobados": [], "direccion": []}
+        wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        should_close = False if self._wb_cache else True
+
+        datos = {"docente": [], "aprobados": [], "direccion": []}
+        grado_num = grado.replace("°", "")
+
+        def extraer_de_hoja(palabra_clave):
+            hoja_obj = None
+            for s in wb.sheetnames:
+                if palabra_clave in s.upper() and (self.modalidad == "primaria" or grado_num in s):
+                    hoja_obj = wb[s]
+                    break
+
+            filas = []
+            if hoja_obj:
+                col_nom = None; col_ced = None; col_estado = None; col_anual = None
+                for c in range(1, 40):
+                    val = str(hoja_obj.cell(row=9, column=c).value or "").upper()
+                    val2 = str(hoja_obj.cell(row=8, column=c).value or "").upper()
+                    if "NOMBRE" in val: col_nom = c
+                    if "CÉDULA" in val or "CEDULA" in val: col_ced = c
+                    if "ESTADO" in val or "ESTADO" in val2: col_estado = c
+                    if "ANUAL" in val or "FINAL" in val or "ANUAL" in val2 or "FINAL" in val2: col_anual = c
+
+                if col_nom:
+                    for r in range(10, 50):
+                        nom = hoja_obj.cell(row=r, column=col_nom).value
+                        if nom:
+                            ced = hoja_obj.cell(row=r, column=col_ced).value if col_ced else ""
+                            estado = hoja_obj.cell(row=r, column=col_estado).value if col_estado else ""
+                            anual = hoja_obj.cell(row=r, column=col_anual).value if col_anual else ""
+                            filas.append([nom, ced, anual, estado])
+            return filas
+
+        # Si las hojas dedicadas existen, leemos de ahí, de lo contrario fallback a RESUMEN
+
+        docente_data = extraer_de_hoja("REPORTE_DOCENTE")
+        aprobados_data = extraer_de_hoja("REPORTE_APROBADOS")
+        direccion_data = extraer_de_hoja("REPORTE_DIRECCIÓN")
+
+        if not docente_data: docente_data = extraer_de_hoja("RESUMEN")
+        if not aprobados_data: aprobados_data = extraer_de_hoja("RESUMEN")
+        if not direccion_data: direccion_data = extraer_de_hoja("RESUMEN")
+
+        for fila in docente_data: datos["docente"].append([fila[0], fila[1], fila[2]])
+        for fila in aprobados_data: datos["aprobados"].append([fila[0], fila[3]])
+        for fila in direccion_data: datos["direccion"].append(fila)
+
+        if should_close: wb.close()
+        return datos
 
     def get_dashboard_stats(self):
         if not os.path.exists(self.ruta) and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
@@ -522,7 +724,8 @@ class DataEngine:
         try:
             cell_desc = ws.cell(row=self.fila_desc, column=col_vacia)
             cell_desc.value = desc
-            cell_desc.alignment = Alignment(textRotation=90, wrapText=True, horizontal='center', vertical='center')
+            cell_desc.alignment = Alignment(wrapText=True, horizontal='center', vertical='center')
+            cell_desc.font = Font(name='Calibri', size=11, bold=False)
         except AttributeError: pass
         for id_estudiante, nota in dic_notas.items():
             fila_excel = 4 + int(id_estudiante)
@@ -531,6 +734,7 @@ class DataEngine:
         wb.save(self.ruta)
         wb.close()
         self._cargar_en_memoria()
+        self.actualizar_resumen(grado)
         return True, ""
 
     def obtener_descripciones_notas(self, grado, materia, trimestre, tipo_nota):
@@ -615,6 +819,7 @@ class DataEngine:
         wb.save(self.ruta)
         wb.close()
         self._cargar_en_memoria()
+        self.actualizar_resumen(grado)
         return True
 
     def _encontrar_hoja_asistencia(self, wb, grado):
@@ -696,6 +901,7 @@ class DataEngine:
         wb.save(self.ruta)
         wb.close()
         self._cargar_en_memoria()
+        self.actualizar_resumen(grado)
         return True, ""
 
     def actualizar_asistencia(self, grado, trimestre, columna, dic_asistencia):
@@ -976,6 +1182,66 @@ class DataEngine:
         wb.close()
         self._cargar_en_memoria()
         return True, "Materia clonada y agregada al Resumen."
+
+
+    def actualizar_resumen(self, grado):
+        if not os.path.exists(self.ruta): return False
+        wb = openpyxl.load_workbook(self.ruta, data_only=True)
+        hoja_res = None
+        grado_num = grado.replace("°", "")
+        for sheet in wb.sheetnames:
+            if "RESUMEN" in sheet.upper() and (self.modalidad == "primaria" or grado_num in sheet):
+                hoja_res = sheet
+                break
+
+        if not hoja_res:
+            wb.close()
+            return False
+
+        ws_res = wb[hoja_res]
+
+        # Primero vamos a identificar las columnas de Promedio (T1, T2, T3) y Nota Final/Anual
+        cols_promedios = []
+        col_anual = None
+        col_estado = None
+
+        for c in range(5, 40):
+            val = str(ws_res.cell(row=9, column=c).value or "").upper()
+            val2 = str(ws_res.cell(row=8, column=c).value or "").upper()
+            if "PROMEDIO" in val or "T.1" in val or "T.2" in val or "T.3" in val:
+                cols_promedios.append(c)
+            if "ANUAL" in val or "FINAL" in val or "ANUAL" in val2 or "FINAL" in val2:
+                col_anual = c
+            if "ESTADO" in val or "ESTADO" in val2:
+                col_estado = c
+
+        if col_anual and col_estado:
+            wb_write = openpyxl.load_workbook(self.ruta)
+            ws_write = wb_write[hoja_res]
+
+            for r in range(10, 50):
+                # Calcular anual
+                notas = []
+                for c in cols_promedios:
+                    try:
+                        nota = float(ws_res.cell(row=r, column=c).value)
+                        notas.append(nota)
+                    except (ValueError, TypeError): pass
+
+                if notas:
+                    anual = sum(notas) / len(notas)
+                    anual = round(anual, 1)
+                    try:
+                        ws_write.cell(row=r, column=col_anual).value = anual
+                        ws_write.cell(row=r, column=col_estado).value = "Aprobado" if anual >= 3.0 else "Reprobado"
+                    except AttributeError: pass
+
+            wb_write.save(self.ruta)
+            wb_write.close()
+
+        wb.close()
+        self._cargar_en_memoria()
+        return True
 
     def eliminar_materia(self, grado, materia):
         if not os.path.exists(self.ruta): return False

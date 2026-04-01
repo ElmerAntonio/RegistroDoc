@@ -88,6 +88,13 @@ class EstudiantesFrame(ctk.CTkFrame):
             messagebox.showwarning("Faltan datos", "El Apellido y Nombre son obligatorios.")
             return
 
+        # Friendly Limit Warning
+        max_estudiantes = 34 if self.engine.modalidad == "primaria" else 36
+        actuales = self.engine.obtener_estudiantes_completos(grado)
+        if len(actuales) >= max_estudiantes:
+            messagebox.showwarning("Límite Alcanzado", f"El grado {grado} ha alcanzado el límite máximo de {max_estudiantes} estudiantes permitido para {self.engine.modalidad.capitalize()}.")
+            return
+
         exito = self.engine.agregar_estudiante(grado, nombre, cedula)
         if exito:
             messagebox.showinfo("Éxito", f"Estudiante {nombre} agregado correctamente.")

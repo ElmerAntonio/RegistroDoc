@@ -48,8 +48,10 @@ class ConfigFrame(ctk.CTkFrame):
         ctk.CTkButton(row_mod, text="🔄 Cambiar Modalidad", fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
 
         f2 = ctk.CTkFrame(self.scroll_gen, fg_color="#1A2638", corner_radius=10)
-        f2.pack(fill="x", padx=10, pady=10, ipadx=10, ipady=10)
-        # Hacemos que la columna de las cajas de texto (columna 1) se expanda al maximizar
+        f2.pack(fill="both", expand=True, padx=10, pady=10, ipadx=10, ipady=10)
+
+        # Simetría en el grid (50/50 o peso equitativo)
+        f2.grid_columnconfigure(0, weight=1)
         f2.grid_columnconfigure(1, weight=1)
         
         ctk.CTkLabel(f2, text="📖 Información Académica (Extraída de Portada)", font=("Segoe UI", 16, "bold"), text_color="#10B981").grid(row=0, column=0, columnspan=2, sticky="w", padx=20, pady=10)
@@ -59,7 +61,7 @@ class ConfigFrame(ctk.CTkFrame):
         self.entry_ced = self._crear_campo(f2, r, "Cédula:", data.get("docente_cedula", "")); r+=1
         self.entry_ss = self._crear_campo(f2, r, "N° Seguro Social:", data.get("seguro_social", "")); r+=1
         self.entry_pos = self._crear_campo(f2, r, "N° Posición:", data.get("numero_posicion", "")); r+=1
-        self.entry_con = self._crear_campo(f2, r, "Condición Nomb.:", data.get("condicion_nombramiento", "")); r+=1
+
         
         ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#475569").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_esc = self._crear_campo(f2, r, "Escuela:", data.get("escuela_nombre", "")); r+=1
@@ -80,8 +82,26 @@ class ConfigFrame(ctk.CTkFrame):
         self.entry_jor = self._crear_campo(f2, r, "Jornada:", data.get("jornada", "")); r+=1
 
         ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
-        self.entry_tit = self._crear_campo(f2, r, "Título (Carátula):", data.get("titulo_caratula", "Maestro de Grado")); r+=1
-        self.entry_gru = self._crear_campo(f2, r, "Grupos (Carátula):", data.get("grupos_caratula", "7°A, 7°B")); r+=1
+        self.var_condicion = ctk.StringVar(value=data.get("condicion_nombramiento", ""))
+        self.var_titulo = ctk.StringVar(value=data.get("titulo_caratula", "Maestro de Grado"))
+
+        def sincronizar_condicion_titulo(*args):
+            self.var_titulo.set(self.var_condicion.get())
+
+        self.var_condicion.trace_add("write", sincronizar_condicion_titulo)
+
+        ctk.CTkLabel(f2, text="Condición Nomb.:", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=5, column=0, sticky="e", padx=10, pady=5)
+        self.entry_con = ctk.CTkEntry(f2, textvariable=self.var_condicion)
+        self.entry_con.grid(row=5, column=1, sticky="ew", padx=20, pady=5)
+
+        ctk.CTkLabel(f2, text="Título (Carátula):", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=r, column=0, sticky="e", padx=10, pady=5)
+        self.entry_tit = ctk.CTkEntry(f2, textvariable=self.var_titulo)
+        self.entry_tit.grid(row=r, column=1, sticky="ew", padx=20, pady=5)
+        r+=1
+
+        grados_activos = ", ".join(self.engine.obtener_grados_activos())
+        self.entry_gru = self._crear_campo(f2, r, "Grupos (Carátula):", grados_activos); r+=1
+
 
         ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
         self.entry_t1 = self._crear_campo(f2, r, "Fecha Trimestre 1:", data.get("fecha_t1", "")); r+=1
@@ -97,7 +117,7 @@ class ConfigFrame(ctk.CTkFrame):
         ctk.CTkLabel(parent, text=texto, anchor="e", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="e", padx=10, pady=5)
         entry = ctk.CTkEntry(parent)
         entry.insert(0, valor)
-        entry.grid(row=row, column=1, sticky="ew", padx=10, pady=5) # El 'sticky="ew"' hace que se estire al maximizar
+        entry.grid(row=row, column=1, sticky="ew", padx=20, pady=5)
         return entry
 
     # ================= PESTAÑA 2: HORARIOS (GRID RESPONSIVO Y CENTRADO) =================
