@@ -1,5 +1,6 @@
 import os
 import re
+from rdsecurity import validar_nota_meduca
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from utils.cleaner import ExcelCleaner
@@ -521,10 +522,13 @@ class DataEngine:
                 for r in range(10, 50):
                     nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
                     if nom:
-                        valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
-                        if valido:
-                            datos[nom] = nota
-                        else:
+                        try:
+                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
+                            if valido:
+                                datos[nom] = nota
+                            else:
+                                datos[nom] = 1.0
+                        except (ValueError, TypeError):
                             datos[nom] = 1.0 # Default if empty or invalid
 
         if should_close: wb.close()
@@ -577,9 +581,11 @@ class DataEngine:
                                 cols_trimestres.append(c)
 
                         for c in cols_trimestres:
-                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
-                            if valido:
-                                historial.append(nota)
+                            try:
+                                valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                                if valido:
+                                    historial.append(nota)
+                            except (ValueError, TypeError): pass
                 else:
                     cols_promedios = []
                     for c in range(5, 40):
@@ -589,9 +595,11 @@ class DataEngine:
                             cols_promedios.append(c)
 
                     for c in cols_promedios:
-                        valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
-                        if valido:
-                            historial.append(nota)
+                        try:
+                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                            if valido:
+                                historial.append(nota)
+                        except (ValueError, TypeError): pass
 
         if should_close: wb.close()
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
@@ -1223,9 +1231,11 @@ class DataEngine:
                 # Calcular anual
                 notas = []
                 for c in cols_promedios:
-                    valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=c).value)
-                    if valido:
-                        notas.append(nota)
+                    try:
+                        valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=c).value)
+                        if valido:
+                            notas.append(nota)
+                    except (ValueError, TypeError): pass
 
                 if notas:
                     anual = sum(notas) / len(notas)

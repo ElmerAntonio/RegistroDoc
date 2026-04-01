@@ -69,8 +69,13 @@ class MainApplication(ctk.CTkFrame):
     #  CUERPO: SIDEBAR + PANEL PRINCIPAL
     # ══════════════════════════════════════════════════════════════════════
     def _cuerpo(self):
+        self._header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=50)
+        self._header.grid(row=0, column=0, sticky="ew")
+        self._header.pack_propagate(False)
+        ctk.CTkLabel(self._header, text="RegistroDoc Pro", font=ctk.CTkFont("Segoe UI", 16, "bold"), text_color=C["cian"]).pack(side="left", padx=20)
+
         cuerpo = ctk.CTkFrame(self, fg_color=C["fondo"], corner_radius=0)
-        cuerpo.grid(row=0, column=0, sticky="nsew") # Movido a la fila 0
+        cuerpo.grid(row=1, column=0, sticky="nsew")
         cuerpo.rowconfigure(0, weight=1)
         cuerpo.columnconfigure(1, weight=1)
 
@@ -102,7 +107,8 @@ class MainApplication(ctk.CTkFrame):
 
         self.pack_propagate(False)
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)   # El cuerpo ahora toma toda la pantalla
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=1)   # El cuerpo ahora toma toda la pantalla
 
         self._cuerpo()
 
@@ -133,6 +139,7 @@ class MainApplication(ctk.CTkFrame):
             ("👤", "Estudiantes",   self._ir_estudiantes),
             ("📝", "Notas",         self._ir_notas),
             ("📅", "Asistencia",    self._ir_asistencia),
+            ("🔍", "Observaciones", self._ir_observaciones),
             ("📋", "Reportes",      self._ir_reportes),
             ("📊", "Gráficos",      self._ir_graficos),
             ("⚙️", "Configuración", self._ir_configuracion)
@@ -203,6 +210,11 @@ class MainApplication(ctk.CTkFrame):
     def _ir_graficos(self):
         if self.app:
             try: self.app.mostrar_graficos()
+            except Exception: pass
+
+    def _ir_observaciones(self):
+        if self.app:
+            try: self.app.mostrar_observaciones()
             except Exception: pass
 
     def _ir_configuracion(self):
