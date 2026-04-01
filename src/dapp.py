@@ -102,7 +102,7 @@ class EstudiantesFrame(ctk.CTkFrame):
             self.entry_nueva_cedula.delete(0, 'end')
             self.cargar_lista(grado) # Recargar la lista para que aparezca
         else:
-            messagebox.showerror("Error", "No se pudo agregar. La lista podría estar llena (Máx. 46 alumnos).")
+            messagebox.showerror("Error", f"No se pudo agregar. La lista podría estar llena (Máx. {max_estudiantes} alumnos).")
 
     def guardar_cambios(self):
         grado = self.combo_grado.get()
