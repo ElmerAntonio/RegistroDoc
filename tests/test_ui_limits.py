@@ -11,7 +11,7 @@ def test_frontend_student_limit_warning():
     engine = MagicMock()
     engine.modalidad = "primaria"
     # mock a full class list
-    engine.obtener_estudiantes_completos.return_value = [{"id": i, "nombre": "MOCK", "cedula": ""} for i in range(34)]
+    engine.obtener_estudiantes_completos.return_value = [{"id": i, "nombre": f"Estudiante {i}", "cedula": ""} for i in range(34)]
 
     frame = EstudiantesFrame(root, engine)
 

@@ -4,6 +4,7 @@ from rdsecurity import validar_nota_meduca
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from utils.cleaner import ExcelCleaner
+from rdsecurity import validar_nota_meduca
 
 class DataEngine:
     def __init__(self, ruta_excel, modalidad="premedia"):
