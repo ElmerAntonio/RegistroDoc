@@ -609,6 +609,8 @@ def cargar_config_segura(default: dict) -> dict:
 NOTA_MIN = 1.0
 NOTA_MAX = 5.0
 
+import math
+
 def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     """
     Valida una nota según el sistema MEDUCA Panamá.
@@ -622,13 +624,12 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     # Normalizar separador decimal
     val_str = str(valor).strip().replace(",", ".")
     
-    # Solo dígitos y punto decimal
-    if not re.match(r"^\d+(\.\d{1,2})?$", val_str):
-        return False, 0.0, f"'{valor}' no es un número válido. Use formato: 3.5"
-    
     try:
-        nota = round(float(val_str), 1)
-    except ValueError:
+        nota_float = float(val_str)
+        if math.isnan(nota_float) or math.isinf(nota_float):
+            return False, 0.0, f"'{valor}' no es un número válido."
+        nota = round(nota_float, 1)
+    except (ValueError, TypeError):
         return False, 0.0, f"'{valor}' no es un número válido."
     
     if nota < NOTA_MIN:
