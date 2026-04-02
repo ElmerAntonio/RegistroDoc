@@ -16,16 +16,15 @@ class DataEngine:
         self._cargar_en_memoria()
 
     def _cargar_en_memoria(self):
-        if self._wb_cache:
+        if self._wb_cache is not None:
             try:
                 self._wb_cache.close()
             except Exception:
                 pass
             self._wb_cache = None
+
         if os.path.exists(self.ruta):
             try:
-                if self._wb_cache is not None:
-                    self._wb_cache.close()
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
             except Exception:
                 self._wb_cache = None
