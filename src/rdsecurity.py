@@ -618,6 +618,9 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     
     Retorna (válida: bool, valor_float: float, mensaje: str)
     """
+    if isinstance(valor, bool):
+        return False, 0.0, f"'{valor}' no es un número válido."
+
     if valor is None or not str(valor).strip():
         return False, 0.0, "Nota vacía."
     

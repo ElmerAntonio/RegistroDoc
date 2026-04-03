@@ -132,11 +132,11 @@ class SetupWizard(ctk.CTk):
 
         # 2. Inyectar datos y limpiar el Excel
         archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_2026.xlsx"
-        ruta_excel = os.path.abspath(os.path.join(BASE_DIR, "..", archivo))
+        ruta_excel = os.path.join(BASE_DIR, "..", archivo)
         
         if os.path.exists(ruta_excel):
             try:
-                engine = DataEngine(ruta_excel, self.datos["modalidad"])
+                engine = DataEngine(ruta_excel=ruta_excel, modalidad=self.datos["modalidad"])
                 engine.actualizar_datos_generales(self.datos["docente_nombre"], self.datos["ano_lectivo"])
                 engine.reiniciar_libreta() 
             except Exception as e:
