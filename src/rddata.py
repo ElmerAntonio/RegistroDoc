@@ -744,7 +744,6 @@ class DataEngine:
             except AttributeError: pass
         wb.save(self.ruta)
         wb.close()
-        self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True, ""
 
@@ -829,7 +828,6 @@ class DataEngine:
 
         wb.save(self.ruta)
         wb.close()
-        self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True
 
@@ -911,7 +909,6 @@ class DataEngine:
             celda.font = fuente_meduca
         wb.save(self.ruta)
         wb.close()
-        self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True, ""
 
