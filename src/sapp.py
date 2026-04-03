@@ -305,7 +305,7 @@ class ConfigFrame(ctk.CTkFrame):
         nueva = self.var_modalidad.get().lower()
         if nueva == self.engine.modalidad: return
         archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_2026.xlsx"
-        ruta_nueva = os.path.abspath(os.path.join(BASE_DIR, "..", archivo_nuevo))
+        ruta_nueva = os.path.join(BASE_DIR, "..", archivo_nuevo)
         if not os.path.exists(ruta_nueva): return messagebox.showerror("Error", f"Falta: {archivo_nuevo}")
         if messagebox.askyesno("Confirmar", f"¿Cambiar a modo {nueva.capitalize()}?"):
             self.app_principal.reiniciar_motor(ruta_nueva, nueva)

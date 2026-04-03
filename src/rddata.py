@@ -328,6 +328,8 @@ class DataEngine:
 
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -433,6 +435,8 @@ class DataEngine:
                     ws_p.cell(row=15+id_est, column=5).value = cedula
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -453,6 +457,8 @@ class DataEngine:
                         ws_p.cell(row=15+int(id_est), column=5).value = datos["cedula"]
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -744,6 +750,8 @@ class DataEngine:
             except AttributeError: pass
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True, ""
@@ -829,6 +837,8 @@ class DataEngine:
 
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True
@@ -911,6 +921,8 @@ class DataEngine:
             celda.font = fuente_meduca
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True, ""
@@ -933,6 +945,8 @@ class DataEngine:
             celda.font = fuente_meduca
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -946,6 +960,8 @@ class DataEngine:
             ws_m.cell(row=1, column=1).value = nuevo_titulo
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -1003,6 +1019,8 @@ class DataEngine:
                         except AttributeError: pass
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -1062,6 +1080,8 @@ class DataEngine:
         
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True, "Grado creado exitosamente."
 
@@ -1093,6 +1113,8 @@ class DataEngine:
                     break
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -1191,6 +1213,8 @@ class DataEngine:
 
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True, "Materia clonada y agregada al Resumen."
 
@@ -1253,6 +1277,8 @@ class DataEngine:
             wb_write.close()
 
         if should_close: wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True
 
@@ -1290,5 +1316,7 @@ class DataEngine:
 
         wb.save(self.ruta)
         wb.close()
+        if self._wb_cache:
+            self._wb_cache.close()
         self._cargar_en_memoria()
         return True

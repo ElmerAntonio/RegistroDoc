@@ -218,9 +218,9 @@ class DashboardFrame(ctk.CTkFrame):
             self._actualizar_dashboard_contextual()
             # Ocultar toast despues de 3 segundos
             def clear_toast():
-            if self.winfo_exists() and hasattr(self, "_toast_lbl") and self._toast_lbl.winfo_exists():
-                self._toast_lbl.configure(text="")
-        self.after(3000, clear_toast)
+                if self.winfo_exists() and hasattr(self, "_toast_lbl") and self._toast_lbl.winfo_exists():
+                    self._toast_lbl.configure(text="")
+            self.after(3000, clear_toast)
 
     def _actualizar_dashboard_contextual(self):
         # Refresh the cards and graph based on _current_student state

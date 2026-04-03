@@ -620,6 +620,9 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     """
     if valor is None or not str(valor).strip():
         return False, 0.0, "Nota vacía."
+
+    if isinstance(valor, bool):
+        return False, 0.0, f"'{valor}' no es un número válido."
     
     # Normalizar separador decimal
     val_str = str(valor).strip().replace(",", ".")
