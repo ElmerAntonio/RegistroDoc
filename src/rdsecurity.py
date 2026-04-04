@@ -636,9 +636,9 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
         return False, 0.0, f"'{valor}' no es un número válido."
     
     if nota < NOTA_MIN:
-        return False, nota, f"La nota mínima en el sistema MEDUCA es {NOTA_MIN}. El 0 no existe en esta escala."
+        return False, 0.0, f"La nota mínima en el sistema MEDUCA es {NOTA_MIN}. El 0 no existe en esta escala."
     
     if nota > NOTA_MAX:
-        return False, nota, f"La nota máxima en el sistema MEDUCA es {NOTA_MAX}."
+        return False, 0.0, f"La nota máxima en el sistema MEDUCA es {NOTA_MAX}."
     
     return True, nota, "OK"

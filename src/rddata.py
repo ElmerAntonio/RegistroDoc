@@ -349,7 +349,7 @@ class DataEngine:
                 grados.append(g)
 
         if should_close: wb.close()
-        return sorted(list(set(grados))) if grados else ["7°", "8°", "9°"]
+        return sorted(list(set(grados))) if grados else []
 
     def obtener_materias_por_grado(self, grado):
         if not os.path.exists(self.ruta) and self._wb_cache is None: return []
