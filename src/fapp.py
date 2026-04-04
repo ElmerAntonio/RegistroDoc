@@ -264,7 +264,7 @@ class AsistenciaFrame(ctk.CTkFrame):
             messagebox.showinfo("Completado", f"{mensaje_base}\n\n(Falta la librería python-docx para generar los Word).")
             return
 
-        carpeta_expedientes = os.path.abspath(os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes"))
+        carpeta_expedientes = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
         if not os.path.exists(carpeta_expedientes):
             os.makedirs(carpeta_expedientes)
 
