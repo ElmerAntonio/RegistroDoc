@@ -5,7 +5,7 @@ import ctypes
 import json
 import customtkinter as ctk
 
-# Usamos abspath para asegurar que las rutas sean correctas sin importar desde dónde se ejecute el script.
+# Añadimos el directorio base al path para resolución de módulos.
 sys.path.insert(0, BASE_DIR)
 
 # Matplotlib
