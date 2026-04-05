@@ -5,7 +5,7 @@ import ctypes
 import json
 import customtkinter as ctk
 
-# Usamos abspath para asegurar que las rutas sean correctas sin importar desde dónde se ejecute el script.
+# Añadimos el directorio base al path para resolución de módulos.
 sys.path.insert(0, BASE_DIR)
 
 # Matplotlib
@@ -254,6 +254,8 @@ class RegistroDocApp(ctk.CTk):
 
         # Iconos de la ventana (resolución para Windows / Barra de tareas)
         icon_path = os.path.join(BASE_DIR, "..", "img", "icon.ico")
+        png_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
+
         if os.path.exists(icon_path):
             try:
                 self.iconbitmap(icon_path)
@@ -261,12 +263,12 @@ class RegistroDocApp(ctk.CTk):
                 pass
 
         # Fallback multi-plataforma
-        png_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
         if os.path.exists(png_path) and getattr(self, "iconphoto", None):
             try:
-                pil = Image.open(png_path).resize((64, 64))
-                self._icono_app = ImageTk.PhotoImage(pil)
-                self.iconphoto(True, self._icono_app)
+                if PIL_OK:
+                    pil = Image.open(png_path).resize((64, 64))
+                    self._icono_app = ImageTk.PhotoImage(pil)
+                    self.iconphoto(True, self._icono_app)
             except Exception:
                 pass
 

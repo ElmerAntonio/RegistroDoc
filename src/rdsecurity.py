@@ -290,7 +290,7 @@ def registrar_auditoria(categoria: str, accion: str, detalle: str = "") -> None:
         hw = _hw_fingerprint()
         hw_id = hashlib.sha256(hw).hexdigest()[:12]  # ID corto del dispositivo
         evento = {
-            "ts":       datetime.datetime.utcnow().isoformat() + "Z",
+            "ts":       datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
             "cat":      categoria[:32],
             "accion":   accion[:64],
             "detalle":  detalle[:256],
@@ -336,7 +336,7 @@ def guardar_hash_excel(ruta_excel: str) -> None:
         datos = {
             "hash":      hash_val,
             "algoritmo": "SHA3-256",
-            "fecha":     datetime.datetime.utcnow().isoformat() + "Z",
+            "fecha":     datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
             "archivo":   os.path.basename(ruta_excel),
         }
         guardar_cifrado(EXCEL_HASH_FILE, datos)
@@ -481,7 +481,7 @@ def activar_licencia(cedula: str, codigo: str) -> tuple[bool, str]:
     datos_lic = {
         "cedula":     cedula,
         "codigo":     codigo,
-        "activado":   datetime.datetime.utcnow().isoformat() + "Z",
+        "activado":   datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
         "version":    VERSION,
         "hw_id":      hashlib.sha256(hw).hexdigest(),
         "valido":     True,
@@ -555,7 +555,7 @@ def _guardar_cedula_token(cedula: str) -> None:
         iterations=PBKDF2_ITERS, backend=default_backend()
     )
     clave_token = kdf.derive(hw)
-    datos = {"hint": cedula, "ts": datetime.datetime.utcnow().isoformat()}
+    datos = {"hint": cedula, "ts": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     blob  = cifrar(json.dumps(datos).encode(), clave_token)
     with open("rd_token.bin", "wb") as f:
         f.write(blob)
@@ -618,6 +618,9 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     
     Retorna (válida: bool, valor_float: float, mensaje: str)
     """
+    if isinstance(valor, bool):
+        return False, 0.0, "Los valores booleanos no son válidos."
+
     if valor is None or not str(valor).strip():
         return False, 0.0, "Nota vacía."
 
@@ -636,9 +639,9 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
         return False, 0.0, f"'{valor}' no es un número válido."
     
     if nota < NOTA_MIN:
-        return False, nota, f"La nota mínima en el sistema MEDUCA es {NOTA_MIN}. El 0 no existe en esta escala."
+        return False, 0.0, f"La nota mínima en el sistema MEDUCA es {NOTA_MIN}. El 0 no existe en esta escala."
     
     if nota > NOTA_MAX:
-        return False, nota, f"La nota máxima en el sistema MEDUCA es {NOTA_MAX}."
+        return False, 0.0, f"La nota máxima en el sistema MEDUCA es {NOTA_MAX}."
     
     return True, nota, "OK"
