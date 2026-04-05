@@ -23,8 +23,6 @@ class GraficosFrame(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self.crear_filtros()
-
         # Contenedor de gráficos con scroll
         self.scroll_canvas = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll_canvas.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
@@ -33,6 +31,7 @@ class GraficosFrame(ctk.CTkFrame):
 
         self.fig_objs = [] # Para limpiar figuras después
 
+        self.crear_filtros()
         # Iniciar gráficos
         self.actualizar_graficos()
 
@@ -315,3 +314,4 @@ class GraficosFrame(ctk.CTkFrame):
         canvas = FigureCanvasTkAgg(fig, master=f_grafico)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+

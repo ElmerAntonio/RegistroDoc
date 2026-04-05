@@ -3,6 +3,7 @@ from config import BASE_DIR, CONFIG_FILE
 import sys
 import ctypes
 import json
+import tkinter as tk
 import customtkinter as ctk
 
 # Usamos abspath para asegurar que las rutas sean correctas sin importar desde dónde se ejecute el script.
@@ -119,6 +120,10 @@ class MainApplication(ctk.CTkFrame):
         # Prevenir operaciones si la aplicación ya fue destruida
         if self._destroyed or not self.winfo_exists():
             return
+        if getattr(self.app, "_destroyed", False):
+            return
+        if tk._default_root is None:
+            return
             
         for w in self._sb.winfo_children():
             w.destroy()
@@ -166,23 +171,33 @@ class MainApplication(ctk.CTkFrame):
                     # Prevenir ejecución si la aplicación fue destruida
                     if self._destroyed or not self.winfo_exists():
                         return
+                    if getattr(self.app, "_destroyed", False):
+                        return
+                    if tk._default_root is None:
+                        return
                     self.menu_activo = t
-                    self._sb_renderizar()
-                    c()
+                    try:
+                        self._sb_renderizar()
+                        c()
+                    except (tk.TclError, RuntimeError):
+                        return
                 return wrapper
 
-            btn = ctk.CTkButton(
-                self._sb, text=label_txt,
-                fg_color=bg,
-                hover_color=C["hover"],
-                font=ctk.CTkFont("Segoe UI", 15),
-                text_color=tc, anchor="w",
-                height=45, corner_radius=6,
-                border_width=bw,
-                border_color=self._acento,
-                command=make_cmd())
-            
-            btn.pack(fill="x", padx=12, pady=4)
+            try:
+                btn = ctk.CTkButton(
+                    self._sb, text=label_txt,
+                    fg_color=bg,
+                    hover_color=C["hover"],
+                    font=ctk.CTkFont("Segoe UI", 15),
+                    text_color=tc, anchor="w",
+                    height=45, corner_radius=6,
+                    border_width=bw,
+                    border_color=self._acento,
+                    command=make_cmd())
+                
+                btn.pack(fill="x", padx=12, pady=4)
+            except (tk.TclError, RuntimeError):
+                return
 
         ctk.CTkFrame(self._sb, fg_color="transparent").pack(
             fill="both", expand=True)
@@ -347,14 +362,40 @@ class RegistroDocApp(ctk.CTk):
 
 
     def on_closing(self):
-        """Limpieza segura y salida completa del programa."""
-        self.destroy()
-        sys.exit(0)
+        """Limpieza segura y salida sin destruir widgets en carrera."""
+        if self._destroyed:
+            return
+        self._destroyed = True
+        try:
+            if hasattr(self, "main_app"):
+                self.main_app._destroyed = True
+        except Exception:
+            pass
+        try:
+            self.withdraw()
+        except Exception:
+            pass
+        try:
+            self.quit()
+        except Exception:
+            pass
+        try:
+            super().destroy()
+        except Exception:
+            pass
 
     def destroy(self):
         """Override destroy para marcar la aplicación como destruida y limpiar recursos."""
         self._destroyed = True
-        super().destroy()
+        try:
+            if hasattr(self, "main_app"):
+                self.main_app._destroyed = True
+        except Exception:
+            pass
+        try:
+            super().destroy()
+        except Exception:
+            pass
 
 
 def iniciar_programa_principal():
@@ -370,12 +411,14 @@ def iniciar_programa_principal():
     except (FileNotFoundError, json.JSONDecodeError):
         config = {"modalidad": "premedia"}
 
-    # Mostrar pantalla splash
-    splash = SplashScreen()
-    splash.mostrar()
-
+    # Crear app primero y usar splash como hija para evitar un segundo root.
     app = RegistroDocApp(
         modalidad_inicial=config.get("modalidad", "premedia"))
+    app.withdraw()
+    splash = SplashScreen(parent=app)
+    splash.mostrar()
+    if app.winfo_exists() and not app._destroyed:
+        app.deiconify()
     app.mainloop()
 
 
