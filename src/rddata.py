@@ -30,7 +30,10 @@ class DataEngine:
                 self._wb_cache = None
 
     def reiniciar_libreta(self):
-        return self.cleaner.limpiar_todo(self.ruta, self.modalidad)
+        result = self.cleaner.limpiar_todo(self.ruta, self.modalidad)
+        if result:
+            self._cargar_en_memoria()
+        return result
 
     def _obtener_columna_nombres(self, grado, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return 2

@@ -136,7 +136,7 @@ class SetupWizard(ctk.CTk):
         
         if os.path.exists(ruta_excel):
             try:
-                engine = DataEngine(ruta_excel, self.datos["modalidad"])
+                engine = DataEngine(ruta_excel=ruta_excel, modalidad=self.datos["modalidad"])
                 engine.actualizar_datos_generales(self.datos["docente_nombre"], self.datos["ano_lectivo"])
                 engine.reiniciar_libreta() 
             except Exception as e:
