@@ -85,9 +85,10 @@ class ConfigFrame(ctk.CTkFrame):
 
         self.var_condicion.trace_add("write", sincronizar_condicion_titulo)
 
-        ctk.CTkLabel(f2, text="Condición Nomb.:", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=5, column=0, sticky="e", padx=10, pady=5)
+        ctk.CTkLabel(f2, text="Condición Nomb.:", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=r, column=0, sticky="e", padx=10, pady=5)
         self.entry_con = ctk.CTkEntry(f2, textvariable=self.var_condicion)
-        self.entry_con.grid(row=5, column=1, sticky="ew", padx=20, pady=5)
+        self.entry_con.grid(row=r, column=1, sticky="ew", padx=20, pady=5)
+        r+=1
 
         ctk.CTkLabel(f2, text="Título (Carátula):", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=r, column=0, sticky="e", padx=10, pady=5)
         self.entry_tit = ctk.CTkEntry(f2, textvariable=self.var_titulo)
@@ -304,11 +305,31 @@ class ConfigFrame(ctk.CTkFrame):
     def cambiar_modalidad(self):
         nueva = self.var_modalidad.get().lower()
         if nueva == self.engine.modalidad: return
+
+        # Advertencia de cambios sin guardar
+        msg = ("Advertencia: Si tiene cambios sin guardar (como modificar un horario o datos), "
+               "se perderán al cambiar de modalidad.\n\n"
+               f"¿Desea descartar los cambios y cambiar a modo {nueva.capitalize()}?")
+
+        if not messagebox.askyesno("Cambio de Modalidad", msg):
+            # Restaurar el valor del radio button si cancelan
+            self.var_modalidad.set(self.engine.modalidad.capitalize())
+            return
+
         archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_2026.xlsx"
         ruta_nueva = os.path.join(BASE_DIR, "..", archivo_nuevo)
-        if not os.path.exists(ruta_nueva): return messagebox.showerror("Error", f"Falta: {archivo_nuevo}")
-        if messagebox.askyesno("Confirmar", f"¿Cambiar a modo {nueva.capitalize()}?"):
-            self.app_principal.reiniciar_motor(ruta_nueva, nueva)
+        if not os.path.exists(ruta_nueva):
+            self.var_modalidad.set(self.engine.modalidad.capitalize())
+            return messagebox.showerror("Error", f"Falta el archivo: {archivo_nuevo}")
+
+        # Reiniciar motor y reconstruir UI
+        self.app_principal.reiniciar_motor(ruta_nueva, nueva)
+
+        # Limpiar/resetear la vista de configuración actual re-creándola,
+        # Ya que al reiniciar el motor la app principal recarga la interfaz,
+        # aseguremos que los campos internos que guardan referencias se borren si esta vista sigue viva (aunque al llamar mostrar_dashboard en teoria se cierra la vista).
+        # En RegistroDoc, la navegacion suele destruir el main_content_frame, pero si no,
+        # app_principal.mostrar_dashboard() recarga el Dashboard. Por lo que esto deberia ser suficiente para dejar el entorno limpio.
 
     # ================= PESTAÑA 3: GRADOS =================
     def crear_panel_grados(self):
