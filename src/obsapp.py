@@ -131,7 +131,7 @@ class ObservacionesFrame(ctk.CTkFrame):
             return
 
         # Guarda en Word usando el mismo generador
-        carpeta = os.path.abspath(os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes"))
+        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
         if not os.path.exists(carpeta): os.makedirs(carpeta)
 
         nombre_est = self.estudiante_seleccionado['nombre']
