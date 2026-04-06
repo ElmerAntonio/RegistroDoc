@@ -1,5 +1,4 @@
-import sys, os
-sys.path.insert(0, os.path.abspath('src'))
+import os
 os.environ["REGISTRODOC_MASTER_SALT"] = "test"
 from rdsecurity import validar_nota_meduca
 
