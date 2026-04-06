@@ -417,7 +417,30 @@ class DashboardFrame(ctk.CTkFrame):
         self._footer_frame = ctk.CTkFrame(parent, fg_color="transparent")
         ff = self._footer_frame
         ff.pack(fill="x", padx=20, pady=(4, 20))
-        ff.columnconfigure((0, 1, 2), weight=1, uniform="bot")
+        ff.columnconfigure((0, 1, 2, 3), weight=1, uniform="bot")
+# Exportaciones
+        ex = ctk.CTkFrame(ff, fg_color=C["card"],
+                          border_width=1, border_color=C["borde"],
+                          corner_radius=12)
+        ex.grid(row=0, column=3, padx=(8, 0), sticky="nsew", pady=4)
+
+        ctk.CTkLabel(ex, text="Exportar Calificaciones",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
+
+        exf = ctk.CTkFrame(ex, fg_color="transparent")
+        exf.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+
+        self.cb_trim_export = ctk.CTkOptionMenu(exf, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los trimestres"])
+        self.cb_trim_export.pack(fill="x", pady=5)
+        self.cb_trim_export.set("Todos los trimestres")
+
+        btn_f_ex = ctk.CTkFrame(exf, fg_color="transparent")
+        btn_f_ex.pack(fill="x", pady=5)
+
+        ctk.CTkButton(btn_f_ex, text="📄 PDF", width=40, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📝 Word", width=40, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📊 Excel", width=40, fg_color="#059669", command=lambda: self.exportar_calificaciones("xlsx")).pack(side="left", padx=2, expand=True)
 
         # Grados activos
         gc = ctk.CTkFrame(ff, fg_color=C["card"],
@@ -519,6 +542,87 @@ class DashboardFrame(ctk.CTkFrame):
                           command=cmd).grid(
                 row=0, column=i, padx=5, sticky="ew")
 
+
+
+    def exportar_calificaciones(self, formato):
+        trimestre = self.cb_trim_export.get()
+        import tempfile
+        import os
+        from tkinter import messagebox
+        import pandas as pd
+
+        try:
+            grados = self.engine.obtener_grados_activos()
+            if not grados: return messagebox.showerror("Error", "No hay grados activos")
+
+            # Recopilar datos
+            todas_notas = []
+            for grado in grados:
+                materias = self.engine.obtener_materias_por_grado(grado)
+                estudiantes = self.engine.obtener_estudiantes_completos(grado)
+                if not materias or not estudiantes: continue
+
+                for est in estudiantes:
+                    nombre = est['nombre']
+                    for mat in materias:
+                        if trimestre == "Todos los trimestres":
+                            t1 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 1").get(nombre, 0)
+                            t2 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 2").get(nombre, 0)
+                            t3 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 3").get(nombre, 0)
+                            todas_notas.append({"Grado": grado, "Materia": mat, "Estudiante": nombre, "T1": t1, "T2": t2, "T3": t3})
+                        else:
+                            val = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, trimestre).get(nombre, 0)
+                            todas_notas.append({"Grado": grado, "Materia": mat, "Estudiante": nombre, trimestre: val})
+
+            if not todas_notas:
+                return messagebox.showinfo("Aviso", "No se encontraron datos para exportar.")
+
+            df = pd.DataFrame(todas_notas)
+
+            if formato == "xlsx":
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+                    df.to_excel(tmp.name, index=False)
+                    res_path = tmp.name
+                messagebox.showinfo("Exportar Excel", f"Datos exportados a:\n{res_path}")
+            elif formato == "docx":
+                from docx import Document
+                doc = Document()
+                doc.add_heading(f"Calificaciones - {trimestre}", 0)
+                table = doc.add_table(rows=1, cols=len(df.columns))
+                for i, col in enumerate(df.columns): table.rows[0].cells[i].text = col
+                for idx, row in df.iterrows():
+                    cells = table.add_row().cells
+                    for i, val in enumerate(row): cells[i].text = str(val)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                    doc.save(tmp.name)
+                    res_path = tmp.name
+                messagebox.showinfo("Exportar Word", f"Datos exportados a:\n{res_path}")
+            elif formato == "pdf":
+                from docx import Document
+                doc = Document()
+                doc.add_heading(f"Calificaciones - {trimestre}", 0)
+                table = doc.add_table(rows=1, cols=len(df.columns))
+                for i, col in enumerate(df.columns): table.rows[0].cells[i].text = col
+                for idx, row in df.iterrows():
+                    cells = table.add_row().cells
+                    for i, val in enumerate(row): cells[i].text = str(val)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                    doc.save(tmp.name)
+                    tmp_docx = tmp.name
+                try:
+                    import comtypes.client
+                    pdf_path = tmp_docx.replace(".docx", ".pdf")
+                    word = comtypes.client.CreateObject('Word.Application')
+                    doc_obj = word.Documents.Open(tmp_docx)
+                    doc_obj.SaveAs(pdf_path, FileFormat=17)
+                    doc_obj.Close()
+                    word.Quit()
+                    messagebox.showinfo("Exportar PDF", f"PDF generado en:\n{pdf_path}")
+                except Exception:
+                    messagebox.showinfo("Aviso PDF", f"Documento generado en DOCX:\n{tmp_docx}\n\nNo se pudo convertir automáticamente a PDF (requiere MS Word en Windows).")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error al exportar: {str(e)}")
 
     def _obtener_materia_actual(self):
         """Obtiene la materia actual basada en el día y hora actuales."""
