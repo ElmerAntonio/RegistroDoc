@@ -382,17 +382,49 @@ def actualizar_hash_excel(ruta_excel: str) -> None:
 
 # Cargar configuracion segura desde .env
 from config import BASE_DIR
-env_path = os.path.join(os.path.dirname(BASE_DIR), '.env')
+env_path = os.path.join(os.path.dirname(BASE_DIR), ".env")
 load_dotenv(dotenv_path=env_path)
 
-# Clave maestra interna (Cargada desde variable de entorno de forma segura)
-_master_salt_env = os.environ.get("REGISTRODOC_MASTER_SALT")
-if not _master_salt_env:
-    raise RuntimeError(
-        "CRITICAL ERROR: REGISTRODOC_MASTER_SALT no encontrada en el entorno o archivo .env. "
-        "El programa no puede iniciar de forma segura."
-    )
+def _persistir_master_salt(path: str, valor: str) -> None:
+    """Guarda REGISTRODOC_MASTER_SALT en .env si no existe."""
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                contenido = f.read()
+            if "REGISTRODOC_MASTER_SALT=" in contenido:
+                return
+            if contenido and not contenido.endswith("\n"):
+                contenido += "\n"
+        else:
+            contenido = ""
 
+        contenido += f"REGISTRODOC_MASTER_SALT={valor}\n"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(contenido)
+    except Exception:
+        # No bloquear inicio por un problema de escritura del .env
+        pass
+
+def _obtener_master_salt() -> str:
+    """
+    Obtiene el master salt desde entorno/.env.
+    Si no existe, genera uno criptograficamente seguro y lo persiste.
+    """
+    valor = os.environ.get("REGISTRODOC_MASTER_SALT", "").strip()
+    if valor:
+        return valor
+
+    try:
+        import secrets
+        valor = secrets.token_hex(32)  # 256 bits
+    except Exception:
+        valor = hashlib.sha3_256(os.urandom(64)).hexdigest()
+
+    os.environ["REGISTRODOC_MASTER_SALT"] = valor
+    _persistir_master_salt(env_path, valor)
+    return valor
+
+_master_salt_env = _obtener_master_salt()
 _MASTER_SALT = _master_salt_env.encode("utf-8")
 
 def _clave_licencia(cedula: str) -> bytes:

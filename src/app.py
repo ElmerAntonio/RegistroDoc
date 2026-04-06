@@ -36,7 +36,6 @@ from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
 from grapp  import GraficosFrame
 from happ   import ReportesFrame
-from splash import SplashScreen
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -412,15 +411,23 @@ def iniciar_programa_principal():
     except (FileNotFoundError, json.JSONDecodeError):
         config = {"modalidad": "premedia"}
 
-    # Crear app primero y usar splash como hija para evitar un segundo root.
+    # Inicio directo sin ventana de carga.
     app = RegistroDocApp(
         modalidad_inicial=config.get("modalidad", "premedia"))
-    app.withdraw()
-    splash = SplashScreen(parent=app)
-    splash.mostrar()
-    if app.winfo_exists() and not app._destroyed:
-        app.deiconify()
-    app.mainloop()
+    try:
+        app.lift()
+        app.focus_force()
+    except Exception:
+        pass
+
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        # Si se interrumpe desde consola, cerrar limpio sin traceback ruidoso.
+        try:
+            app.on_closing()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
