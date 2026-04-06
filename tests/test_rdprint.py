@@ -1,10 +1,6 @@
 import pytest
 import os
-import sys
 from unittest.mock import patch, MagicMock
-
-# To fix the unresolvable import in testing environment, since rdprint is in src
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 # Note: We import functions directly to mock internal dependencies effectively.
 # rdprint uses local imports of win32com to prevent loading errors on non-Windows.
