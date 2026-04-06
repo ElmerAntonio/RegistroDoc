@@ -105,12 +105,7 @@ class DataEngine:
             if "ASISTENCIA" in sheet.upper():
                 ws = wb[sheet]
                 def extraer_fecha(celda):
-                    val = str(ws[celda].value or "").upper()
-                    if "ASISTENCIA DEL" in val:
-                        # Corta la palabra, limpia guiones y espacios dobles
-                        fecha = val.replace("ASISTENCIA DEL", "").replace("_", " ").strip()
-                        return " ".join(fecha.split())
-                    return ""
+                    return DataEngine._procesar_texto_asistencia(ws[celda].value)
                 
                 datos["fecha_t1"] = extraer_fecha("C1")
                 datos["fecha_t2"] = extraer_fecha("C44")
@@ -119,6 +114,18 @@ class DataEngine:
                 
         if should_close: wb.close()
         return datos
+
+    @staticmethod
+    def _procesar_texto_asistencia(valor):
+        """Lógica pura para extraer la fecha de una celda de asistencia."""
+        if not valor:
+            return ""
+        val = str(valor).upper()
+        if "ASISTENCIA DEL" in val:
+            # Corta la palabra, limpia guiones y espacios dobles
+            fecha = val.replace("ASISTENCIA DEL", "").replace("_", " ").strip()
+            return " ".join(fecha.split())
+        return ""
 
     def obtener_horario(self):
         horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "", "jueves": "", "viernes": ""} for _ in range(8)]
