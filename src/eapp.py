@@ -200,17 +200,17 @@ class NotasFrame(ctk.CTkFrame):
         header_row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
         header_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(header_row, text="N°", width=30, font=("Segoe UI", 12, "bold")).pack(side="left")
-        ctk.CTkLabel(header_row, text="Nombre", width=200, anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left")
-        ctk.CTkLabel(header_row, text="Nota", width=80, anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(header_row, text="Nombre", width=280, anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left")
+        ctk.CTkLabel(header_row, text="Nota", width=80, anchor="e", font=("Segoe UI", 12, "bold")).pack(side="right", padx=30)
 
         ests = self.engine.obtener_estudiantes_completos(grado)
         for est in ests:
             row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
             row.pack(fill="x", pady=2)
             ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
-            ctk.CTkLabel(row, text=est['nombre'], width=200, anchor="w").pack(side="left")
+            ctk.CTkLabel(row, text=est['nombre'], width=280, anchor="w").pack(side="left")
             entry = ctk.CTkEntry(row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
-            entry.pack(side="left", padx=10)
+            entry.pack(side="right", padx=30)
             self.entradas_notas[est['id']] = [entry]
 
     def cargar_descripciones(self, *args):
