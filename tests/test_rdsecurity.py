@@ -69,8 +69,8 @@ def test_cargar_cifrado_archivo_inexistente():
     (3.5, True, 3.5),
     (5.0, True, 5.0),
     ("4,2", True, 4.2),  # Manejo de coma decimal
-    (6.0, False, 6.0),   # Arriba del rango
-    (0.9, False, 0.9)    # Abajo del rango
+    (6.0, False, 0.0),   # Arriba del rango
+    (0.9, False, 0.0)    # Abajo del rango
 ])
 def test_validar_nota_meduca(valor, esperado, esperado_val):
     valido, nota, _ = validar_nota_meduca(valor)

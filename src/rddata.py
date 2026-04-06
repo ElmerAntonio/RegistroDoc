@@ -39,11 +39,8 @@ class DataEngine:
 
         should_close = False
         if wb is None:
-            if self._wb_cache:
-                wb = self._wb_cache
-            else:
-                wb = openpyxl.load_workbook(self.ruta, data_only=True)
-                should_close = True
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            should_close = not bool(self._wb_cache)
 
         if "MAESTRO" not in wb.sheetnames: 
             if should_close: wb.close()
@@ -338,11 +335,8 @@ class DataEngine:
 
         should_close = False
         if wb is None:
-            if self._wb_cache:
-                wb = self._wb_cache
-            else:
-                wb = openpyxl.load_workbook(self.ruta, data_only=True)
-                should_close = True
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            should_close = not bool(self._wb_cache)
 
         grados = []
         for sheet in wb.sheetnames:
@@ -375,11 +369,8 @@ class DataEngine:
 
         should_close = False
         if wb is None:
-            if self._wb_cache:
-                wb = self._wb_cache
-            else:
-                wb = openpyxl.load_workbook(self.ruta, data_only=True)
-                should_close = True
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            should_close = not bool(self._wb_cache)
 
         ws_m = wb["MAESTRO"]
         col_nom = self._obtener_columna_nombres(grado, wb=wb)
