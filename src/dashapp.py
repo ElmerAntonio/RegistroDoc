@@ -204,8 +204,7 @@ class DashboardFrame(ctk.CTkFrame):
 
         except Exception:
             # Fallback mock for UI test
-            if "maria" in texto:
-                encontrado = {"grado": "7°A", "nombre": "Maria Gonzalez"}
+            pass
 
         if encontrado:
             self._current_student = encontrado
