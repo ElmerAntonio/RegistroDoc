@@ -14,9 +14,46 @@ from tkinter import messagebox
 
 
 def _ruta_excel():
-    from config import BASE_DIR
+    from config import BASE_DIR, CONFIG_FILE
+
     base = BASE_DIR
-    return os.path.join(base, "Registro_2026.xlsx")
+    raiz = os.path.join(base, "..")
+
+    modalidad = "premedia"
+    try:
+        import json
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                modalidad = str(json.load(f).get("modalidad", "premedia")).lower()
+    except Exception:
+        pass
+
+    candidatos = []
+    if modalidad == "primaria":
+        candidatos.extend([
+            os.path.join(raiz, "Registro_Primaria.xlsx"),
+            os.path.join(base, "Registro_Primaria.xlsx"),
+        ])
+    else:
+        candidatos.extend([
+            os.path.join(raiz, "Registro_2026.xlsx"),
+            os.path.join(base, "Registro_2026.xlsx"),
+        ])
+
+    # Fallback por si la modalidad del perfil no coincide.
+    candidatos.extend([
+        os.path.join(raiz, "Registro_2026.xlsx"),
+        os.path.join(raiz, "Registro_Primaria.xlsx"),
+        os.path.join(base, "Registro_2026.xlsx"),
+        os.path.join(base, "Registro_Primaria.xlsx"),
+    ])
+
+    for ruta in candidatos:
+        if os.path.exists(ruta):
+            return os.path.abspath(ruta)
+
+    # Devuelve la ruta principal esperada aunque no exista para mantener mensajes consistentes.
+    return os.path.abspath(candidatos[0] if candidatos else os.path.join(raiz, "Registro_2026.xlsx"))
 
 
 def _excel_disponible() -> bool:

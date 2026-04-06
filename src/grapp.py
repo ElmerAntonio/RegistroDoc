@@ -16,6 +16,7 @@ class GraficosFrame(ctk.CTkFrame):
             "verde":        "#00FF88",
             "rojo":         "#FF4444",
             "amarillo":     "#FFD700",
+            "purpura":      "#A855F7",
             "texto":        "#E2E8F0",
         }
 
@@ -64,41 +65,44 @@ class GraficosFrame(ctk.CTkFrame):
         self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"], command=lambda _: self.actualizar_graficos())
         self.combo_trimestre.pack(side="left", padx=5)
 
-        # Opciones de gráficos
-        f_opciones = ctk.CTkFrame(f_top, fg_color="transparent")
-        f_opciones.pack(side="left", padx=10)
-        ctk.CTkLabel(f_opciones, text="Gráficos:", font=("Segoe UI", 12)).pack(side="top")
-        self.chk_pastel = ctk.CTkCheckBox(f_opciones, text="Pastel", command=self.actualizar_graficos)
-        self.chk_pastel.pack(side="left", padx=5)
-        self.chk_pastel.select()
-        self.chk_barras = ctk.CTkCheckBox(f_opciones, text="Barras", command=self.actualizar_graficos)
-        self.chk_barras.pack(side="left", padx=5)
-        self.chk_barras.select()
-        self.chk_tendencia = ctk.CTkCheckBox(f_opciones, text="Tendencia", command=self.actualizar_graficos)
-        self.chk_tendencia.pack(side="left", padx=5)
-        self.chk_tendencia.select()
+        # Opciones de graficos (agrupadas)
+        f_opciones = ctk.CTkFrame(f_top, fg_color="#13263f", corner_radius=8)
+        f_opciones.pack(side="left", padx=12, pady=8)
 
-        # Nuevos graficos
-        self.chk_hist = ctk.CTkCheckBox(f_opciones, text="Histograma", command=self.actualizar_graficos)
-        self.chk_hist.pack(side="left", padx=5)
-        self.chk_hist.select()
-        self.chk_pareto = ctk.CTkCheckBox(f_opciones, text="Pareto", command=self.actualizar_graficos)
-        self.chk_pareto.pack(side="left", padx=5)
-        self.chk_pareto.select()
-        self.chk_scatter = ctk.CTkCheckBox(f_opciones, text="Dispersión", command=self.actualizar_graficos)
-        self.chk_scatter.pack(side="left", padx=5)
-        self.chk_scatter.select()
-        self.chk_box = ctk.CTkCheckBox(f_opciones, text="Box-plot", command=self.actualizar_graficos)
-        self.chk_box.pack(side="left", padx=5)
-        self.chk_box.select()
-        self.chk_lineas = ctk.CTkCheckBox(f_opciones, text="Líneas Trim", command=self.actualizar_graficos)
-        self.chk_lineas.pack(side="left", padx=5)
-        self.chk_lineas.select()
-        self.chk_heat = ctk.CTkCheckBox(f_opciones, text="Heatmap", command=self.actualizar_graficos)
-        self.chk_heat.pack(side="left", padx=5)
-        self.chk_heat.select()
+        ctk.CTkLabel(
+            f_opciones,
+            text="Mostrar graficos",
+            font=("Segoe UI", 12, "bold"),
+            text_color=self.C["texto"],
+        ).pack(anchor="w", padx=10, pady=(6, 2))
 
-        ctk.CTkButton(f_top, text="🔄 Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=10)
+        checks_grid = ctk.CTkFrame(f_opciones, fg_color="transparent")
+        checks_grid.pack(padx=8, pady=(0, 8))
+
+        check_specs = [
+            ("chk_pastel", "Pastel"),
+            ("chk_barras", "Barras"),
+            ("chk_tendencia", "Tendencia"),
+            ("chk_hist", "Histograma"),
+            ("chk_pareto", "Pareto"),
+            ("chk_scatter", "Dispersion"),
+            ("chk_box", "Box-plot"),
+            ("chk_lineas", "Lineas Trim"),
+            ("chk_heat", "Heatmap"),
+        ]
+
+        for idx, (attr_name, label) in enumerate(check_specs):
+            chk = ctk.CTkCheckBox(
+                checks_grid,
+                text=label,
+                command=self.actualizar_graficos,
+                width=120,
+            )
+            chk.grid(row=idx // 3, column=idx % 3, sticky="w", padx=8, pady=2)
+            chk.select()
+            setattr(self, attr_name, chk)
+
+        ctk.CTkButton(f_top, text="Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=10)
         self.al_cambiar_grado(grados[0])
 
     def al_cambiar_grado(self, grado):
@@ -238,7 +242,6 @@ class GraficosFrame(ctk.CTkFrame):
 
     def dibujar_proyeccion(self, nombre, historial, row, col, colspan=1):
         import numpy as np
-        from scipy.stats import linregress
 
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
@@ -255,8 +258,8 @@ class GraficosFrame(ctk.CTkFrame):
             x = np.arange(1, len(historial) + 1)
             y = np.array(historial)
 
-            # Regresion lineal
-            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            # Regresion lineal sin dependencia de scipy.
+            slope, intercept = np.polyfit(x, y, 1)
             x_pred = np.arange(1, len(historial) + 3) # Proyectar 2 periodos mas
             y_pred = intercept + slope * x_pred
 

@@ -38,79 +38,117 @@ class ConfigFrame(ctk.CTkFrame):
 
         f1 = ctk.CTkFrame(self.scroll_gen, fg_color="#1E2D42", corner_radius=10)
         f1.pack(fill="x", padx=10, pady=10, ipadx=10, ipady=10)
-        ctk.CTkLabel(f1, text="Modalidad Activa:", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(10,5))
-        
+        ctk.CTkLabel(f1, text="Modalidad Activa:", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(10, 5))
+
         row_mod = ctk.CTkFrame(f1, fg_color="transparent")
         row_mod.pack(fill="x")
         self.var_modalidad = ctk.StringVar(value=self.engine.modalidad.capitalize())
         ctk.CTkRadioButton(row_mod, text="Premedia", variable=self.var_modalidad, value="Premedia").pack(side="left", padx=40)
         ctk.CTkRadioButton(row_mod, text="Primaria", variable=self.var_modalidad, value="Primaria").pack(side="left", padx=40)
-        ctk.CTkButton(row_mod, text="🔄 Cambiar Modalidad", fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
+        ctk.CTkButton(row_mod, text="Cambiar Modalidad", fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
 
         f2 = ctk.CTkFrame(self.scroll_gen, fg_color="#1A2638", corner_radius=10)
         f2.pack(fill="both", expand=True, padx=10, pady=10, ipadx=10, ipady=10)
 
-        # Simetría en el grid (50/50 o peso equitativo)
-        f2.grid_columnconfigure(0, weight=1)
+        # Doble columna real: (label, entry) x 2
+        f2.grid_columnconfigure(0, weight=0, minsize=250)
         f2.grid_columnconfigure(1, weight=1)
-        
-        ctk.CTkLabel(f2, text="📖 Información Académica (Extraída de Portada)", font=("Segoe UI", 16, "bold"), text_color="#10B981").grid(row=0, column=0, columnspan=2, sticky="w", padx=20, pady=10)
-        
-        r = 1
-        self.entry_doc = self._crear_campo(f2, r, "Nombre Docente:", data.get("docente_nombre", "")); r+=1
-        self.entry_ced = self._crear_campo(f2, r, "Cédula:", data.get("docente_cedula", "")); r+=1
-        self.entry_ss = self._crear_campo(f2, r, "N° Seguro Social:", data.get("seguro_social", "")); r+=1
-        self.entry_pos = self._crear_campo(f2, r, "N° Posición:", data.get("numero_posicion", "")); r+=1
+        f2.grid_columnconfigure(2, weight=0, minsize=250)
+        f2.grid_columnconfigure(3, weight=1)
 
-        self.entry_esc = self._crear_campo(f2, r, "Escuela:", data.get("escuela_nombre", "")); r+=1
-        self.entry_reg = self._crear_campo(f2, r, "Región Escolar:", data.get("escuela_region", "")); r+=1
-        self.entry_dis = self._crear_campo(f2, r, "Distrito:", data.get("distrito", "")); r+=1
-        self.entry_cor = self._crear_campo(f2, r, "Corregimiento:", data.get("corregimiento", "")); r+=1
-        self.entry_zon = self._crear_campo(f2, r, "Zona Escolar:", data.get("zona_escolar", "")); r+=1
-        
-        self.entry_dir = self._crear_campo(f2, r, "Director(a):", data.get("director_nombre", "")); r+=1
-        self.entry_sub = self._crear_campo(f2, r, "Subdirector(a):", data.get("subdirector_nombre", "")); r+=1
-        self.entry_coo = self._crear_campo(f2, r, "Coordinador:", data.get("coordinador_nombre", "")); r+=1
-        self.entry_tel = self._crear_campo(f2, r, "Teléfono:", data.get("telefono", "")); r+=1
-        self.entry_cor = self._crear_campo(f2, r, "Correo:", data.get("correo", "")); r+=1
-        self.entry_ano = self._crear_campo(f2, r, "Año Lectivo:", data.get("ano_lectivo", "2026")); r+=1
-        self.entry_jor = self._crear_campo(f2, r, "Jornada:", data.get("jornada", "")); r+=1
+        ctk.CTkLabel(
+            f2,
+            text="Informacion Academica (Portada y Caratula)",
+            font=("Segoe UI", 16, "bold"),
+            text_color="#10B981",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=20, pady=10)
 
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
-        self.var_condicion = ctk.StringVar(value=data.get("condicion_nombramiento", ""))
-        self.var_titulo = ctk.StringVar(value=data.get("titulo_caratula", "Maestro de Grado"))
+        cargo_unificado = (
+            str(data.get("condicion_nombramiento", "")).strip()
+            or str(data.get("titulo_caratula", "")).strip()
+            or "Instructor Vocacional"
+        )
+        self.var_condicion = ctk.StringVar(value=cargo_unificado)
+        self.var_grupos_caratula = ctk.StringVar(value="")
 
-        def sincronizar_condicion_titulo(*args):
-            self.var_titulo.set(self.var_condicion.get())
+        def crear_campo_en_columna(row_i, base_col, texto, attr_name, valor="", var=None, state="normal"):
+            ctk.CTkLabel(
+                f2,
+                text=texto,
+                anchor="w",
+                font=("Segoe UI", 12, "bold"),
+            ).grid(row=row_i, column=base_col, sticky="w", padx=10, pady=5)
 
-        self.var_condicion.trace_add("write", sincronizar_condicion_titulo)
+            if var is not None:
+                entry = ctk.CTkEntry(f2, textvariable=var, state=state)
+            else:
+                entry = ctk.CTkEntry(f2, state=state)
+                entry.insert(0, valor)
 
-        ctk.CTkLabel(f2, text="Condición Nomb.:", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=r, column=0, sticky="e", padx=10, pady=5)
-        self.entry_con = ctk.CTkEntry(f2, textvariable=self.var_condicion)
-        self.entry_con.grid(row=r, column=1, sticky="ew", padx=20, pady=5)
-        r+=1
+            entry.grid(row=row_i, column=base_col + 1, sticky="ew", padx=20, pady=5)
+            setattr(self, attr_name, entry)
 
-        ctk.CTkLabel(f2, text="Título (Carátula):", anchor="e", font=("Segoe UI", 12, "bold")).grid(row=r, column=0, sticky="e", padx=10, pady=5)
-        self.entry_tit = ctk.CTkEntry(f2, textvariable=self.var_titulo)
-        self.entry_tit.grid(row=r, column=1, sticky="ew", padx=20, pady=5)
-        r+=1
+        left_fields = [
+            ("Nombre Docente:", "entry_doc", data.get("docente_nombre", ""), None, "normal"),
+            ("Cedula:", "entry_ced", data.get("docente_cedula", ""), None, "normal"),
+            ("No. Seguro Social:", "entry_ss", data.get("seguro_social", ""), None, "normal"),
+            ("No. Posicion:", "entry_pos", data.get("numero_posicion", ""), None, "normal"),
+            ("Escuela:", "entry_esc", data.get("escuela_nombre", ""), None, "normal"),
+            ("Region Escolar:", "entry_reg", data.get("escuela_region", ""), None, "normal"),
+            ("Distrito:", "entry_dis", data.get("distrito", ""), None, "normal"),
+            ("Corregimiento:", "entry_correg", data.get("corregimiento", ""), None, "normal"),
+            ("Zona Escolar:", "entry_zon", data.get("zona_escolar", ""), None, "normal"),
+            ("Ano Lectivo:", "entry_ano", data.get("ano_lectivo", "2026"), None, "normal"),
+            ("Jornada:", "entry_jor", data.get("jornada", ""), None, "normal"),
+            ("Fecha Trimestre 1:", "entry_t1", data.get("fecha_t1", ""), None, "normal"),
+            ("Fecha Trimestre 2:", "entry_t2", data.get("fecha_t2", ""), None, "normal"),
+            ("Fecha Trimestre 3:", "entry_t3", data.get("fecha_t3", ""), None, "normal"),
+        ]
 
-        grados_activos = ", ".join(self.engine.obtener_grados_activos())
-        self.entry_gru = self._crear_campo(f2, r, "Grupos (Carátula):", grados_activos); r+=1
+        right_fields = [
+            ("Director(a):", "entry_dir", data.get("director_nombre", ""), None, "normal"),
+            ("Subdirector(a):", "entry_sub", data.get("subdirector_nombre", ""), None, "normal"),
+            ("Coordinador:", "entry_coo", data.get("coordinador_nombre", ""), None, "normal"),
+            ("Telefono:", "entry_tel", data.get("telefono", ""), None, "normal"),
+            ("Correo:", "entry_mail", data.get("correo", ""), None, "normal"),
+            ("Condicion/Titulo (Portada y Caratula):", "entry_con", "", self.var_condicion, "normal"),
+            ("Grupos (Caratula):", "entry_gru", "", self.var_grupos_caratula, "disabled"),
+        ]
 
+        row_start = 1
+        max_rows = max(len(left_fields), len(right_fields))
 
-        ctk.CTkLabel(f2, text="────────────────────────────────────────", text_color="#334155").grid(row=r, column=0, columnspan=2, pady=5); r+=1
-        self.entry_t1 = self._crear_campo(f2, r, "Fecha Trimestre 1:", data.get("fecha_t1", "")); r+=1
-        self.entry_t2 = self._crear_campo(f2, r, "Fecha Trimestre 2:", data.get("fecha_t2", "")); r+=1
-        self.entry_t3 = self._crear_campo(f2, r, "Fecha Trimestre 3:", data.get("fecha_t3", "")); r+=1
+        for idx in range(max_rows):
+            row_i = row_start + idx
+            if idx < len(left_fields):
+                t, a, v, var, st = left_fields[idx]
+                crear_campo_en_columna(row_i, 0, t, a, v, var, st)
+            if idx < len(right_fields):
+                t, a, v, var, st = right_fields[idx]
+                crear_campo_en_columna(row_i, 2, t, a, v, var, st)
 
-        ctk.CTkLabel(f2, text="⚠️ Al sincronizar, el programa inyectará estos datos en todas las Portadas, Horarios y Asistencias.", text_color="#F59E0B", font=("Segoe UI", 11)).grid(row=r, column=0, columnspan=2, pady=15); r+=1
-        
-        self.btn_sinc = ctk.CTkButton(f2, text="✨ SINCRONIZAR Y SOBREESCRIBIR EXCEL", fg_color="#3B82F6", height=45, font=("Segoe UI", 14, "bold"), command=self.sincronizar_plantilla)
-        self.btn_sinc.grid(row=r, column=0, columnspan=2, pady=10)
+        self.actualizar_grupos_caratula()
+
+        footer_row = row_start + max_rows
+        ctk.CTkLabel(
+            f2,
+            text="Al sincronizar, el programa inyectara estos datos en Portadas, Horarios y Asistencias.",
+            text_color="#F59E0B",
+            font=("Segoe UI", 11),
+        ).grid(row=footer_row, column=0, columnspan=4, pady=15)
+
+        self.btn_sinc = ctk.CTkButton(
+            f2,
+            text="SINCRONIZAR Y SOBREESCRIBIR EXCEL",
+            fg_color="#3B82F6",
+            height=45,
+            font=("Segoe UI", 14, "bold"),
+            command=self.sincronizar_plantilla,
+        )
+        self.btn_sinc.grid(row=footer_row + 1, column=0, columnspan=4, pady=10)
 
     def _crear_campo(self, parent, row, texto, valor):
-        ctk.CTkLabel(parent, text=texto, anchor="e", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="e", padx=10, pady=5)
+        ctk.CTkLabel(parent, text=texto, anchor="w", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=5)
         entry = ctk.CTkEntry(parent)
         entry.insert(0, valor)
         entry.grid(row=row, column=1, sticky="ew", padx=20, pady=5)
@@ -276,19 +314,21 @@ class ConfigFrame(ctk.CTkFrame):
         self.btn_guardar_h.configure(text="💾 GUARDAR HORARIO EN EXCEL", state="normal")
 
     def sincronizar_plantilla(self):
+        cargo_unificado = self.entry_con.get().strip() or "Instructor Vocacional"
+        grupos_auto = ", ".join(self.engine.obtener_grados_activos())
         datos = {
             "docente_nombre": self.entry_doc.get().strip(), "docente_cedula": self.entry_ced.get().strip(),
             "seguro_social": self.entry_ss.get().strip(), "numero_posicion": self.entry_pos.get().strip(),
-            "condicion_nombramiento": self.entry_con.get().strip(), "escuela_nombre": self.entry_esc.get().strip(),
+            "condicion_nombramiento": cargo_unificado, "escuela_nombre": self.entry_esc.get().strip(),
             "escuela_region": self.entry_reg.get().strip(), "distrito": self.entry_dis.get().strip(),
-            "corregimiento": self.entry_cor.get().strip(), "zona_escolar": self.entry_zon.get().strip(),
+            "corregimiento": self.entry_correg.get().strip(), "zona_escolar": self.entry_zon.get().strip(),
             "director_nombre": self.entry_dir.get().strip(), "subdirector_nombre": self.entry_sub.get().strip(),
             "coordinador_nombre": self.entry_coo.get().strip(), "telefono": self.entry_tel.get().strip(),
-            "correo": self.entry_cor.get().strip(), "ano_lectivo": self.entry_ano.get().strip(),
+            "correo": self.entry_mail.get().strip(), "ano_lectivo": self.entry_ano.get().strip(),
             "jornada": self.entry_jor.get().strip(), "fecha_t1": self.entry_t1.get().strip(),
             "fecha_t2": self.entry_t2.get().strip(), "fecha_t3": self.entry_t3.get().strip(),
-            "titulo_caratula": self.entry_tit.get().strip() if hasattr(self, 'entry_tit') else "Maestro de Grado",
-            "grupos_caratula": self.entry_gru.get().strip() if hasattr(self, 'entry_gru') else "",
+            "titulo_caratula": cargo_unificado,
+            "grupos_caratula": grupos_auto,
             "materias_activas": [m for m, var in getattr(self, "vars_materias", {}).items() if var.get()] if getattr(self, 'vars_materias', None) else [],
         }
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(datos, f, ensure_ascii=False, indent=4)
@@ -414,6 +454,12 @@ class ConfigFrame(ctk.CTkFrame):
         self.combo_mat_del = ctk.CTkOptionMenu(row3, values=["Seleccione arriba"]); self.combo_mat_del.pack(side="left", padx=5)
         self.btn_del_mat = ctk.CTkButton(row3, text="Eliminar Materia", fg_color="#EF4444", hover_color="#B91C1C", command=self.eliminar_materia); self.btn_del_mat.pack(side="left", padx=20)
 
+    def actualizar_grupos_caratula(self):
+        if not hasattr(self, "var_grupos_caratula"):
+            return
+        grupos = ", ".join(self.engine.obtener_grados_activos())
+        self.var_grupos_caratula.set(grupos)
+
     def actualizar_listas_ui(self):
         grados = self.engine.obtener_grados_activos()
         self.combo_grado_del.configure(values=grados); self.combo_grado_del.set(grados[0] if grados else "")
@@ -421,6 +467,7 @@ class ConfigFrame(ctk.CTkFrame):
         if grados: self.combo_grado_cons.set(grados[0]); self.mostrar_consejero_actual(grados[0]) 
         self.combo_grado_mat.configure(values=grados); self.combo_grado_mat.set(grados[0] if grados else "")
         self.cargar_materias_actuales(grados[0] if grados else "")
+        self.actualizar_grupos_caratula()
 
     def cargar_materias_actuales(self, grado):
         if not grado: return
