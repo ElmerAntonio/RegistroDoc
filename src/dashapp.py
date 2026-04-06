@@ -10,6 +10,7 @@ Diseño basado en la imagen de referencia:
 import customtkinter as ctk
 import tkinter as tk
 import datetime
+import time
 
 # Matplotlib para las gráficas
 import matplotlib
@@ -187,7 +188,6 @@ class DashboardFrame(ctk.CTkFrame):
         encontrado = None
         try:
             if self._student_cache is None:
-                import time
                 start_cache = time.perf_counter()
                 self._student_cache = []
                 for g in self.engine.obtener_grados_activos():
@@ -202,9 +202,9 @@ class DashboardFrame(ctk.CTkFrame):
                     break
             print(f"[*] Search completed in {time.perf_counter() - start_search:.6f}s")
 
-        except Exception:
+        except Exception as e:
             # Fallback mock for UI test
-            pass
+            print(f"[!] Search error: {e}")
 
         if encontrado:
             self._current_student = encontrado
@@ -517,17 +517,17 @@ class DashboardFrame(ctk.CTkFrame):
         def nav_notas():
             if self.app:
                 try: self.app.mostrar_notas()
-                except Exception: pass
+                except Exception as e: print(f"[!] Navigation error: {e}")
 
         def nav_asistencia():
             if self.app:
                 try: self.app.mostrar_asistencia()
-                except Exception: pass
+                except Exception as e: print(f"[!] Navigation error: {e}")
 
         def nav_config():
             if self.app:
                 try: self.app.mostrar_configuracion()
-                except Exception: pass
+                except Exception as e: print(f"[!] Navigation error: {e}")
 
         botones = [
             ("📝 Notas",      "#2563EB", nav_notas),
