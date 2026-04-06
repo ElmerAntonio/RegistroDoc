@@ -664,14 +664,19 @@ class GraficosFrame(ctk.CTkFrame):
             materias_cortas = [m[:10] for m in materias[:5]] # Limitar a 5 para no colapsar
             nombres_cortos = [e['nombre'].split(" ")[0] for e in estudiantes[:10]] # Limitar a 10
 
+            # Optimización: Obtener mapa de promedios fuera del bucle de estudiantes
+            promedios_por_materia = {}
+            for m in materias[:5]:
+                promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Anual")
+                if not promedios:
+                    promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
+                promedios_por_materia[m] = promedios
+
             data = []
             for e in estudiantes[:10]:
                 row_data = []
                 for m in materias[:5]:
-                    promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Anual")
-                    if not promedios:
-                        promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
-                    val = promedios.get(e['nombre'], 0.0)
+                    val = promedios_por_materia[m].get(e['nombre'], 0.0)
                     row_data.append(val)
                 data.append(row_data)
 
