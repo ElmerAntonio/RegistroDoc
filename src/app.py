@@ -6,9 +6,6 @@ import json
 import tkinter as tk
 import customtkinter as ctk
 
-# Añadimos el directorio base al path para resolución de módulos.
-sys.path.insert(0, BASE_DIR)
-
 # Matplotlib
 import matplotlib
 matplotlib.use("TkAgg")
