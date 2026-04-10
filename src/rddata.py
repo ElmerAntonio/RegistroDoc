@@ -15,11 +15,9 @@ class DataEngine:
         self._cargar_en_memoria()
 
     def _cargar_en_memoria(self):
-        should_close = not bool(self._wb_cache)
         if self._wb_cache is not None:
             try:
-                if should_close:
-                    self._wb_cache.close()
+                self._wb_cache.close()
             except Exception:
                 pass
             self._wb_cache = None
