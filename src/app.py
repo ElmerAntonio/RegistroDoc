@@ -284,7 +284,7 @@ class RegistroDocApp(ctk.CTk):
                 pass
 
         # Motor de datos
-        archivo = ("Registro_Primaria.xlsx"
+        archivo = ("Registro Primaria.xlsx"
                    if modalidad_inicial == "primaria"
                    else "Registro_2026.xlsx")
         ruta    = os.path.join(BASE_DIR, "..", archivo)

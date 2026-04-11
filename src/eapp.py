@@ -32,7 +32,7 @@ class NotasFrame(ctk.CTkFrame):
             lbl_texto = "Grado/Grupo:"
             opciones = self.engine.obtener_grados_activos()
             if not opciones:
-                opciones = ["7°", "8°", "9°"]
+                opciones = ["Sin datos"]
         else:
             lbl_texto = "Materia/Grado:"
             # En primaria solo dan a 1 grado, las opciones son las materias
@@ -40,7 +40,7 @@ class NotasFrame(ctk.CTkFrame):
             g_ref = g_ref[0] if g_ref else ""
             opciones = self.engine.obtener_materias_por_grado(g_ref)
             if not opciones or opciones[0] == "Sin materias registradas":
-                opciones = ["Español", "Matemáticas"]
+                opciones = ["Sin datos"]
 
         ctk.CTkLabel(top, text=lbl_texto, font=(
             "Segoe UI", 16, "bold")).pack(side="left")
