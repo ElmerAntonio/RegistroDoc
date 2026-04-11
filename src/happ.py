@@ -27,7 +27,7 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkLabel(self.frame_controles, text="Seleccione Grado:", font=("Segoe UI", 14)).pack(side="left", padx=10)
 
         opciones_grado = self.engine.obtener_grados_activos()
-        if not opciones_grado: opciones_grado = ["7°", "8°", "9°"]
+        if not opciones_grado: opciones_grado = ["Sin datos"]
         self.combo_grado = ctk.CTkOptionMenu(self.frame_controles, values=opciones_grado, command=self.cargar_reportes)
         self.combo_grado.pack(side="left", padx=10)
 
