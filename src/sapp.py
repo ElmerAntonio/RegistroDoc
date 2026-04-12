@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import os
 from config import BASE_DIR, CONFIG_FILE
 import json
@@ -127,10 +127,33 @@ class ConfigFrame(ctk.CTkFrame):
                 t, a, v, var, st = right_fields[idx]
                 crear_campo_en_columna(row_i, 2, t, a, v, var, st)
 
+
         self.actualizar_grupos_caratula()
 
         footer_row = row_start + max_rows
+
+        # --- Configuración del Logo ---
+        logo_path_guardado = ""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                    logo_path_guardado = cfg.get("logo_escuela_path", "")
+            except: pass
+
+        self.var_logo_path = ctk.StringVar(value=logo_path_guardado)
+
+        ctk.CTkLabel(f2, text="Logo de Escuela (Word):", anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
+        entry_logo = ctk.CTkEntry(f2, textvariable=self.var_logo_path, state="readonly")
+        entry_logo.grid(row=footer_row, column=1, sticky="ew", padx=20, pady=5)
+        btn_logo = ctk.CTkButton(f2, text="Seleccionar Logo", command=self.seleccionar_logo)
+        btn_logo.grid(row=footer_row, column=2, sticky="w", padx=10, pady=5)
+
+        footer_row += 1
+        # --- Fin Logo ---
+
         ctk.CTkLabel(
+
             f2,
             text="Al sincronizar, el programa inyectara estos datos en Portadas, Horarios y Asistencias.",
             text_color="#F59E0B",
@@ -146,6 +169,26 @@ class ConfigFrame(ctk.CTkFrame):
             command=self.sincronizar_plantilla,
         )
         self.btn_sinc.grid(row=footer_row + 1, column=0, columnspan=4, pady=10)
+
+
+    def seleccionar_logo(self):
+        ruta = filedialog.askopenfilename(
+            title="Seleccionar Logo de Escuela",
+            filetypes=(("Imágenes", "*.png *.jpg *.jpeg"), ("Todos", "*.*"))
+        )
+        if ruta:
+            self.var_logo_path.set(ruta)
+            self._guardar_logo_path(ruta)
+
+    def _guardar_logo_path(self, ruta):
+        datos = {}
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                try: datos = json.load(f)
+                except: pass
+        datos["logo_escuela_path"] = ruta
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(datos, f, ensure_ascii=False, indent=4)
 
     def _crear_campo(self, parent, row, texto, valor):
         ctk.CTkLabel(parent, text=texto, anchor="w", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=5)

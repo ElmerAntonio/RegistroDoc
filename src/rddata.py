@@ -14,6 +14,23 @@ class DataEngine:
         self._wb_cache = None
         self._cargar_en_memoria()
 
+
+    def _safe_set_value(self, ws, row, column, value):
+        celda = ws.cell(row=row, column=column)
+        # Even if the type is not MergedCell, it could be the top-left cell of a merged range.
+        for merged_range in list(ws.merged_cells.ranges):
+            if celda.coordinate in merged_range:
+                ws.unmerge_cells(str(merged_range))
+                break
+        ws.cell(row=row, column=column).value = value
+
+    def _safe_clear_value(self, ws, row, column):
+        celda = ws.cell(row=row, column=column)
+        if type(celda).__name__ == 'MergedCell':
+            return # Don't clear if it's merged, or we could unmerge. Let's just ignore or unmerge? The code was doing: if type != MergedCell: cell.value = None. So if it's Merged, just skip.
+        if celda.data_type != 'f':
+            celda.value = None
+
     def _cargar_en_memoria(self):
         if self._wb_cache is not None:
             try:
@@ -943,7 +960,7 @@ class DataEngine:
             ws_m = wb["MAESTRO"]
             titulo_actual = str(ws_m.cell(row=1, column=1).value or "")
             nuevo_titulo = re.sub(r'20\d{2}', str(ano_lectivo), titulo_actual)
-            ws_m.cell(row=1, column=1).value = nuevo_titulo
+            self._safe_set_value(ws_m, 1, 1, nuevo_titulo)
         wb.save(self.ruta)
         wb.close()
         self._cargar_en_memoria()
@@ -1038,10 +1055,10 @@ class DataEngine:
                     col_vacia = c
                     break
             if col_vacia:
-                ws_m.cell(row=3, column=col_vacia).value = f"GRADO {nuevo_grado}"
-                ws_m.cell(row=4, column=col_vacia).value = "NOMBRES Y APELLIDOS"
+                self._safe_set_value(ws_m, 3, col_vacia, f"GRADO {nuevo_grado}")
+                self._safe_set_value(ws_m, 4, col_vacia, "NOMBRES Y APELLIDOS")
                 if self.modalidad == "premedia":
-                    ws_m.cell(row=4, column=col_vacia+1).value = "N° DE CÉDULA"
+                    self._safe_set_value(ws_m, 4, col_vacia+1, "N° DE CÉDULA")
                     
         hoja_base_resumen = None
         for sheet in wb.sheetnames:
@@ -1056,8 +1073,7 @@ class DataEngine:
                 for c in range(1, 30):
                     try:
                         celda = ws_resumen.cell(row=r, column=c)
-                        if type(celda).__name__ != 'MergedCell' and celda.data_type != 'f':
-                            celda.value = None
+                        self._safe_clear_value(ws_resumen, r, c)
                     except AttributeError: pass
         
         wb.save(self.ruta)
@@ -1087,8 +1103,8 @@ class DataEngine:
                 if grado in val:
                     for r in range(3, 51):
                         try:
-                            ws_m.cell(row=r, column=c).value = None
-                            ws_m.cell(row=r, column=c+1).value = None
+                            self._safe_clear_value(ws_m, r, c)
+                            self._safe_clear_value(ws_m, r, c+1)
                         except AttributeError: pass
                     break
         wb.save(self.ruta)
@@ -1133,17 +1149,17 @@ class DataEngine:
             for c in range(1, 15):
                 try:
                     val = str(nueva_prom.cell(row=r, column=c).value or "").upper()
-                    if "ASIGNATURA" in val and len(val) < 20: nueva_prom.cell(row=r, column=c).value = f"ASIGNATURA: {nueva_materia.upper()}"
-                    if "CONSEJERO" in val and len(val) < 30: nueva_prom.cell(row=r, column=c).value = f"PROF. CONSEJERO: {consejero.upper()}"
-                    if "AULA" in val and len(val) < 15: nueva_prom.cell(row=r, column=c).value = f"AULA: {grado}"
-                    if "JORNADA" in val and len(val) < 20: nueva_prom.cell(row=r, column=c).value = f"JORNADA: {jornada.upper()}"
+                    if "ASIGNATURA" in val and len(val) < 20: self._safe_set_value(nueva_prom, r, c, f"ASIGNATURA: {nueva_materia.upper()}")
+                    if "CONSEJERO" in val and len(val) < 30: self._safe_set_value(nueva_prom, r, c, f"PROF. CONSEJERO: {consejero.upper()}")
+                    if "AULA" in val and len(val) < 15: self._safe_set_value(nueva_prom, r, c, f"AULA: {grado}")
+                    if "JORNADA" in val and len(val) < 20: self._safe_set_value(nueva_prom, r, c, f"JORNADA: {jornada.upper()}")
                 except AttributeError: pass
 
         for r in range(4, 50):
             for c in range(3, 100):
                 try:
                     celda = nueva_prom.cell(row=r, column=c)
-                    if type(celda).__name__ != 'MergedCell' and celda.data_type != 'f': celda.value = None
+                    self._safe_clear_value(nueva_prom, r, c)
                 except AttributeError: pass
 
         if hoja_plan_origen:
@@ -1153,18 +1169,18 @@ class DataEngine:
                 for c in range(1, 10):
                     try:
                         val = str(nueva_plan.cell(row=r, column=c).value or "").upper()
-                        if "ASIGNATURA:" in val: nueva_plan.cell(row=r, column=c+2).value = nueva_materia.upper()
-                        if "GRUPO:" in val: nueva_plan.cell(row=r, column=c+2).value = grado
+                        if "ASIGNATURA:" in val: self._safe_set_value(nueva_plan, r, c+2, nueva_materia.upper())
+                        if "GRUPO:" in val: self._safe_set_value(nueva_plan, r, c+2, grado)
                         if "CONSEJERO" in val:
-                            if len(val) > 20: nueva_plan.cell(row=r, column=c).value = f"PROF. CONSEJERO (A): {consejero.upper()}"
-                            else: nueva_plan.cell(row=r, column=c+2).value = consejero.upper()
+                            if len(val) > 20: self._safe_set_value(nueva_plan, r, c, f"PROF. CONSEJERO (A): {consejero.upper()}")
+                            else: self._safe_set_value(nueva_plan, r, c+2, consejero.upper())
                     except AttributeError: pass
             
             for r in range(15, 60):
                 for c in range(5, 20):
                     try:
                         celda = nueva_plan.cell(row=r, column=c)
-                        if type(celda).__name__ != 'MergedCell' and celda.data_type != 'f': celda.value = None
+                        self._safe_clear_value(nueva_prom, r, c)
                     except AttributeError: pass
 
         hoja_resumen = None
@@ -1186,7 +1202,7 @@ class DataEngine:
             if fila_materias:
                 for c in range(2, 20):
                     if not ws_res.cell(row=fila_materias, column=c).value:
-                        ws_res.cell(row=fila_materias, column=c).value = nueva_materia.upper()
+                        self._safe_set_value(ws_res, fila_materias, c, nueva_materia.upper())
                         break
 
         wb.save(self.ruta)
@@ -1286,7 +1302,7 @@ class DataEngine:
             for r in range(10, 20):
                 for c in range(2, 20):
                     if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
-                        ws_res.cell(row=r, column=c).value = None
+                        self._safe_clear_value(ws_res, r, c)
 
         wb.save(self.ruta)
         wb.close()

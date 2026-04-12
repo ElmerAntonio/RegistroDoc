@@ -293,6 +293,13 @@ class AsistenciaFrame(ctk.CTkFrame):
                 print(f"No se pudo actualizar el Word de {nombre_est}: {e}")
         else:
             doc = Document()
+        try:
+            from utils.footer_utils import add_header_with_logo, get_school_logo_path
+            logo_esc = get_school_logo_path()
+            if logo_esc:
+                add_header_with_logo(doc, logo_esc)
+        except Exception: pass
+
 
             p_head = doc.add_paragraph()
             p_head.alignment = WD_ALIGN_PARAGRAPH.CENTER

@@ -30,3 +30,28 @@ def add_footer_with_logo(doc, logo_path, nombre_programa, versiculo=None, fecha=
     run.font.color.rgb = RGBColor(100, 100, 100)
     return doc
 
+
+
+def add_header_with_logo(doc, logo_path, text=""):
+    section = doc.sections[0]
+    header = section.header
+    header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    header_para.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+    run = header_para.add_run()
+    if os.path.exists(logo_path):
+        run.add_picture(logo_path, width=Inches(1.0))
+    if text:
+        run.add_text(f"  {text}")
+    return doc
+
+def get_school_logo_path():
+    import json
+    from config import CONFIG_FILE
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("logo_escuela_path", "")
+        except:
+            pass
+    return ""
