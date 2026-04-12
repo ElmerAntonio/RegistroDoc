@@ -97,7 +97,7 @@ class NotasFrame(ctk.CTkFrame):
 
         self.var_desc = ctk.StringVar()
         self.var_desc.trace_add("write", self.actualizar_contador_desc)
-        self.entry_desc = ctk.CTkEntry(tab_nueva, textvariable=self.var_desc)
+        self.entry_desc = ctk.CTkEntry(tab_nueva, textvariable=self.var_desc, font=("Calibri", 11), justify="center")
         self.entry_desc.pack(fill="x", padx=10, pady=5)
 
         self.btn_guardar_nueva = ctk.CTkButton(
@@ -160,7 +160,11 @@ class NotasFrame(ctk.CTkFrame):
     def actualizar_contador_desc(self, *args):
         texto = self.var_desc.get()
         if len(texto) > 25:
+            # We must use self.entry_desc to prevent recursive trace issues or lag in UI update
+            # sometimes set() causes cursor jump
             self.var_desc.set(texto[:25])
+            # Move cursor to end
+            self.entry_desc.icursor("end")
             texto = texto[:25]
         if hasattr(self, 'lbl_desc_counter'):
             self.lbl_desc_counter.configure(
@@ -200,17 +204,17 @@ class NotasFrame(ctk.CTkFrame):
         header_row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
         header_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(header_row, text="N°", width=30, font=("Segoe UI", 12, "bold")).pack(side="left")
-        ctk.CTkLabel(header_row, text="Nombre", width=280, anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left")
-        ctk.CTkLabel(header_row, text="Nota", width=80, anchor="e", font=("Segoe UI", 12, "bold")).pack(side="right", padx=30)
+        ctk.CTkLabel(header_row, text="Nombre", anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left", fill="x", expand=True, padx=(10, 10))
+        ctk.CTkLabel(header_row, text="Nota", width=80, anchor="center", font=("Segoe UI", 12, "bold")).pack(side="right", padx=10)
 
         ests = self.engine.obtener_estudiantes_completos(grado)
         for est in ests:
             row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
             row.pack(fill="x", pady=2)
             ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
-            ctk.CTkLabel(row, text=est['nombre'], width=280, anchor="w").pack(side="left")
+            ctk.CTkLabel(row, text=est['nombre'], anchor="w").pack(side="left", fill="x", expand=True, padx=(10, 10))
             entry = ctk.CTkEntry(row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
-            entry.pack(side="right", padx=30)
+            entry.pack(side="right", padx=10)
             self.entradas_notas[est['id']] = [entry]
 
     def cargar_descripciones(self, *args):

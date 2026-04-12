@@ -1047,18 +1047,36 @@ class DataEngine:
                 try: ws_nueva.cell(row=r, column=c).value = None
                 except AttributeError: pass
 
-        if "MAESTRO" in wb.sheetnames:
-            ws_m = wb["MAESTRO"]
-            col_vacia = None
-            for c in range(2, 40, 2):
-                if not ws_m.cell(row=4, column=c).value:
-                    col_vacia = c
+        if self.modalidad == "primaria":
+            hoja_base_maestro = None
+            for sheet in wb.sheetnames:
+                if "MAESTRO" in sheet.upper():
+                    hoja_base_maestro = sheet
                     break
-            if col_vacia:
-                self._safe_set_value(ws_m, 3, col_vacia, f"GRADO {nuevo_grado}")
-                self._safe_set_value(ws_m, 4, col_vacia, "NOMBRES Y APELLIDOS")
-                if self.modalidad == "premedia":
-                    self._safe_set_value(ws_m, 4, col_vacia+1, "N° DE CÉDULA")
+            if hoja_base_maestro:
+                nueva_hoja_maestro = f"MAESTRO ({nuevo_grado})"
+                if nueva_hoja_maestro not in wb.sheetnames:
+                    ws_maestro_nueva = wb.copy_worksheet(wb[hoja_base_maestro])
+                    ws_maestro_nueva.title = nueva_hoja_maestro
+                    # Clean the names and keep the layout
+                    for r in range(5, 50):
+                        try:
+                            self._safe_clear_value(ws_maestro_nueva, r, 2)
+                        except AttributeError: pass
+                    self._safe_set_value(ws_maestro_nueva, 3, 2, f"GRADO {nuevo_grado}")
+        else:
+            if "MAESTRO" in wb.sheetnames:
+                ws_m = wb["MAESTRO"]
+                col_vacia = None
+                for c in range(2, 40, 2):
+                    if not ws_m.cell(row=4, column=c).value:
+                        col_vacia = c
+                        break
+                if col_vacia:
+                    self._safe_set_value(ws_m, 3, col_vacia, f"GRADO {nuevo_grado}")
+                    self._safe_set_value(ws_m, 4, col_vacia, "NOMBRES Y APELLIDOS")
+                    if self.modalidad == "premedia":
+                        self._safe_set_value(ws_m, 4, col_vacia+1, "N° DE CÉDULA")
                     
         hoja_base_resumen = None
         for sheet in wb.sheetnames:
