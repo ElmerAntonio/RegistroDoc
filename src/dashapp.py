@@ -587,12 +587,12 @@ class DashboardFrame(ctk.CTkFrame):
             elif formato == "docx":
                 from docx import Document
                 doc = Document()
-        try:
-            from utils.footer_utils import add_header_with_logo, get_school_logo_path
-            logo_esc = get_school_logo_path()
-            if logo_esc:
-                add_header_with_logo(doc, logo_esc)
-        except Exception: pass
+                try:
+                    from utils.footer_utils import add_header_with_logo, get_school_logo_path
+                    logo_esc = get_school_logo_path()
+                    if logo_esc:
+                        add_header_with_logo(doc, logo_esc)
+                except Exception: pass
 
                 doc.add_heading(f"Calificaciones - {trimestre}", 0)
                 table = doc.add_table(rows=1, cols=len(df.columns))
@@ -607,12 +607,12 @@ class DashboardFrame(ctk.CTkFrame):
             elif formato == "pdf":
                 from docx import Document
                 doc = Document()
-        try:
-            from utils.footer_utils import add_header_with_logo, get_school_logo_path
-            logo_esc = get_school_logo_path()
-            if logo_esc:
-                add_header_with_logo(doc, logo_esc)
-        except Exception: pass
+                try:
+                    from utils.footer_utils import add_header_with_logo, get_school_logo_path
+                    logo_esc = get_school_logo_path()
+                    if logo_esc:
+                        add_header_with_logo(doc, logo_esc)
+                except Exception: pass
 
                 doc.add_heading(f"Calificaciones - {trimestre}", 0)
                 table = doc.add_table(rows=1, cols=len(df.columns))
