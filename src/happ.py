@@ -180,7 +180,7 @@ class ReportesFrame(ctk.CTkFrame):
         try:
             from docx import Document
             from docx.shared import Pt
-            from utils.footer_utils import add_footer_with_logo
+            from utils.footer_utils import add_footer_with_logo, add_header_with_logo, get_school_logo_path
         except ImportError:
             messagebox.showerror("Error", "Falta librería python-docx.")
             return
@@ -188,6 +188,13 @@ class ReportesFrame(ctk.CTkFrame):
         grado = self.combo_grado.get()
         reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
         doc = Document()
+        try:
+            from utils.footer_utils import add_header_with_logo, get_school_logo_path
+            logo_esc = get_school_logo_path()
+            if logo_esc:
+                add_header_with_logo(doc, logo_esc)
+        except Exception: pass
+
         doc.add_heading(f"Reporte Académico — Grado {grado}", 0)
         # Encabezado escuela
         datos = self.engine.obtener_datos_generales() if hasattr(self.engine, 'obtener_datos_generales') else {}
@@ -310,7 +317,7 @@ class ReportesFrame(ctk.CTkFrame):
         import os
         try:
             from docx import Document
-            from utils.footer_utils import add_footer_with_logo
+            from utils.footer_utils import add_footer_with_logo, add_header_with_logo, get_school_logo_path
             from utils.docx_graphics import save_figure_as_image, add_image_to_doc
         except ImportError:
             messagebox.showerror("Error", "Falta librería python-docx o utils de gráficos.")
@@ -323,6 +330,13 @@ class ReportesFrame(ctk.CTkFrame):
         trimestre = trimestre.get() if trimestre else None
 
         doc = Document()
+        try:
+            from utils.footer_utils import add_header_with_logo, get_school_logo_path
+            logo_esc = get_school_logo_path()
+            if logo_esc:
+                add_header_with_logo(doc, logo_esc)
+        except Exception: pass
+
         doc.add_heading(f"Gráficos de Rendimiento — Grado {grado}", 0)
 
         engine = self.engine
@@ -566,7 +580,7 @@ class ReportesFrame(ctk.CTkFrame):
         import os
         try:
             from docx import Document
-            from utils.footer_utils import add_footer_with_logo
+            from utils.footer_utils import add_footer_with_logo, add_header_with_logo, get_school_logo_path
         except ImportError:
             messagebox.showerror("Error", "Falta librería python-docx.")
             return
@@ -574,6 +588,13 @@ class ReportesFrame(ctk.CTkFrame):
         grado = self.combo_grado.get()
         reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
         doc = Document()
+        try:
+            from utils.footer_utils import add_header_with_logo, get_school_logo_path
+            logo_esc = get_school_logo_path()
+            if logo_esc:
+                add_header_with_logo(doc, logo_esc)
+        except Exception: pass
+
         doc.add_heading(f"Reportes y Estadísticas — Grado {grado}", 0)
 
         # Docente

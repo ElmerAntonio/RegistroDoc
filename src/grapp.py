@@ -135,6 +135,13 @@ class GraficosFrame(ctk.CTkFrame):
             return
 
         doc = Document()
+        try:
+            from utils.footer_utils import add_header_with_logo, get_school_logo_path
+            logo_esc = get_school_logo_path()
+            if logo_esc:
+                add_header_with_logo(doc, logo_esc)
+        except Exception: pass
+
         doc.add_heading(f"Gráfico: {titulo}", 0)
         try:
             img = save_figure_as_image(fig, "indiv_")
