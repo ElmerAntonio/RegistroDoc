@@ -215,18 +215,12 @@ class DataEngine:
                 if es_periodo:
                     h = datos_horario[idx]
                     # Escribimos exactamente en la primera celda de la combinación
-                    try: ws.cell(row=r, column=10).value = h["horas"]
-                    except: pass
-                    try: ws.cell(row=r, column=15).value = h["lunes"]
-                    except: pass
-                    try: ws.cell(row=r, column=16).value = h["martes"]
-                    except: pass
-                    try: ws.cell(row=r, column=17).value = h["miercoles"]
-                    except: pass
-                    try: ws.cell(row=r, column=18).value = h["jueves"]
-                    except: pass
-                    try: ws.cell(row=r, column=19).value = h["viernes"]
-                    except: pass
+                    mapeo_columnas = {10: "horas", 15: "lunes", 16: "martes", 17: "miercoles", 18: "jueves", 19: "viernes"}
+                    for col, llave in mapeo_columnas.items():
+                        try:
+                            ws.cell(row=r, column=col).value = h[llave]
+                        except Exception as e:
+                            print(f"[!] Error al escribir horario ({llave}) en fila {r}: {e}")
                     idx += 1
                     
             wb.save(self.ruta)
@@ -327,7 +321,8 @@ class DataEngine:
                             if "ELMER TUGRI" in texto.upper(): texto = re.sub(r'ELMER TUGRI', docente_titulo, texto, flags=re.IGNORECASE); modificado = True
                             
                             if modificado: ws.cell(row=r, column=c).value = texto
-                        except: pass
+                        except Exception as e:
+                            print(f"[!] Error in sincronizar_plantilla_maestra (carátula) at row {r}, col {c}: {e}")
 
         # 4. INYECCIÓN DE FECHAS EN ASISTENCIA (Solo escribe en la celda)
         for sheet in wb.sheetnames:
@@ -347,7 +342,8 @@ class DataEngine:
                                 g_match = re.search(r'\((.*?)\)', sheet)
                                 aula = g_match.group(1) if g_match else "Multigrado"
                                 ws.cell(row=r, column=c).value = f"AÑO: {ano}     AULA:      {aula}                   NOMBRE DEL PROF./A CONSEJERO/A:      {docente}"
-                        except: pass
+                        except Exception as e:
+                            print(f"[!] Error in sincronizar_plantilla_maestra (asistencia) at row {r}, col {c}: {e}")
 
         wb.save(self.ruta)
         wb.close()
