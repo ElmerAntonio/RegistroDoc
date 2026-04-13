@@ -513,13 +513,17 @@ class ReportesFrame(ctk.CTkFrame):
             if materias and materias != ["Sin materias"] and estudiantes:
                 m_c = [m[:10] for m in materias[:5]]
                 n_c = [e['nombre'].split(" ")[0] for e in estudiantes[:10]]
+                # Pre-fetch promedios for each materia to avoid N+1 query pattern
+                materias_reales = []
+                for m in materias[:5]:
+                    pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Anual")
+                    if not pr:
+                        pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
+                    materias_reales.append(pr)
+
                 data_h = []
                 for e in estudiantes[:10]:
-                    row_data = []
-                    for m in materias[:5]:
-                        pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Anual")
-                        if not pr: pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
-                        row_data.append(pr.get(e['nombre'], 0.0))
+                    row_data = [pr.get(e['nombre'], 0.0) for pr in materias_reales]
                     data_h.append(row_data)
                 data_np = np.array(data_h)
                 im = ax8.imshow(data_np, cmap="RdYlGn", vmin=1.0, vmax=5.0, aspect='auto')
