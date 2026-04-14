@@ -54,9 +54,8 @@ class DataEngine:
     def _obtener_columna_nombres(self, grado, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return 2
 
-        should_close = False
+        should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
-            should_close = not bool(self._wb_cache)
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
         if "MAESTRO" not in wb.sheetnames: 
@@ -357,9 +356,8 @@ class DataEngine:
     def obtener_grados_activos(self, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
 
-        should_close = False
+        should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
-            should_close = not bool(self._wb_cache)
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
         grados = []
@@ -391,9 +389,8 @@ class DataEngine:
     def obtener_estudiantes_completos(self, grado, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
 
-        should_close = False
+        should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
-            should_close = not bool(self._wb_cache)
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
         ws_m = wb["MAESTRO"]

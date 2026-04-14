@@ -10,8 +10,12 @@ class SetupWizard(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RegistroDoc Pro - Configuración Inicial")
-        self.geometry("700x500")
-        self.eval('tk::PlaceWindow . center') 
+        w, h = 700, 500
+        ws = self.winfo_screenwidth()
+        hs = self.winfo_screenheight()
+        x = (ws // 2) - (w // 2)
+        y = (hs // 2) - (h // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
         self.datos = {}
 
         self.paso_actual = 1
