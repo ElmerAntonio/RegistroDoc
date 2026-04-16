@@ -10,12 +10,16 @@ class SetupWizard(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RegistroDoc Pro - Configuración Inicial")
-        w, h = 700, 500
-        ws = self.winfo_screenwidth()
-        hs = self.winfo_screenheight()
-        x = (ws // 2) - (w // 2)
-        y = (hs // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
+
+        # Centrar ventana de forma segura sin eval()
+        width = 700
+        height = 500
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
         self.datos = {}
 
         self.paso_actual = 1

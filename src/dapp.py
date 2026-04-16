@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+import tkinter.messagebox as messagebox
 
 class EstudiantesFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
