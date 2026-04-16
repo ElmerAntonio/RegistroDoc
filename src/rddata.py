@@ -53,7 +53,6 @@ class DataEngine:
 
     def _obtener_columna_nombres(self, grado, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return 2
-        wb = None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -354,7 +353,6 @@ class DataEngine:
 
     def obtener_grados_activos(self, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        wb = None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -389,7 +387,6 @@ class DataEngine:
 
     def obtener_estudiantes_completos(self, grado, wb=None):
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        wb = None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
