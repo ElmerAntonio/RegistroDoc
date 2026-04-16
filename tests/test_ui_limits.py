@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from dapp import EstudiantesFrame
+from src.dapp import EstudiantesFrame
 import tkinter as tk
 
 def test_frontend_student_limit_warning():
