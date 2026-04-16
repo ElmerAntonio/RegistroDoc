@@ -1,5 +1,5 @@
 import pytest
-from rddata import DataEngine
+from src.rddata import DataEngine
 
 @pytest.mark.parametrize("input_val, expected", [
     ("ASISTENCIA DEL 15 DE MARZO", "15 DE MARZO"),
