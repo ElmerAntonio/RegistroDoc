@@ -50,10 +50,10 @@ def _ruta_excel():
 
     for ruta in candidatos:
         if os.path.exists(ruta):
-            return os.path.abspath(ruta)
+            return ruta
 
     # Devuelve la ruta principal esperada aunque no exista para mantener mensajes consistentes.
-    return os.path.abspath(candidatos[0] if candidatos else os.path.join(raiz, "Registro_2026.xlsx"))
+    return candidatos[0] if candidatos else os.path.join(raiz, "Registro_2026.xlsx")
 
 
 def _excel_disponible() -> bool:
@@ -141,7 +141,7 @@ def imprimir_hoja_directo(nombre_hoja: str = "Portada") -> tuple[bool, str]:
         import win32com.client
 
         # Absolute path ensures we only use trusted, absolute file locations
-        abs_ruta = os.path.abspath(ruta)
+        abs_ruta = ruta
 
         # Ensure we only interact with files that exist to
         # prevent path traversal issues

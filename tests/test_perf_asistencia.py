@@ -22,6 +22,7 @@ def create_dummy_file(ruta):
 
 def test_performance_buscar_asistencia():
     test_file = "test_asist_bench.xlsx"
+    if os.path.exists(test_file): os.remove(test_file)
     if not os.path.exists(test_file):
         create_dummy_file(test_file)
 

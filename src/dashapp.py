@@ -80,7 +80,7 @@ class DashboardFrame(ctk.CTkFrame):
             return {
                 "total": 92, "riesgo": 7, "honor": "SANTOS FIDEL",
                 "honor_prom": "4.9", "asistencia": "98%",
-                "grados": ["7°", "8°", "9°"],
+                "grados": ["Sin datos"],
             }
 
     # ══════════════════════════════════════════════════════════════════════
@@ -455,7 +455,7 @@ class DashboardFrame(ctk.CTkFrame):
         try:
             grados = self.engine.obtener_grados_activos()
         except Exception:
-            grados = ["7°", "8°", "9°"]
+            grados = ["Sin datos"]
 
         gf = ctk.CTkFrame(gc, fg_color="transparent")
         gf.pack(padx=16, pady=(0, 14))
@@ -693,7 +693,7 @@ if __name__ == "__main__":
                     "honor": "SANTOS FIDEL", "honor_prom": "4.9",
                     "asistencia": "98%"}
         def obtener_grados_activos(self):
-            return ["7°", "8°", "9°"]
+            return ["Sin datos"]
         def obtener_estudiantes_completos(self, g):
             names = ["Maria Gonzalez", "Pedro Pinto", "Ana Santos"]
             return [{"id": i+1, "nombre": n, "cedula": ""} for i, n in enumerate(names)]

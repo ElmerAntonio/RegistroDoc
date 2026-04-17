@@ -8,7 +8,7 @@ mock_ctk = MagicMock()
 sys.modules['customtkinter'] = mock_ctk
 sys.modules['tkinter'] = MagicMock()
 sys.modules['tkinter.messagebox'] = MagicMock()
-sys.modules['openpyxl'] = MagicMock()
+sys.modules.pop('openpyxl', None)
 sys.modules['pandas'] = MagicMock()
 sys.modules['matplotlib'] = MagicMock()
 sys.modules['rddata'] = MagicMock()
