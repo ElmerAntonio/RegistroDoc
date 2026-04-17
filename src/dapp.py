@@ -29,7 +29,7 @@ class EstudiantesFrame(ctk.CTkFrame):
 
         ctk.CTkLabel(self.frame_controles, text="Seleccione Grado:", font=("Segoe UI", 14)).pack(side="left", padx=10)
         
-        opciones_grado = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["7°"]
+        opciones_grado = self.engine.obtener_grados_activos() or ["Sin datos"]
         self.combo_grado = ctk.CTkOptionMenu(self.frame_controles, values=opciones_grado, command=self.cargar_lista)
         self.combo_grado.pack(side="left", padx=10)
 
