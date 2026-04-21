@@ -3,6 +3,7 @@ from docx.shared import Inches
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import os
+import sys
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -47,11 +48,26 @@ def add_header_with_logo(doc, logo_path, text=""):
 def get_school_logo_path():
     import json
     from config import CONFIG_FILE
+
+    # 1. Intentar obtener desde el archivo de configuración (prioridad usuario)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("logo_escuela_path", "")
-        except:
+                config_path = data.get("logo_escuela_path", "")
+                if config_path and os.path.exists(config_path):
+                    return config_path
+        except Exception:
             pass
+
+    # 2. Intentar obtener desde el paquete (PyInstaller fallback)
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    internal_path = os.path.join(base_path, "img", "logo.png")
+    if os.path.exists(internal_path):
+        return internal_path
+
     return ""
