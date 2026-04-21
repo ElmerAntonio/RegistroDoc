@@ -1,6 +1,5 @@
 import os
 import tempfile
-import matplotlib.pyplot as plt
 from docx.shared import Inches
 
 def save_figure_as_image(fig, name_prefix="grafico"): 
