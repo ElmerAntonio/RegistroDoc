@@ -513,11 +513,15 @@ class ReportesFrame(ctk.CTkFrame):
             if materias and materias != ["Sin materias"] and estudiantes:
                 m_c = [m[:10] for m in materias[:5]]
                 n_c = [e['nombre'].split(" ")[0] for e in estudiantes[:10]]
-                # Pre-fetch promedios for each materia to avoid N+1 query pattern
+                # Pre-fetch promedios for all materias using bulk fetch
+                materias_interes = materias[:5]
+                bulk_reales = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,ms,t: {})(grado, materias_interes, "Anual")
+
                 materias_reales = []
-                for m in materias[:5]:
-                    pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Anual")
+                for m in materias_interes:
+                    pr = bulk_reales.get(m, {})
                     if not pr:
+                        # Fallback individual query if bulk for this materia was empty
                         pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
                     materias_reales.append(pr)
 

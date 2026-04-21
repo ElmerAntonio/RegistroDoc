@@ -543,6 +543,73 @@ class DataEngine:
         if should_close: wb.close()
         return datos
 
+    def obtener_promedios_reales_bulk(self, grado, materias, trimestre, wb=None):
+        if not os.path.exists(self.ruta) and self._wb_cache is None: return {}
+        should_close = not bool(self._wb_cache) if wb is None else False
+        if wb is None:
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+
+        resultados = {m: {} for m in materias}
+        grado_num = grado.replace("°", "")
+
+        if trimestre == "Trimestre 1": col_b = "T.1"
+        elif trimestre == "Trimestre 2": col_b = "T.2"
+        elif trimestre == "Trimestre 3": col_b = "T.3"
+        else: col_b = "ANUAL"
+
+        hoja_res = None
+        for s in wb.sheetnames:
+            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
+                hoja_res = s
+                break
+
+        if hoja_res:
+            ws_res = wb[hoja_res]
+            col_nom = None
+            for c in range(1, 40):
+                val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                if "NOMBRE" in val:
+                    col_nom = c
+                    break
+
+            if col_nom:
+                materia_to_col = {}
+                for materia in materias:
+                    if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+                        fila_materias = None
+                        col_inicio_materia = None
+                        for r in range(4, 15):
+                            for c in range(2, 40):
+                                if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
+                                    fila_materias = r
+                                    col_inicio_materia = c
+                                    break
+                            if col_inicio_materia: break
+
+                        if col_inicio_materia:
+                            for c in range(col_inicio_materia, col_inicio_materia + 5):
+                                val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
+                                val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
+                                if col_b in val or col_b in val2:
+                                    materia_to_col[materia] = c
+                                    break
+
+                for r in range(10, 50):
+                    nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
+                    if nom:
+                        for materia, col_nota in materia_to_col.items():
+                            try:
+                                valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
+                                if valido:
+                                    resultados[materia][nom] = nota
+                                else:
+                                    resultados[materia][nom] = 1.0
+                            except (ValueError, TypeError, Exception):
+                                resultados[materia][nom] = 1.0
+
+        if should_close: wb.close()
+        return resultados
+
     def obtener_historial_real(self, grado, materia, nombre_estudiante, wb=None):
         if not os.path.exists(self.ruta) and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
