@@ -248,12 +248,11 @@ class NotasFrame(ctk.CTkFrame):
                     break
 
             if val:
-                try:
-                    nota = validar_nota_meduca(val)
-                    notas_guardar[id_est] = nota
-                except ValueError as e:
-                    messagebox.showerror("Error", f"Error en la nota: {e}")
+                valido, nota, msg = validar_nota_meduca(val)
+                if not valido:
+                    messagebox.showerror("Error", f"Error en la nota para {id_est}: {msg}")
                     return None
+                notas_guardar[id_est] = nota
 
         return notas_guardar
 
