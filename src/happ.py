@@ -18,7 +18,7 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkButton(acciones_frame, text="⬇️ Exportar a PDF", fg_color="#10B981", command=self.descargar_pdf).pack(side="left", padx=10)
         ctk.CTkButton(acciones_frame, text="🖨️ Solo Gráficos", fg_color="#F59E0B", command=self.imprimir_graficos).pack(side="left", padx=10)
         ctk.CTkButton(acciones_frame, text="⬇️ Gráficos a Word", fg_color="#334155", command=self.descargar_graficos).pack(side="left", padx=10)
-        ctk.CTkButton(acciones_frame, text="⬇️ Reportes a Word", fg_color="#4F46E5", command=self.descargar_reportes_word).pack(side="left", padx=10)
+        ctk.CTkButton(acciones_frame, text="⬇️ Exportar a Word", fg_color="#4F46E5", command=self.descargar_reportes_word).pack(side="left", padx=10)
 
         # Panel de Controles
         self.frame_controles = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=8)
@@ -567,7 +567,7 @@ class ReportesFrame(ctk.CTkFrame):
             else:
                 try:
                     import subprocess
-                    subprocess.call(['lp', tmp_docx])
+                    subprocess.call(['lp', os.path.abspath(tmp_docx)])
                     messagebox.showinfo("Imprimir", "Enviado a la cola de impresión.")
                 except Exception as e:
                     messagebox.showerror("Error de impresión", f"No se pudo imprimir: {e}")
@@ -579,7 +579,7 @@ class ReportesFrame(ctk.CTkFrame):
                 os.startfile(tmp_docx)
             except AttributeError:
                 import subprocess
-                subprocess.call(['xdg-open', tmp_docx])
+                subprocess.call(['xdg-open', os.path.abspath(tmp_docx)])
         else:
             messagebox.showinfo("Descarga DOCX", f"Documento generado en:\n{tmp_docx}\n\nPuedes abrirlo y guardarlo como PDF desde Word.")
 
