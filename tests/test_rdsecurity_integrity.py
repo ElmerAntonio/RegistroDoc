@@ -14,14 +14,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 # Mock dependencies before importing rdsecurity
 sys.modules['dotenv'] = MagicMock()
-sys.modules['cryptography'] = MagicMock()
-sys.modules['cryptography.hazmat'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives.ciphers'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives.ciphers.aead'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives.kdf'] = MagicMock()
-sys.modules['cryptography.hazmat.primitives.kdf.pbkdf2'] = MagicMock()
-sys.modules['cryptography.hazmat.backends'] = MagicMock()
 
 import rdsecurity
 from rdsecurity import (

@@ -1,8 +1,6 @@
 import pytest
 import sys
 from unittest.mock import MagicMock, patch
-sys.modules['cryptography.hazmat.backends.openssl'] = MagicMock()
-sys.modules['cryptography.hazmat.backends.openssl.backend'] = MagicMock()
 import pytest
 import os
 os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT"
