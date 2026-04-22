@@ -111,7 +111,7 @@ def abrir_para_imprimir(hoja: str = None) -> tuple[bool, str]:
         # Linux/Mac — LibreOffice
         if _libreoffice_disponible():
             try:
-                subprocess.Popen(["libreoffice", "--calc", ruta])
+                subprocess.Popen(["libreoffice", "--calc", os.path.abspath(ruta)])
                 return True, (
                     "Excel abierto en LibreOffice. "
                     "Usa Ctrl+P para imprimir."
