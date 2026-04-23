@@ -1,8 +1,6 @@
 import pytest
 import sys
 from unittest.mock import MagicMock, patch
-sys.modules['cryptography.hazmat.backends.openssl'] = MagicMock()
-sys.modules['cryptography.hazmat.backends.openssl.backend'] = MagicMock()
 import pytest
 import os
 import tempfile
