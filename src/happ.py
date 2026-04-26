@@ -414,9 +414,12 @@ class ReportesFrame(ctk.CTkFrame):
             materias = self.engine.obtener_materias_por_grado(grado)
             if materias and materias != ["Sin materias"]:
                 reprobados_por_materia = {}
+                bulk_anual = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Anual")
+                bulk_t1 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 1")
+
                 for mat in materias:
-                    proms = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Anual")
-                    if not proms: proms = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 1")
+                    proms = bulk_anual.get(mat, {})
+                    if not proms: proms = bulk_t1.get(mat, {})
                     reps = sum(1 for v in proms.values() if v < 3.0)
                     reprobados_por_materia[mat] = reps
                 reprobados_ordenado = dict(sorted(reprobados_por_materia.items(), key=lambda item: item[1], reverse=True))
@@ -516,13 +519,13 @@ class ReportesFrame(ctk.CTkFrame):
                 # Pre-fetch promedios for all materias using bulk fetch
                 materias_interes = materias[:5]
                 bulk_reales = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,ms,t: {})(grado, materias_interes, "Anual")
+                bulk_t1 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,ms,t: {})(grado, materias_interes, "Trimestre 1")
 
                 materias_reales = []
                 for m in materias_interes:
                     pr = bulk_reales.get(m, {})
                     if not pr:
-                        # Fallback individual query if bulk for this materia was empty
-                        pr = getattr(self.engine, 'obtener_promedios_reales', lambda g,ma,t: {})(grado, m, "Trimestre 1")
+                        pr = bulk_t1.get(m, {})
                     materias_reales.append(pr)
 
                 data_h = []

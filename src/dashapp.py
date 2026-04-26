@@ -562,16 +562,23 @@ class DashboardFrame(ctk.CTkFrame):
                 estudiantes = self.engine.obtener_estudiantes_completos(grado)
                 if not materias or not estudiantes: continue
 
+                if trimestre == "Todos los trimestres":
+                    bulk_t1 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 1")
+                    bulk_t2 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 2")
+                    bulk_t3 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 3")
+                else:
+                    bulk_trim = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, trimestre)
+
                 for est in estudiantes:
                     nombre = est['nombre']
                     for mat in materias:
                         if trimestre == "Todos los trimestres":
-                            t1 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 1").get(nombre, 0)
-                            t2 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 2").get(nombre, 0)
-                            t3 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 3").get(nombre, 0)
+                            t1 = bulk_t1.get(mat, {}).get(nombre, 0)
+                            t2 = bulk_t2.get(mat, {}).get(nombre, 0)
+                            t3 = bulk_t3.get(mat, {}).get(nombre, 0)
                             todas_notas.append({"Grado": grado, "Materia": mat, "Estudiante": nombre, "T1": t1, "T2": t2, "T3": t3})
                         else:
-                            val = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, trimestre).get(nombre, 0)
+                            val = bulk_trim.get(mat, {}).get(nombre, 0)
                             todas_notas.append({"Grado": grado, "Materia": mat, "Estudiante": nombre, trimestre: val})
 
             if not todas_notas:
