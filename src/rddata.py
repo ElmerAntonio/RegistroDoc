@@ -90,7 +90,7 @@ class DataEngine:
             "coordinador_nombre": "", "telefono": "", "correo": "", "ano_lectivo": "2026",
             "jornada": "", "fecha_t1": "", "fecha_t2": "", "fecha_t3": ""
         }
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return datos
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return datos
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -145,7 +145,7 @@ class DataEngine:
 
     def obtener_horario(self, wb=None):
         horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "", "jueves": "", "viernes": ""} for _ in range(8)]
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return horario
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return horario
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -365,7 +365,7 @@ class DataEngine:
         return sorted(list(set(grados))) if grados else []
 
     def obtener_materias_por_grado(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -466,7 +466,7 @@ class DataEngine:
         return True
 
     def obtener_promedios_reales(self, grado, materia, trimestre, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return {}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -544,7 +544,7 @@ class DataEngine:
         return datos
 
     def obtener_promedios_reales_bulk(self, grado, materias, trimestre, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return {}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -611,7 +611,7 @@ class DataEngine:
         return resultados
 
     def obtener_historial_real(self, grado, materia, nombre_estudiante, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -687,7 +687,7 @@ class DataEngine:
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
 
     def obtener_datos_reportes(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return {"docente": [], "aprobados": [], "direccion": []}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"docente": [], "aprobados": [], "direccion": []}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -741,7 +741,7 @@ class DataEngine:
         return datos
 
     def get_dashboard_stats(self, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
 
         # Optimization: Use a single workbook load for all dashboard stats
         should_close = not bool(self._wb_cache) if wb is None else False
@@ -829,7 +829,7 @@ class DataEngine:
         return True, ""
 
     def obtener_descripciones_notas(self, grado, materia, trimestre, tipo_nota, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -855,7 +855,7 @@ class DataEngine:
         return descripciones
 
     def buscar_notas_por_descripcion_exacta(self, grado, materia, trimestre, tipo_nota, descripcion, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return None
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -922,7 +922,7 @@ class DataEngine:
         return None
 
     def obtener_fechas_asistencia(self, grado, trimestre, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -941,7 +941,7 @@ class DataEngine:
         return fechas
 
     def buscar_asistencia_existente(self, grado, trimestre, fecha, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return None
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -1034,7 +1034,7 @@ class DataEngine:
         return True
 
     def obtener_consejero_actual(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return "No asignado"
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return "No asignado"
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
@@ -1298,7 +1298,7 @@ class DataEngine:
 
 
     def actualizar_resumen(self, grado, wb=None):
-        if not os.path.exists(self.ruta) and self._wb_cache is None: return False
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return False
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
