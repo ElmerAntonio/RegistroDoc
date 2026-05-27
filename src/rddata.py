@@ -535,10 +535,8 @@ class DataEngine:
                             valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
                             if valido:
                                 datos[nom] = nota
-                            else:
-                                datos[nom] = 1.0
                         except (ValueError, TypeError):
-                            datos[nom] = 1.0 # Default if empty or invalid
+                            pass
 
         if should_close: wb.close()
         return datos
@@ -602,10 +600,8 @@ class DataEngine:
                                 valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
                                 if valido:
                                     resultados[materia][nom] = nota
-                                else:
-                                    resultados[materia][nom] = 1.0
                             except (ValueError, TypeError, Exception):
-                                resultados[materia][nom] = 1.0
+                                pass
 
         if should_close: wb.close()
         return resultados
@@ -1355,8 +1351,9 @@ class DataEngine:
             wb_write.save(self.ruta)
             wb_write.close()
 
-        if should_close: wb.close()
-        self._cargar_en_memoria()
+        if should_close:
+            wb.close()
+            self._cargar_en_memoria()
         return True
 
     def eliminar_materia(self, grado, materia):
