@@ -47,10 +47,7 @@ class ObservacionesFrame(ctk.CTkFrame):
                 14,
                 "bold")).pack(
             side="left")
-        grados = [
-            "7°",
-            "8°",
-            "9°"] if self.engine.modalidad == "premedia" else ["7°"]
+        grados = self.engine.obtener_grados_activos() or ["Sin datos"]
 
         self.combo_grado = ctk.CTkOptionMenu(
             top, values=grados, command=self.al_cambiar_grado, width=80)
