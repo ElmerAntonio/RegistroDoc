@@ -90,11 +90,71 @@ def test_leer_cedula_token_corrupto(temp_file):
             assert _leer_cedula_token() == {}
 
 def test_cedula_token_roundtrip():
+    from rdsecurity import TOKEN_FILE
     cedula = "8-888-888"
     try:
         _guardar_cedula_token(cedula)
         datos = _leer_cedula_token()
         assert datos["hint"] == cedula
     finally:
-        if os.path.exists("rd_token.bin"):
-            os.remove("rd_token.bin")
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+
+def test_validar_nota_meduca_decimals():
+    # Deberían ser rechazados por tener más de un decimal
+    valido, _, _ = validar_nota_meduca("3.55")
+    assert not valido
+    valido, _, _ = validar_nota_meduca(3.55)
+    assert not valido
+    valido, _, _ = validar_nota_meduca("4.001")
+    assert not valido
+    
+    # Deberían ser aceptados (1 decimal o enteros)
+    valido, nota, _ = validar_nota_meduca("3.5")
+    assert valido
+    assert nota == 3.5
+    valido, nota, _ = validar_nota_meduca("3.50")
+    assert valido
+    assert nota == 3.5
+    valido, nota, _ = validar_nota_meduca("4")
+    assert valido
+    assert nota == 4.0
+
+def test_config_migration():
+    from rdsecurity import CONFIG_FILE, cargar_config_segura, guardar_config_segura
+    from config import CONFIG_FILE as PLAIN_CONFIG_FILE
+    
+    # Limpiar cualquier residuo previo de pruebas
+    if os.path.exists(CONFIG_FILE):
+        try: os.remove(CONFIG_FILE)
+        except: pass
+    if os.path.exists(PLAIN_CONFIG_FILE):
+        try: os.remove(PLAIN_CONFIG_FILE)
+        except: pass
+        
+    test_data = {"docente_nombre": "Test Migracion", "tema": "light"}
+    
+    try:
+        # 1. Crear perfil.json en texto plano
+        with open(PLAIN_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
+            
+        # 2. Cargar usando cargar_config_segura -> Debería migrar automáticamente
+        cfg = cargar_config_segura({"tema": "dark"})
+        
+        # 3. Comprobar que los datos migrados coinciden
+        assert cfg["docente_nombre"] == "Test Migracion"
+        assert cfg["tema"] == "light"
+        
+        # 4. Comprobar que perfil.json plano fue eliminado y config.enc cifrado existe
+        assert not os.path.exists(PLAIN_CONFIG_FILE)
+        assert os.path.exists(CONFIG_FILE)
+        
+    finally:
+        # Cleanup
+        if os.path.exists(CONFIG_FILE):
+            try: os.remove(CONFIG_FILE)
+            except: pass
+        if os.path.exists(PLAIN_CONFIG_FILE):
+            try: os.remove(PLAIN_CONFIG_FILE)
+            except: pass

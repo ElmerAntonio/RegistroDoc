@@ -45,7 +45,10 @@ class GraficosFrame(ctk.CTkFrame):
 
         # Grado
         grados = self.engine.obtener_grados_activos()
-        if not grados: grados = ["Sin datos"]
+        if not grados: 
+            grados = ["Sin datos"]
+        else:
+            grados = ["Todos los Grados"] + grados
 
         self.combo_grado = ctk.CTkOptionMenu(f_top, values=grados, command=self.al_cambiar_grado)
         self.combo_grado.pack(side="left", padx=5)
@@ -53,6 +56,8 @@ class GraficosFrame(ctk.CTkFrame):
 
         # Materia
         materias = self.engine.obtener_materias_por_grado(grados[0]) if grados[0] != "Sin datos" else ["Sin materias"]
+        if materias and materias != ["Sin materias"]:
+            materias = ["Todas las Materias"] + materias
         self.combo_materia = ctk.CTkOptionMenu(f_top, values=materias, command=lambda _: self.actualizar_graficos())
         self.combo_materia.pack(side="left", padx=5)
         if materias: self.combo_materia.set(materias[0])
@@ -62,7 +67,7 @@ class GraficosFrame(ctk.CTkFrame):
         self.combo_estudiante.pack(side="left", padx=5)
 
         # Trimestre (si aplica)
-        self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"], command=lambda _: self.actualizar_graficos())
+        self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los Trimestres"], command=lambda _: self.actualizar_graficos())
         self.combo_trimestre.pack(side="left", padx=5)
 
         # Opciones de graficos (agrupadas)
@@ -80,35 +85,42 @@ class GraficosFrame(ctk.CTkFrame):
         checks_grid.pack(padx=8, pady=(0, 8))
 
         check_specs = [
-            ("chk_pastel", "Pastel"),
-            ("chk_barras", "Barras"),
-            ("chk_tendencia", "Tendencia"),
-            ("chk_hist", "Histograma"),
-            ("chk_pareto", "Pareto"),
-            ("chk_scatter", "Dispersion"),
-            ("chk_box", "Box-plot"),
-            ("chk_lineas", "Lineas Trim"),
-            ("chk_heat", "Heatmap"),
+            ("chk_pastel", "Pastel", True),
+            ("chk_barras", "Barras", True),
+            ("chk_tendencia", "Tendencia", True),
+            ("chk_hist", "Histograma", False),
+            ("chk_pareto", "Pareto", False),
+            ("chk_scatter", "Dispersion", False),
+            ("chk_box", "Box-plot", False),
+            ("chk_lineas", "Lineas Trim", True),
+            ("chk_heat", "Heatmap", False),
         ]
 
-        for idx, (attr_name, label) in enumerate(check_specs):
+        grid_idx = 0
+        for attr_name, label, should_grid in check_specs:
             chk = ctk.CTkCheckBox(
                 checks_grid,
                 text=label,
                 command=self.actualizar_graficos,
                 width=120,
             )
-            chk.grid(row=idx // 3, column=idx % 3, sticky="w", padx=8, pady=2)
-            chk.select()
+            if should_grid:
+                chk.grid(row=grid_idx // 3, column=grid_idx % 3, sticky="w", padx=8, pady=2)
+                chk.select()
+                grid_idx += 1
+            else:
+                chk.deselect()
             setattr(self, attr_name, chk)
 
-        ctk.CTkButton(f_top, text="Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=10)
+        ctk.CTkButton(f_top, text="ℹ️ Guía de Uso", fg_color="#00DDEB", text_color="#0A1628", hover_color="#00C0CD", font=("Segoe UI", 12, "bold"), command=self.mostrar_guia_graficas).pack(side="right", padx=5)
+        ctk.CTkButton(f_top, text="Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=5)
         self.al_cambiar_grado(grados[0])
 
     def al_cambiar_grado(self, grado):
         if grado == "Sin datos": return
         materias = self.engine.obtener_materias_por_grado(grado)
         if materias:
+            materias = ["Todas las Materias"] + materias
             self.combo_materia.configure(values=materias)
             self.combo_materia.set(materias[0])
         else:
@@ -522,32 +534,50 @@ class GraficosFrame(ctk.CTkFrame):
         if not promedios_dict:
             ax.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='white')
         else:
-            # Fake attendance % based on grades for demonstration, or real logic if possible
-            # We don't have easy aggregated attendance % method, let's simulate
-            # In a real scenario we would fetch attendance.
             x = []
             y = []
+            grados_info = {}
             for n, p in promedios_dict.items():
+                est_grado = grado
+                est_name = n
+                if "(" in n and n.endswith(")"):
+                    parts = n.rsplit(" (", 1)
+                    if len(parts) == 2:
+                        est_name = parts[0]
+                        est_grado = parts[1][:-1]
+                
+                if est_grado not in grados_info:
+                    try:
+                        fechas = self.engine.obtener_fechas_asistencia(est_grado, "Trimestre 1")
+                        estudiantes = self.engine.obtener_estudiantes_completos(est_grado)
+                        name_to_id = {e["nombre"].upper().strip(): e["id"] for e in estudiantes}
+                        grados_info[est_grado] = {
+                            "fechas": fechas,
+                            "name_to_id": name_to_id,
+                            "asis_cache": {}
+                        }
+                    except:
+                        grados_info[est_grado] = None
+                
+                info = grados_info[est_grado]
                 asistencia = 100
-                try:
-                    fechas = self.engine.obtener_fechas_asistencia(grado, "Trimestre 1")
-                    # No hay un método directo para obtener % asistencia de un estudiante
-                    # Pero podemos buscar la info si la implementamos o usamos un proxy.
-                    # As we are limited, let's keep it close to 100 or random, actually the prompt says
-                    # "(Notas vs % Asistencia)". DataEngine doesn't have a direct "obtener_asistencia_estudiante".
-                    # Let's try to calculate it if `fechas` exist.
-                    if fechas:
-                        presentes = 0
-                        total = len(fechas)
-                        for fecha in fechas:
-                            asis_dia = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: {})(grado, "Trimestre 1", fecha)
-                            if asis_dia.get(n, "P") in ["P", "T"]: presentes += 1
-                        asistencia = (presentes / total) * 100 if total > 0 else 100
-                except:
-                    pass
+                if info and info["fechas"]:
+                    presentes = 0
+                    total = len(info["fechas"])
+                    for fecha in info["fechas"]:
+                        if fecha not in info["asis_cache"]:
+                            res = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(est_grado, "Trimestre 1", fecha)
+                            info["asis_cache"][fecha] = res["asistencia"] if res else {}
+                        
+                        asis_dict = info["asis_cache"][fecha]
+                        est_id = info["name_to_id"].get(est_name.upper().strip())
+                        val = asis_dict.get(est_id, "P") if est_id is not None else "P"
+                        if val in ["P", "T"]:
+                            presentes += 1
+                    asistencia = (presentes / total) * 100 if total > 0 else 100
+                
                 x.append(asistencia)
                 y.append(p)
-
 
             ax.scatter(x, y, color=self.C["cian"], alpha=0.7)
             ax.set_xlabel("% Asistencia (Estimado)", color=self.C["texto"])
@@ -710,3 +740,74 @@ class GraficosFrame(ctk.CTkFrame):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
         ctk.CTkButton(f_grafico, text="⬇️ a Word", width=80, height=24, fg_color="#334155", hover_color="#475569", command=lambda f=fig, t=ax.get_title(): self.exportar_grafico_individual(f, t)).place(relx=0.98, rely=0.02, anchor="ne")
+
+    def mostrar_guia_graficas(self):
+        win = ctk.CTkToplevel(self)
+        win.title("Guía de Uso de Gráficos Académicos")
+        win.geometry("750x650")
+        win.configure(fg_color="#0A1628")
+        win.transient(self)
+        win.grab_set()
+        
+        ctk.CTkLabel(
+            win,
+            text="📘 Guía de Interpretación de Gráficos",
+            font=("Segoe UI", 20, "bold"),
+            text_color="#00DDEB"
+        ).pack(pady=(20, 10))
+        
+        sf = ctk.CTkScrollableFrame(
+            win,
+            fg_color="#0D1F35",
+            scrollbar_button_color="#00DDEB",
+            scrollbar_fg_color="#0D1F35"
+        )
+        sf.pack(fill="both", expand=True, padx=20, pady=(10, 20))
+        
+        guias = [
+            ("📊 Gráfico de Pastel", 
+             "Muestra la proporción de estudiantes que están aprobando (nota ≥ 3.0) frente a los que están reprobando (nota < 3.0).\n\n"
+             "💡 Uso Pedagógico: Permite visualizar de forma instantánea la tasa general de éxito de un aula de clases."),
+            
+            ("📶 Gráfico de Barras", 
+             "Representa el promedio individual de cada estudiante en la asignatura seleccionada.\n\n"
+             "💡 Uso Pedagógico: Facilita la comparación directa entre alumnos y la identificación de casos con rendimiento destacado o rezago."),
+            
+            ("📈 Tendencia de Rendimiento", 
+             "Muestra la evolución del promedio del grupo (o del estudiante seleccionado) a lo largo de los trimestres (T1 ➔ T2 ➔ T3).\n\n"
+             "💡 Uso Pedagógico: Ideal para evaluar si las estrategias educativas implementadas están dando frutos a lo largo del año."),
+            
+            ("〰️ Comparativa Trimestral", 
+             "Compara las curvas de calificaciones individuales de cada alumno de manera directa a través del tiempo.\n\n"
+             "💡 Uso Pedagógico: Permite hacer seguimiento individualizado detallado sobre la evolución trimestral de los alumnos.")
+        ]
+        
+        for titulo, desc in guias:
+            card = ctk.CTkFrame(sf, fg_color="#0F2744", border_width=1, border_color="#00DDEB", corner_radius=8)
+            card.pack(fill="x", padx=10, pady=8)
+            
+            ctk.CTkLabel(
+                card, 
+                text=titulo, 
+                font=("Segoe UI", 14, "bold"), 
+                text_color="#00DDEB"
+            ).pack(anchor="w", padx=15, pady=(10, 5))
+            
+            ctk.CTkLabel(
+                card, 
+                text=desc, 
+                font=("Segoe UI", 12), 
+                text_color="#E2E8F0",
+                justify="left",
+                wraplength=640
+            ).pack(anchor="w", padx=15, pady=(0, 10))
+            
+        ctk.CTkButton(
+            win,
+            text="Entendido",
+            fg_color="#00DDEB",
+            text_color="#0A1628",
+            hover_color="#00C0CD",
+            font=("Segoe UI", 12, "bold"),
+            command=win.destroy
+        ).pack(pady=(10, 15))

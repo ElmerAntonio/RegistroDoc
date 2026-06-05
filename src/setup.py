@@ -2,8 +2,9 @@ import customtkinter as ctk
 from tkinter import messagebox
 import json
 import os
-from config import BASE_DIR, CONFIG_FILE
+from config import BASE_DIR
 from rddata import DataEngine 
+from rdsecurity import guardar_config_segura
 
 
 class SetupWizard(ctk.CTk):
@@ -134,9 +135,8 @@ class SetupWizard(ctk.CTk):
         self.after(500, self.ejecutar_limpieza_y_cerrar)
 
     def ejecutar_limpieza_y_cerrar(self):
-        # 1. Guardar Configuración JSON
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(self.datos, f, ensure_ascii=False, indent=4)
+        # 1. Guardar Configuración Cifrada
+        guardar_config_segura(self.datos)
 
         # 2. Inyectar datos y limpiar el Excel
         archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_2026.xlsx"

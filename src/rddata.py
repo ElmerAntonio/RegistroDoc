@@ -12,6 +12,7 @@ class DataEngine:
         self.cleaner = ExcelCleaner()
         self.fila_desc = 39 if self.modalidad == "primaria" else 42
         self._wb_cache = None
+        self._last_mtime = 0.0
         self._cargar_en_memoria()
 
 
@@ -42,8 +43,55 @@ class DataEngine:
         if os.path.exists(self.ruta):
             try:
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
+                self._last_mtime = os.path.getmtime(self.ruta)
             except Exception:
                 self._wb_cache = None
+                self._last_mtime = 0.0
+    def _verificar_y_recargar_cache(self):
+        if os.path.exists(self.ruta):
+            try:
+                current_mtime = os.path.getmtime(self.ruta)
+                if current_mtime != self._last_mtime:
+                    self._cargar_en_memoria()
+            except Exception:
+                pass
+
+    def _save_wb(self, wb):
+        import shutil
+        import tempfile
+
+        # 1. Backup de seguridad antes de guardar
+        bak_ruta = self.ruta.replace(".xlsx", "_bak.xlsx")
+        if os.path.exists(self.ruta):
+            try:
+                shutil.copy2(self.ruta, bak_ruta)
+            except Exception:
+                pass
+
+        # 2. Guardar a través de archivo temporal de forma atómica
+        dir_base = os.path.dirname(os.path.abspath(self.ruta))
+        fd, temp_path = tempfile.mkstemp(suffix=".xlsx", dir=dir_base)
+        os.close(fd)
+
+        try:
+            wb.save(temp_path)
+            # Reemplazar de forma atómica
+            if os.path.exists(self.ruta):
+                os.replace(temp_path, self.ruta)
+            else:
+                shutil.move(temp_path, self.ruta)
+        except Exception as e:
+            if os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+            raise e
+
+        # Actualizar mtime para evitar recarga de caché redundante por nuestra propia escritura
+        try:
+            self._last_mtime = os.path.getmtime(self.ruta)
+        except Exception:
+            self._last_mtime = 0.0
+
 
     def reiniciar_libreta(self):
         result = self.cleaner.limpiar_todo(self.ruta, self.modalidad)
@@ -52,6 +100,8 @@ class DataEngine:
         return result
 
     def _obtener_columna_nombres(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return 2
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -83,6 +133,8 @@ class DataEngine:
 
     # --- LECTOR EXACTO DE CELDAS ---
     def obtener_datos_generales(self, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         datos = {
             "docente_nombre": "", "docente_cedula": "", "seguro_social": "", "numero_posicion": "",
             "condicion_nombramiento": "", "escuela_nombre": "", "escuela_region": "", "distrito": "",
@@ -144,6 +196,8 @@ class DataEngine:
         return ""
 
     def obtener_horario(self, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "", "jueves": "", "viernes": ""} for _ in range(8)]
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return horario
         should_close = not bool(self._wb_cache) if wb is None else False
@@ -222,7 +276,7 @@ class DataEngine:
                             print(f"[!] Error al escribir horario ({llave}) en fila {r}: {e}")
                     idx += 1
                     
-            wb.save(self.ruta)
+            self._save_wb(wb)
             wb.close()
             self._cargar_en_memoria()
             return True
@@ -344,12 +398,14 @@ class DataEngine:
                         except Exception as e:
                             print(f"[!] Error in sincronizar_plantilla_maestra (asistencia) at row {r}, col {c}: {e}")
 
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
 
     def obtener_grados_activos(self, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -365,6 +421,8 @@ class DataEngine:
         return sorted(list(set(grados))) if grados else []
 
     def obtener_materias_por_grado(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -383,6 +441,8 @@ class DataEngine:
         return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
 
     def obtener_estudiantes_completos(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -440,7 +500,7 @@ class DataEngine:
                 if "Planilla" in sheet and num_grado in sheet:
                     ws_p = wb[sheet]
                     ws_p.cell(row=15+id_est, column=5).value = cedula
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
@@ -460,12 +520,14 @@ class DataEngine:
                     if "Planilla" in sheet and num_grado in sheet:
                         ws_p = wb[sheet]
                         ws_p.cell(row=15+int(id_est), column=5).value = datos["cedula"]
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
 
     def obtener_promedios_reales(self, grado, materia, trimestre, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -542,6 +604,8 @@ class DataEngine:
         return datos
 
     def obtener_promedios_reales_bulk(self, grado, materias, trimestre, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -607,6 +671,8 @@ class DataEngine:
         return resultados
 
     def obtener_historial_real(self, grado, materia, nombre_estudiante, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -683,6 +749,8 @@ class DataEngine:
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
 
     def obtener_datos_reportes(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"docente": [], "aprobados": [], "direccion": []}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -737,6 +805,8 @@ class DataEngine:
         return datos
 
     def get_dashboard_stats(self, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
 
         # Optimization: Use a single workbook load for all dashboard stats
@@ -818,13 +888,15 @@ class DataEngine:
             fila_excel = 4 + int(id_estudiante)
             try: ws.cell(row=fila_excel, column=col_vacia).value = nota
             except AttributeError: pass
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
         return True, ""
 
     def obtener_descripciones_notas(self, grado, materia, trimestre, tipo_nota, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -851,6 +923,8 @@ class DataEngine:
         return descripciones
 
     def buscar_notas_por_descripcion_exacta(self, grado, materia, trimestre, tipo_nota, descripcion, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -905,7 +979,7 @@ class DataEngine:
             try: ws.cell(row=fila_excel, column=columna).value = nota
             except AttributeError: continue
 
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
@@ -918,6 +992,8 @@ class DataEngine:
         return None
 
     def obtener_fechas_asistencia(self, grado, trimestre, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -937,6 +1013,8 @@ class DataEngine:
         return fechas
 
     def buscar_asistencia_existente(self, grado, trimestre, fecha, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -989,7 +1067,7 @@ class DataEngine:
             celda = ws.cell(row=fila_excel, column=col_vacia)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         self.actualizar_resumen(grado)
@@ -1011,7 +1089,7 @@ class DataEngine:
             celda = ws.cell(row=fila_excel, column=columna)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
@@ -1024,12 +1102,14 @@ class DataEngine:
             titulo_actual = str(ws_m.cell(row=1, column=1).value or "")
             nuevo_titulo = re.sub(r'20\d{2}', str(ano_lectivo), titulo_actual)
             self._safe_set_value(ws_m, 1, 1, nuevo_titulo)
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
 
     def obtener_consejero_actual(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return "No asignado"
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -1082,7 +1162,7 @@ class DataEngine:
                                     ws.cell(row=r, column=c+1).value = nuevo_consejero.upper()
                                     ws.cell(row=r, column=c+2).value = nuevo_consejero.upper()
                         except AttributeError: pass
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
@@ -1158,7 +1238,7 @@ class DataEngine:
                         self._safe_clear_value(ws_resumen, r, c)
                     except AttributeError: pass
         
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True, "Grado creado exitosamente."
@@ -1189,7 +1269,7 @@ class DataEngine:
                             self._safe_clear_value(ws_m, r, c+1)
                         except AttributeError: pass
                     break
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True
@@ -1287,13 +1367,15 @@ class DataEngine:
                         self._safe_set_value(ws_res, fila_materias, c, nueva_materia.upper())
                         break
 
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True, "Materia clonada y agregada al Resumen."
 
 
     def actualizar_resumen(self, grado, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return False
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
@@ -1348,7 +1430,7 @@ class DataEngine:
                         ws_write.cell(row=r, column=col_estado).value = "Aprobado" if anual >= 3.0 else "Reprobado"
                     except AttributeError: pass
 
-            wb_write.save(self.ruta)
+            self._save_wb(wb_write)
             wb_write.close()
 
         if should_close:
@@ -1388,7 +1470,7 @@ class DataEngine:
                     if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
                         self._safe_clear_value(ws_res, r, c)
 
-        wb.save(self.ruta)
+        self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
         return True

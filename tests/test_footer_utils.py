@@ -25,25 +25,27 @@ class TestFooterUtils(unittest.TestCase):
         pass
 
     @patch('os.path.exists')
-    @patch('builtins.open', new_callable=mock_open, read_data='{"logo_escuela_path": "custom/path/logo.png"}')
-    def test_get_school_logo_path_from_config(self, mock_file, mock_exists):
+    @patch('rdsecurity.cargar_config_segura')
+    def test_get_school_logo_path_from_config(self, mock_cargar, mock_exists):
         # Mocking CONFIG_FILE exists and custom path exists
         mock_exists.side_effect = lambda p: True
+        mock_cargar.return_value = {"logo_escuela_path": "custom/path/logo.png"}
 
         path = get_school_logo_path()
         self.assertEqual(path, "custom/path/logo.png")
 
     @patch('os.path.exists')
-    @patch('builtins.open', new_callable=mock_open, read_data='{"logo_escuela_path": "non/existent/path.png"}')
-    def test_get_school_logo_path_config_not_found_fallback_to_meipass(self, mock_file, mock_exists):
+    @patch('rdsecurity.cargar_config_segura')
+    def test_get_school_logo_path_config_not_found_fallback_to_meipass(self, mock_cargar, mock_exists):
         # Mocking CONFIG_FILE exists, but custom path DOES NOT exist.
         # Fallback to _MEIPASS.
         # We also need to mock internal_path exists.
+        mock_cargar.return_value = {"logo_escuela_path": "non/existent/path.png"}
 
         def exists_side_effect(p):
-            if "perfil.json" in p: return True
-            if "non/existent/path.png" in p: return False
-            if "img/logo.png" in p: return True
+            p_norm = p.replace('\\', '/')
+            if "non/existent/path.png" in p_norm: return False
+            if "img/logo.png" in p_norm: return True
             return False
 
         mock_exists.side_effect = exists_side_effect
@@ -60,8 +62,8 @@ class TestFooterUtils(unittest.TestCase):
         # Fallback to os.path.abspath(".") / img / logo.png
 
         def exists_side_effect(p):
-            if "perfil.json" in p: return False
-            if "img/logo.png" in p: return True
+            p_norm = p.replace('\\', '/')
+            if "img/logo.png" in p_norm: return True
             return False
 
         mock_exists.side_effect = exists_side_effect
@@ -82,12 +84,13 @@ class TestFooterUtils(unittest.TestCase):
         self.assertEqual(path, "")
 
     @patch('os.path.exists')
-    @patch('builtins.open', side_effect=Exception("Read error"))
-    def test_get_school_logo_path_config_read_error(self, mock_file, mock_exists):
+    @patch('rdsecurity.cargar_config_segura')
+    def test_get_school_logo_path_config_read_error(self, mock_cargar, mock_exists):
         # CONFIG_FILE exists but reading fails
+        mock_cargar.side_effect = Exception("Read error")
         def exists_side_effect(p):
-            if "perfil.json" in p: return True
-            if "img/logo.png" in p: return True
+            p_norm = p.replace('\\', '/')
+            if "img/logo.png" in p_norm: return True
             return False
         mock_exists.side_effect = exists_side_effect
 

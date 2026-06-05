@@ -28,19 +28,10 @@ class NotasFrame(ctk.CTkFrame):
         top = ctk.CTkFrame(frame_izq, fg_color="transparent")
         top.pack(fill="x", padx=20, pady=15)
 
-        if self.engine.modalidad == "premedia":
-            lbl_texto = "Grado/Grupo:"
-            opciones = self.engine.obtener_grados_activos()
-            if not opciones:
-                opciones = ["Sin datos"]
-        else:
-            lbl_texto = "Materia/Grado:"
-            # En primaria solo dan a 1 grado, las opciones son las materias
-            g_ref = self.engine.obtener_grados_activos()
-            g_ref = g_ref[0] if g_ref else ""
-            opciones = self.engine.obtener_materias_por_grado(g_ref)
-            if not opciones or opciones[0] == "Sin materias registradas":
-                opciones = ["Sin datos"]
+        lbl_texto = "Grado/Grupo:"
+        opciones = self.engine.obtener_grados_activos()
+        if not opciones:
+            opciones = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["1°"]
 
         ctk.CTkLabel(top, text=lbl_texto, font=(
             "Segoe UI", 16, "bold")).pack(side="left")
@@ -271,6 +262,15 @@ class NotasFrame(ctk.CTkFrame):
             messagebox.showwarning("Atención", "Escribe una descripción.")
             return
 
+        if tipo != "Examen" and len(desc) > 20:
+            if not messagebox.askyesno(
+                "Advertencia de Formato",
+                f"La descripción '{desc}' tiene {len(desc)} caracteres (máx. recomendado: 20).\n"
+                "Las descripciones largas podrían recortarse en la impresión de la planilla.\n\n"
+                "¿Desea continuar de todos modos?"
+            ):
+                return
+
         notas_guardar = self._recopilar_notas_validadas()
         if notas_guardar is None or not notas_guardar:
             if notas_guardar == {}:
@@ -303,6 +303,9 @@ class NotasFrame(ctk.CTkFrame):
                                          state="normal")
         if exito:
             self.cargar_descripciones()
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast("✓ Calificaciones guardadas en Excel", color="#10B981")
         else:
             messagebox.showerror("Error de guardado", msj)
 
@@ -363,6 +366,10 @@ class NotasFrame(ctk.CTkFrame):
         self.btn_actualizar.configure(text="🔄 ACTUALIZAR EXCEL",
                                       state="normal")
         self.col_a_modificar = None
-        if not exito:
+        if exito:
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast("✓ Calificaciones actualizadas en Excel", color="#10B981")
+        else:
             messagebox.showerror(
                 "Error", "No se pudieron actualizar las notas.")

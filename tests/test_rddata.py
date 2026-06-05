@@ -57,3 +57,53 @@ def test_obtener_grados_activos_missing_file():
 
     # Expected empty list
     assert resultado == []
+
+def test_atomic_save(tmp_path):
+    import openpyxl
+    file_path = str(tmp_path / "test_libreta.xlsx")
+    wb = openpyxl.Workbook()
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    
+    # 1. Modificar y guardar de forma atómica
+    wb_write = openpyxl.load_workbook(file_path)
+    wb_write.active.cell(row=1, column=1, value="NUEVO_VALOR")
+    engine._save_wb(wb_write)
+    wb_write.close()
+    
+    # 2. Comprobar que el original fue guardado y el backup se creó
+    bak_path = file_path.replace(".xlsx", "_bak.xlsx")
+    assert os.path.exists(file_path)
+    assert os.path.exists(bak_path)
+    
+    # 3. Comprobar contenido guardado
+    wb_check = openpyxl.load_workbook(file_path)
+    assert wb_check.active.cell(row=1, column=1).value == "NUEVO_VALOR"
+    wb_check.close()
+
+def test_cache_invalidation_mtime(tmp_path):
+    import openpyxl
+    import time
+    file_path = str(tmp_path / "test_cache.xlsx")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "DASHBOARD"
+    ws.cell(row=1, column=1, value="ORIGINAL")
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    assert engine._wb_cache.active.cell(row=1, column=1).value == "ORIGINAL"
+    
+    # Simular edición externa escribiendo al archivo
+    time.sleep(0.01)  # Asegurar cambio de mtime en sistemas rápidos
+    wb_ext = openpyxl.load_workbook(file_path)
+    wb_ext.active.cell(row=1, column=1, value="EDITADO_EXTERNO")
+    wb_ext.save(file_path)
+    wb_ext.close()
+    
+    # El motor debería invalidar y recargar al comprobar
+    engine._verificar_y_recargar_cache()
+    assert engine._wb_cache.active.cell(row=1, column=1).value == "EDITADO_EXTERNO"

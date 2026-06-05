@@ -46,19 +46,15 @@ def add_header_with_logo(doc, logo_path, text=""):
     return doc
 
 def get_school_logo_path():
-    import json
-    from config import CONFIG_FILE
-
-    # 1. Intentar obtener desde el archivo de configuración (prioridad usuario)
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                config_path = data.get("logo_escuela_path", "")
-                if config_path and os.path.exists(config_path):
-                    return config_path
-        except Exception:
-            pass
+    # 1. Intentar obtener desde el archivo de configuración cifrado (prioridad usuario)
+    try:
+        from rdsecurity import cargar_config_segura
+        data = cargar_config_segura({})
+        config_path = data.get("logo_escuela_path", "")
+        if config_path and os.path.exists(config_path):
+            return config_path
+    except Exception:
+        pass
 
     # 2. Intentar obtener desde el paquete (PyInstaller fallback)
     try:

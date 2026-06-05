@@ -77,6 +77,8 @@ class DashboardFrame(ctk.CTkFrame):
         try:
             return self.engine.get_dashboard_stats()
         except Exception:
+            modal = getattr(self.engine, "modalidad", "premedia")
+            fallback_g = ["7°", "8°", "9°"] if modal == "premedia" else ["1°"]
             return {
                 "total": 92, "riesgo": 7, "honor": "SANTOS FIDEL",
                 "honor_prom": "4.9", "asistencia": "98%",
@@ -340,8 +342,24 @@ class DashboardFrame(ctk.CTkFrame):
         ax.set_facecolor(C["card"])
         fig.subplots_adjust(left=0.1, right=0.97, top=0.92, bottom=0.16)
 
-        x = [0, 1, 2, 3, 4, 5, 6, 7]
-        y = [2.0, 2.5, 3.1, 3.0, 3.4, 3.7, 4.1, 4.8]
+        grados = self.engine.obtener_grados_activos()
+        if not grados:
+            grados = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["1°"]
+
+        x_labels = ["T1", "T2", "T3"]
+        x = [1, 2, 3]
+        
+        y = []
+        for t_name in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+            notas_t = []
+            for g in grados:
+                proms = self.engine.obtener_promedios_reales(g, None, t_name)
+                if proms:
+                    notas_t.extend([v for v in proms.values() if v is not None])
+            if notas_t:
+                y.append(round(sum(notas_t)/len(notas_t), 2))
+            else:
+                y.append(1.0)
 
         ax.plot(x, y, color=self._acento, linewidth=2.2, label="Promedio Grupal",
                 zorder=3, solid_capstyle="round")
@@ -350,24 +368,35 @@ class DashboardFrame(ctk.CTkFrame):
                    edgecolors=C["fondo"], linewidths=1.5)
 
         if getattr(self, "_current_student", None):
-            # Highlight individual student point (fake data for visualization)
-            y_indiv = [2.2, 2.7, 3.5, 3.3, 3.8, 4.0, 4.5, 5.0]
-            ax.plot(x, y_indiv, color=C["amarillo"], linewidth=2.2, label=self._current_student["nombre"][:12],
+            student_name = self._current_student["nombre"]
+            y_indiv = []
+            for t_name in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                student_notes = []
+                for g in grados:
+                    proms = self.engine.obtener_promedios_reales(g, None, t_name)
+                    if student_name in proms:
+                        student_notes.append(proms[student_name])
+                if student_notes:
+                    y_indiv.append(round(sum(student_notes)/len(student_notes), 2))
+                else:
+                    y_indiv.append(1.0)
+            ax.plot(x, y_indiv, color=C["amarillo"], linewidth=2.2, label=student_name[:12],
                     zorder=4, linestyle="--")
             ax.scatter(x, y_indiv, color=C["amarillo"], s=60, zorder=6,
                        edgecolors=C["fondo"], linewidths=1.5)
             ax.legend(loc="upper left", facecolor=C["fondo"], edgecolor=C["borde"], labelcolor=C["texto"], fontsize=8)
 
         # Ejes
-        ax.set_xlim(-0.3, 7.3)
+        ax.set_xlim(0.7, 3.3)
         ax.set_ylim(1, 5.2)
-        ax.set_xlabel("X  (Trimestres)", color=C["texto_sec"], fontsize=9)
-        ax.set_ylabel("Y  (Notas 1–5)", color=C["texto_sec"], fontsize=9)
+        ax.set_xlabel("Trimestres", color=C["texto_sec"], fontsize=9)
+        ax.set_ylabel("Notas 1–5", color=C["texto_sec"], fontsize=9)
         ax.tick_params(colors=C["texto_sec"], labelsize=8)
         for spine in ax.spines.values():
             spine.set_edgecolor(C["borde"])
         ax.grid(True, color=C["borde"], linewidth=0.5, alpha=0.6)
         ax.set_xticks(x)
+        ax.set_xticklabels(x_labels)
 
         canvas = FigureCanvasTkAgg(fig, master=card)
         canvas.draw()
@@ -393,11 +422,24 @@ class DashboardFrame(ctk.CTkFrame):
         ax2.set_facecolor(C["card"])
         fig2.subplots_adjust(left=0.14, right=0.97, top=0.9, bottom=0.18)
 
-        grupos   = ["7°", "8°", "9°", "7°B", "8°B"]
-        valores  = [3.8, 3.5, 4.2, 3.1, 3.7]
-        colores  = [self._acento] * len(grupos)
+        grados = self.engine.obtener_grados_activos()
+        if not grados:
+            grados = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["1°"]
 
-        ax2.bar(grupos, valores, color=colores, width=0.6,
+        valores = []
+        for g in grados:
+            proms = self.engine.obtener_promedios_reales(g, None, "Anual")
+            if not proms:
+                proms = self.engine.obtener_promedios_reales(g, None, "Trimestre 1")
+            if proms:
+                avg = sum(proms.values()) / len(proms)
+                valores.append(round(avg, 2))
+            else:
+                valores.append(1.0)
+
+        colores  = [self._acento] * len(grados)
+
+        ax2.bar(grados, valores, color=colores, width=0.6,
                 edgecolor=C["fondo"], linewidth=0.8)
 
         ax2.set_ylim(1, 5.3)

@@ -27,12 +27,17 @@ import hmac
 import platform
 import uuid
 import re
+import logging
 from dotenv import load_dotenv
 import datetime
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
+from config import BASE_DIR
+
+# Configurar logger
+logger = logging.getLogger("rdsecurity")
 
 # ══════════════════════════════════════════════════════════════
 #  CONSTANTES — NO MODIFICAR
@@ -48,10 +53,14 @@ MAX_INTENTOS_2  = 5                # Bloqueo nivel 2
 MAX_INTENTOS_3  = 10               # Bloqueo permanente
 DELAY_NIVEL_1   = 30               # segundos
 DELAY_NIVEL_2   = 3600             # 1 hora
-AUDIT_FILE      = "rd_audit.bin"
-BRUTE_FILE      = "rd_brute.bin"
-LICENSE_FILE    = "licencia.dat"
-CONFIG_FILE     = "config.enc"
+
+# Rutas absolutas resueltas desde la raíz del proyecto
+ROOT_DIR        = os.path.dirname(BASE_DIR)
+AUDIT_FILE      = os.path.join(ROOT_DIR, "rd_audit.bin")
+BRUTE_FILE      = os.path.join(ROOT_DIR, "rd_brute.bin")
+LICENSE_FILE    = os.path.join(ROOT_DIR, "licencia.dat")
+CONFIG_FILE     = os.path.join(ROOT_DIR, "config.enc")
+TOKEN_FILE      = os.path.join(ROOT_DIR, "rd_token.bin")
 
 # Clave maestra derivada del hardware — nunca viaja por red ni se guarda
 _HW_SEED = None
@@ -85,8 +94,8 @@ def _hw_fingerprint() -> bytes:
             uid = r[-1].strip() if len(r) > 1 else ""
             if uid and uid != "UUID":
                 componentes.append(uid)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Error obteniendo UUID BIOS: {e}")
 
     # 2. Identificador de volumen del disco del sistema
     try:
@@ -99,8 +108,8 @@ def _hw_fingerprint() -> bytes:
             serial = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
             if serial:
                 componentes.append(serial.group())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Error obteniendo serial de volumen C: {e}")
 
     # 3. Nombre del equipo + usuario (siempre disponible)
     componentes.append(platform.node())
@@ -110,8 +119,8 @@ def _hw_fingerprint() -> bytes:
     try:
         mac = hex(uuid.getnode())
         componentes.append(mac)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Error obteniendo MAC address: {e}")
 
     raw = "|".join(c for c in componentes if c)
     # Derivar clave estable con PBKDF2
@@ -120,7 +129,7 @@ def _hw_fingerprint() -> bytes:
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt_hw,
-        iterations=100_000,
+        iterations=PBKDF2_ITERS,
         backend=default_backend()
     )
     _HW_SEED = kdf.derive(raw.encode("utf-8", errors="replace"))
@@ -589,11 +598,11 @@ def _guardar_cedula_token(cedula: str) -> None:
     clave_token = kdf.derive(hw)
     datos = {"hint": cedula, "ts": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     blob  = cifrar(json.dumps(datos).encode(), clave_token)
-    with open("rd_token.bin", "wb") as f:
+    with open(TOKEN_FILE, "wb") as f:
         f.write(blob)
 
 def _leer_cedula_token() -> dict:
-    if not os.path.exists("rd_token.bin"):
+    if not os.path.exists(TOKEN_FILE):
         return {}
     try:
         hw  = _hw_fingerprint()
@@ -603,7 +612,7 @@ def _leer_cedula_token() -> dict:
             iterations=PBKDF2_ITERS, backend=default_backend()
         )
         clave_token = kdf.derive(hw)
-        with open("rd_token.bin", "rb") as f:
+        with open(TOKEN_FILE, "rb") as f:
             blob = f.read()
         return json.loads(descifrar(blob, clave_token).decode())
     except Exception:
@@ -627,6 +636,19 @@ def guardar_config_segura(cfg: dict) -> None:
 
 def cargar_config_segura(default: dict) -> dict:
     """Carga configuración cifrada. Retorna default si no existe."""
+    from config import CONFIG_FILE as PLAIN_CONFIG_FILE
+    if not os.path.exists(CONFIG_FILE) and os.path.exists(PLAIN_CONFIG_FILE):
+        try:
+            with open(PLAIN_CONFIG_FILE, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+            guardar_config_segura(datos)
+            try:
+                os.remove(PLAIN_CONFIG_FILE)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.debug(f"Error migrando perfil.json: {e}")
+
     datos = cargar_cifrado(CONFIG_FILE)
     if not datos:
         return dict(default)
@@ -659,6 +681,12 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
     # Normalizar separador decimal
     val_str = str(valor).strip().replace(",", ".")
     
+    # Validar que no tenga más de un decimal (evitar redondeo silencioso)
+    if "." in val_str:
+        decimal_part = val_str.split(".")[1]
+        if len(decimal_part.rstrip("0")) > 1:
+            return False, 0.0, f"'{valor}' tiene más de un decimal. Solo se permite un decimal en el sistema MEDUCA."
+
     try:
         nota_float = float(val_str)
         if math.isnan(nota_float) or math.isinf(nota_float):

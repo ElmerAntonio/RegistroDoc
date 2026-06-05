@@ -229,8 +229,9 @@ class ObservacionesFrame(ctk.CTkFrame):
                 fecha,
                 categoria,
                 observacion)
-            messagebox.showinfo(
-                "Éxito", f"Observación agregada al expediente de {nombre_est}.")
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✓ Observación agregada al expediente de {nombre_est}", color="#10B981")
             self.texto_obs.delete("1.0", "end")  # Limpiamos para la siguiente
         except Exception as e:
             messagebox.showerror(

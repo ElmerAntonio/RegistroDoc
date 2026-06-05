@@ -1,10 +1,11 @@
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import os
-from config import BASE_DIR, CONFIG_FILE
+from config import BASE_DIR
 import json
 import threading
 import datetime
+from rdsecurity import cargar_config_segura, guardar_config_segura
 
 
 class ConfigFrame(ctk.CTkFrame):
@@ -46,6 +47,36 @@ class ConfigFrame(ctk.CTkFrame):
         ctk.CTkRadioButton(row_mod, text="Premedia", variable=self.var_modalidad, value="Premedia").pack(side="left", padx=40)
         ctk.CTkRadioButton(row_mod, text="Primaria", variable=self.var_modalidad, value="Primaria").pack(side="left", padx=40)
         ctk.CTkButton(row_mod, text="Cambiar Modalidad", fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
+
+        # --- Selector de Tema Visual ---
+        ctk.CTkLabel(f1, text="Tema Visual (Contraste):", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(15, 5))
+        row_tema = ctk.CTkFrame(f1, fg_color="transparent")
+        row_tema.pack(fill="x")
+        
+        cfg = cargar_config_segura({"tema": "dark"})
+        tema_guardado = cfg.get("tema", "dark")
+            
+        self.var_tema = ctk.StringVar(value="Oscuro" if tema_guardado == "dark" else "Claro (Alto Contraste)")
+        
+        def cambiar_tema_ui(opcion):
+            nuevo_tema = "dark" if opcion == "Oscuro" else "light"
+            ctk.set_appearance_mode(nuevo_tema)
+            datos = cargar_config_segura({"tema": "dark"})
+            datos["tema"] = nuevo_tema
+            guardar_config_segura(datos)
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✓ Tema cambiado a {opcion}", color="#10B981")
+
+        self.combo_tema = ctk.CTkOptionMenu(
+            row_tema,
+            values=["Oscuro", "Claro (Alto Contraste)"],
+            variable=self.var_tema,
+            command=cambiar_tema_ui,
+            fg_color="#3B82F6",
+            button_color="#2563EB"
+        )
+        self.combo_tema.pack(side="left", padx=40)
 
         f2 = ctk.CTkFrame(self.scroll_gen, fg_color="#1A2638", corner_radius=10)
         f2.pack(fill="both", expand=True, padx=10, pady=10, ipadx=10, ipady=10)
@@ -133,14 +164,8 @@ class ConfigFrame(ctk.CTkFrame):
         footer_row = row_start + max_rows
 
         # --- Configuración del Logo ---
-        logo_path_guardado = ""
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    cfg = json.load(f)
-                    logo_path_guardado = cfg.get("logo_escuela_path", "")
-            except: pass
-
+        cfg = cargar_config_segura({"logo_escuela_path": ""})
+        logo_path_guardado = cfg.get("logo_escuela_path", "")
         self.var_logo_path = ctk.StringVar(value=logo_path_guardado)
 
         ctk.CTkLabel(f2, text="Logo de Escuela (Word):", anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
@@ -181,14 +206,9 @@ class ConfigFrame(ctk.CTkFrame):
             self._guardar_logo_path(ruta)
 
     def _guardar_logo_path(self, ruta):
-        datos = {}
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                try: datos = json.load(f)
-                except: pass
+        datos = cargar_config_segura({})
         datos["logo_escuela_path"] = ruta
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(datos, f, ensure_ascii=False, indent=4)
+        guardar_config_segura(datos)
 
     def _crear_campo(self, parent, row, texto, valor):
         ctk.CTkLabel(parent, text=texto, anchor="w", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=5)
@@ -373,8 +393,10 @@ class ConfigFrame(ctk.CTkFrame):
             "titulo_caratula": cargo_unificado,
             "grupos_caratula": grupos_auto,
             "materias_activas": [m for m, var in getattr(self, "vars_materias", {}).items() if var.get()] if getattr(self, 'vars_materias', None) else [],
+            "tema": "dark" if self.var_tema.get() == "Oscuro" else "light",
+            "logo_escuela_path": self.var_logo_path.get(),
         }
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(datos, f, ensure_ascii=False, indent=4)
+        guardar_config_segura(datos)
         self.btn_sinc.configure(text="⏳ Sincronizando...", state="disabled"); self.update()
         def tarea():
             self.engine.sincronizar_plantilla_maestra(datos)

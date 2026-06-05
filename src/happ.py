@@ -118,6 +118,7 @@ class ReportesFrame(ctk.CTkFrame):
         try:
             from rdprint import abrir_para_imprimir
             grado = self.combo_grado.get()
+            self.engine.formatear_reportes_excel(grado)
             # Find the correct RESUMEN sheet. The format varies (e.g. RESUMEN (7°))
             hoja = None
             wb = self.engine._wb_cache

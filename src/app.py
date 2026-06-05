@@ -1,5 +1,5 @@
 import os
-from config import BASE_DIR, CONFIG_FILE
+from config import BASE_DIR
 import sys
 import ctypes
 import json
@@ -33,8 +33,18 @@ from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
 from grapp  import GraficosFrame
 from happ   import ReportesFrame
+from impp   import ImpresionFrame
 
-ctk.set_appearance_mode("dark")
+# Cargar el tema visual desde la configuración cifrada
+_tema = "dark"
+try:
+    from rdsecurity import cargar_config_segura
+    _cfg = cargar_config_segura({"tema": "dark"})
+    _tema = _cfg.get("tema", "dark")
+except Exception:
+    pass
+
+ctk.set_appearance_mode(_tema)
 ctk.set_default_color_theme("blue")
 
 
@@ -150,6 +160,7 @@ class MainApplication(ctk.CTkFrame):
             ("🔍", "Observaciones", self._ir_observaciones),
             ("📋", "Reportes",      self._ir_reportes),
             ("📊", "Gráficos",      self._ir_graficos),
+            ("🖨️", "Impresión",     self._ir_impresion),
             ("⚙️", "Configuración", self._ir_configuracion)
         ]
 
@@ -243,6 +254,11 @@ class MainApplication(ctk.CTkFrame):
             try: self.app.mostrar_observaciones()
             except Exception: pass
 
+    def _ir_impresion(self):
+        if self.app:
+            try: self.app.mostrar_impresion()
+            except Exception: pass
+
     def _ir_configuracion(self):
         if self.app:
             try: self.app.mostrar_configuracion()
@@ -284,7 +300,7 @@ class RegistroDocApp(ctk.CTk):
                 pass
 
         # Motor de datos
-        archivo = ("Registro Primaria.xlsx"
+        archivo = ("Registro_Primaria.xlsx"
                    if modalidad_inicial == "primaria"
                    else "Registro_2026.xlsx")
         ruta    = os.path.join(BASE_DIR, "..", archivo)
@@ -303,6 +319,26 @@ class RegistroDocApp(ctk.CTk):
     def limpiar_pantalla(self):
         for w in self.main_app.main_content_frame.winfo_children():
             w.destroy()
+
+    def mostrar_toast(self, mensaje, color="#10B981"):
+        if hasattr(self, "_toast_widget"):
+            try:
+                if self._toast_widget.winfo_exists():
+                    self._toast_widget.destroy()
+            except Exception:
+                pass
+        toast = ctk.CTkFrame(self, fg_color=color, corner_radius=20, border_width=0)
+        toast.place(relx=0.5, rely=0.9, anchor="center")
+        lbl = ctk.CTkLabel(toast, text=mensaje, font=("Segoe UI", 13, "bold"), text_color="white", padx=20, pady=10)
+        lbl.pack()
+        self._toast_widget = toast
+        def dest():
+            try:
+                if toast.winfo_exists():
+                    toast.destroy()
+            except Exception:
+                pass
+        self.after(2000, dest)
 
     def mostrar_dashboard(self):
         self.limpiar_pantalla()
@@ -338,6 +374,11 @@ class RegistroDocApp(ctk.CTk):
         self.limpiar_pantalla()
         GraficosFrame(self.main_app.main_content_frame,
                       self.engine).pack(fill="both", expand=True)
+
+    def mostrar_impresion(self):
+        self.limpiar_pantalla()
+        ImpresionFrame(self.main_app.main_content_frame,
+                       self.engine).pack(fill="both", expand=True)
 
     def mostrar_configuracion(self):
         self.limpiar_pantalla()
@@ -403,9 +444,9 @@ def iniciar_programa_principal():
         except Exception:
             pass
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        from rdsecurity import cargar_config_segura
+        config = cargar_config_segura({"modalidad": "premedia"})
+    except Exception:
         config = {"modalidad": "premedia"}
 
     # Inicio directo sin ventana de carga.
@@ -428,6 +469,10 @@ def iniciar_programa_principal():
 
 
 if __name__ == "__main__":
+    from rdsecurity import cargar_config_segura, CONFIG_FILE, guardar_config_segura
+    # Esto dispara la migración de perfil.json a config.enc automáticamente si existe
+    cargar_config_segura({})
+
     if not os.path.exists(CONFIG_FILE):
         if SetupWizard:
             wizard = SetupWizard()
@@ -437,9 +482,7 @@ if __name__ == "__main__":
         else:
             cfg = {"modalidad": "premedia",
                    "docente_nombre": "", "ano_lectivo": "2026"}
-            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=4)
+            guardar_config_segura(cfg)
             iniciar_programa_principal()
     else:
         iniciar_programa_principal()

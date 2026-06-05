@@ -9,19 +9,17 @@ class ExcelCleaner:
         try:
             wb = openpyxl.load_workbook(ruta)
             
-            # 1. Limpiar MAESTRO (Nombres y Cédulas)
-            if "MAESTRO" in wb.sheetnames:
-                ws = wb["MAESTRO"]
-                for r in range(5, 51):
-                    for c in range(1, 15):
-                        celda = ws.cell(row=r, column=c)
-                        if type(celda).__name__ != 'MergedCell':
-                            celda.value = None
-
-            # 2. Limpiar hojas de trabajo
+            # 1. Limpiar hojas de trabajo
             for sheet in wb.sheetnames:
                 ws = wb[sheet]
                 sheet_upper = sheet.upper()
+
+                if "MAESTRO" in sheet_upper:
+                    for r in range(5, 51):
+                        for c in range(1, 15):
+                            celda = ws.cell(row=r, column=c)
+                            if type(celda).__name__ != 'MergedCell':
+                                celda.value = None
                 
                 # PROM: Respeta las celdas combinadas y fórmulas
                 if "PROM" in sheet_upper:

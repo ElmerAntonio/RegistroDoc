@@ -455,15 +455,15 @@ class AsistenciaFrame(ctk.CTkFrame):
             lista_excusas,
             mensaje_base):
         if not lista_excusas:
-            messagebox.showinfo(
-                "Completado",
-                f"{mensaje_base}\n\n(Asistencia perfecta. No se generaron justificaciones).")
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✓ {mensaje_base} (Asistencia perfecta)", color="#10B981")
             return
 
         if not DOCX_DISPONIBLE:
-            messagebox.showinfo(
-                "Completado",
-                f"{mensaje_base}\n\n(Falta la librería python-docx para generar los Word).")
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✓ {mensaje_base} (Falta python-docx)", color="#F59E0B")
             return
 
         carpeta_expedientes = os.path.join(
@@ -480,9 +480,9 @@ class AsistenciaFrame(ctk.CTkFrame):
                 exc['estado'],
                 exc['motivo'])
 
-        messagebox.showinfo(
-            "Completado", f"{mensaje_base}\n\nSe actualizaron los expedientes en Word de {
-                len(lista_excusas)} estudiantes por inasistencia/tardanza.")
+        root = self.winfo_toplevel()
+        if hasattr(root, "mostrar_toast"):
+            root.mostrar_toast(f"✓ {mensaje_base} (Expedientes actualizados)", color="#10B981")
 
     def _actualizar_o_crear_word(
             self,

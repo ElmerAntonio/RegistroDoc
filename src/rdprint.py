@@ -14,17 +14,16 @@ from tkinter import messagebox
 
 
 def _ruta_excel():
-    from config import BASE_DIR, CONFIG_FILE
+    from config import BASE_DIR
+    from rdsecurity import cargar_config_segura
 
     base = BASE_DIR
     raiz = os.path.join(base, "..")
 
     modalidad = "premedia"
     try:
-        import json
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                modalidad = str(json.load(f).get("modalidad", "premedia")).lower()
+        cfg = cargar_config_segura({"modalidad": "premedia"})
+        modalidad = str(cfg.get("modalidad", "premedia")).lower()
     except Exception:
         pass
 
@@ -79,6 +78,36 @@ def _libreoffice_disponible() -> bool:
         "/usr/bin/soffice",
     ]
     return any(os.path.exists(r) for r in rutas)
+
+
+def encontrar_hoja_impresion(wb, tipo, grado=None, materia=None) -> str:
+    """
+    Localiza dinámicamente el nombre de la hoja en el libro basándose en el tipo, grado y materia.
+    Evita fallos por diferencias de formato (ej: Asistencia (7°) vs Asistencia 7° ).
+    """
+    tipo_upper = tipo.upper()
+    grado_num = grado.replace("°", "").strip() if grado else ""
+    materia_clean = materia.lower().replace(" ", "").replace(".", "").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u") if materia else ""
+
+    for s in wb.sheetnames:
+        s_upper = s.upper()
+        if tipo == "Portada" and "PORTADA" in s_upper and "VISTOSA" not in s_upper:
+            return s
+        if tipo == "Caratula" and ("CARATULA" in s_upper or "CARÁTULA" in s_upper or "VISTOSA" in s_upper):
+            return s
+        if tipo == "Horarios" and "HORARIO" in s_upper:
+            return s
+        if tipo == "Resumen" and "RESUMEN" in s_upper and grado_num in s_upper:
+            return s
+        if tipo == "Asistencia" and "ASISTENCIA" in s_upper and grado_num in s_upper:
+            return s
+        if tipo == "Planilla" and "PLANILLA" in s_upper and grado_num in s_upper:
+            if not materia_clean:
+                return s
+            sheet_clean = s.lower().replace(" ", "").replace(".", "").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u")
+            if materia_clean in sheet_clean:
+                return s
+    return None
 
 
 def abrir_para_imprimir(hoja: str = None) -> tuple[bool, str]:
@@ -218,28 +247,52 @@ class PanelImpresion:
                  font=("Segoe UI", 10), fg=C["texto_med"], bg=C["blanco"],
                  justify="center").pack(pady=(0, 20))
 
-        # Hojas disponibles
-        hojas_comunes = [
-            ("Portada",           "📋 Portada / Carátula oficial"),
-            ("Caratula",          "📄 Carátula del registro"),
-            ("Asistencia (7°)",   "📅 Asistencia — Grado 7°"),
-            ("Asistencia (8°)",   "📅 Asistencia — Grado 8°"),
-            ("Asistencia (9°)",   "📅 Asistencia — Grado 9°"),
-            ("PROM (Ingles 7°)",  "📝 PROM Inglés — Grado 7°"),
-            ("PROM (Ingles 8°)",  "📝 PROM Inglés — Grado 8°"),
-            ("PROM (Ingles 9°)",  "📝 PROM Inglés — Grado 9°"),
-            ("Planilla (Ingles 7°) ", "📊 Planilla Inglés — Grado 7°"),
-            ("Planilla (Ingles 8°)", "📊 Planilla Inglés — Grado 8°"),
-            ("Planilla (Ingles 9°) ", "📊 Planilla Inglés — Grado 9°"),
-            ("Horarios",          "🕐 Horario de clases"),
-        ]
+        # Hojas disponibles (Cargadas dinámicamente)
+        import openpyxl
+        hojas_comunes = []
+        try:
+            wb = openpyxl.load_workbook(app.engine.ruta, read_only=True)
+            sheet_names = wb.sheetnames
+            wb.close()
+        except Exception:
+            sheet_names = []
+
+        for sheet in sheet_names:
+            sheet_upper = sheet.upper()
+            if "PORTADA" in sheet_upper and "VISTOSA" not in sheet_upper:
+                hojas_comunes.append((sheet, "📋 Portada / Carátula oficial"))
+            elif "CARATULA" in sheet_upper or "CARÁTULA" in sheet_upper or "VISTOSA" in sheet_upper:
+                hojas_comunes.append((sheet, "📄 Carátula del registro"))
+            elif "ASISTENCIA" in sheet_upper:
+                grade = sheet.replace("Asistencia", "").replace("(", "").replace(")", "").strip()
+                hojas_comunes.append((sheet, f"📅 Asistencia — Grado {grade}"))
+            elif "PROM" in sheet_upper:
+                subj = sheet.replace("PROM", "").replace("(", "").replace(")", "").strip()
+                hojas_comunes.append((sheet, f"📝 PROM — {subj}"))
+            elif "PLANILLA" in sheet_upper:
+                subj = sheet.replace("Planilla", "").replace("(", "").replace(")", "").strip()
+                hojas_comunes.append((sheet, f"📊 Planilla — {subj}"))
+            elif "HORARIO" in sheet_upper:
+                hojas_comunes.append((sheet, "🕐 Horario de clases"))
+            elif "RESUMEN" in sheet_upper:
+                grade = sheet.replace("RESUMEN", "").replace("(", "").replace(")", "").strip()
+                hojas_comunes.append((sheet, f"📈 RESUMEN — {grade if grade else 'General'}"))
+
+        if not hojas_comunes:
+            hojas_comunes = [
+                ("Portada",           "📋 Portada / Carátula oficial"),
+                ("Caratula",          "📄 Carátula del registro"),
+                ("Horarios",          "🕐 Horario de clases"),
+            ]
 
         sel_f = tk.LabelFrame(cuerpo, text="  Selecciona qué imprimir  ",
                               font=("Segoe UI", 10, "bold"), bg=C["blanco"],
                               fg=C["azul_osc"], padx=20, pady=15)
         sel_f.pack(fill="x", pady=10)
 
-        var_hoja = tk.StringVar(value="Portada")
+        # Set default value safely to the first available sheet or "Portada"
+        default_val = hojas_comunes[0][0] if hojas_comunes else "Portada"
+        var_hoja = tk.StringVar(value=default_val)
 
         for i, (hoja_id, hoja_lbl) in enumerate(hojas_comunes):
             col = i % 2
