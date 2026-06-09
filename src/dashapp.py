@@ -18,30 +18,19 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-# ─── PALETA PRINCIPAL CORREGIDA ──────────────────────────────────────────────
-C = {
-    "fondo":        "#0A1628",
-    "sidebar":      "#0D1F35",
-    "header":       "#0D1F35",
-    "card":         "#0F2744",
-    "card_borde":   "#00DDEB",
-    "cian":         "#00DDEB",
-    "verde":        "#00FF88",
-    "rojo":         "#FF4444",
-    "amarillo":     "#FFD700",
-    "purpura":      "#A855F7",
-    "texto":        "#E2E8F0",
-    "texto_sec":    "#64748B",
-    "texto_dim":    "#334155",
-    "input":        "#1E3A5F",
-    "hover":        "#1A3352",
-    "activo":       "#1A3352",
-    "borde":        "#1E3A5F",
-    "glow":         "#1E3A5F",
-}
+from theme import C, FONT_TITLE, FONT_BODY, ACENTO
 
-# Color de acento actual (cambiable)
-ACENTO = C["cian"]
+try:
+    from utils.frases_educacion import frase_del_dia
+    FRASES_OK = True
+except ImportError:
+    FRASES_OK = False
+
+try:
+    from tareas import obtener_pendientes, obtener_clase_actual, obtener_proxima_clase
+    TAREAS_OK = True
+except ImportError:
+    TAREAS_OK = False
 
 
 # ─── CLASE PRINCIPAL DEL DASHBOARD ─────────────────────────────────────────
@@ -69,6 +58,12 @@ class DashboardFrame(ctk.CTkFrame):
         self._stats = self._cargar_stats()
 
         self._construir()
+
+    def actualizar_vista(self):
+        self._stats = self._cargar_stats()
+        if hasattr(self, "_panel_container") and self._panel_container.winfo_exists():
+            self._panel_container.destroy()
+        self._panel_principal(self)
 
     # ══════════════════════════════════════════════════════════════════════
     #  DATOS
@@ -115,8 +110,23 @@ class DashboardFrame(ctk.CTkFrame):
         # Título y fecha
         self._titulo_seccion(panel)
 
+        # 🕐 Clase actual según horario
+        self._widget_clase_actual(panel)
+
         # Tarjetas métricas
         self._tarjetas_metricas(panel)
+
+        # Frase motivacional del día
+        self._frase_motivacional(panel)
+
+        # 📋 Tareas pendientes programadas
+        self._widget_tareas_pendientes(panel)
+
+        # Panel de Hábitos
+        self._panel_habitos(panel)
+
+        # Asistente y Alertas del Docente
+        self._asistente_docente(panel)
 
         # Gráficas
         self._graficas(panel)
@@ -140,6 +150,155 @@ class DashboardFrame(ctk.CTkFrame):
             fg_color="transparent")
         fondo_lbl.pack(pady=(0, 0))
         # No ocupa espacio visible — es un efecto decorativo
+
+    # ── Frase Motivacional ─────────────────────────────────────────────
+    def _frase_motivacional(self, parent):
+        """Muestra una frase/versículo del día — offline."""
+        if not FRASES_OK:
+            return
+        try:
+            texto, referencia = frase_del_dia()
+        except Exception:
+            return
+
+        frame = ctk.CTkFrame(parent, fg_color="#0C2137", corner_radius=10,
+                             border_width=1, border_color="#1E3A5F")
+        frame.pack(fill="x", padx=24, pady=(8, 4))
+
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(fill="x", padx=16, pady=10)
+
+        ctk.CTkLabel(inner, text="✨",
+                     font=ctk.CTkFont("Segoe UI", 20)).pack(side="left", padx=(0, 10))
+
+        txt_frame = ctk.CTkFrame(inner, fg_color="transparent")
+        txt_frame.pack(side="left", fill="x", expand=True)
+
+        ctk.CTkLabel(txt_frame, text=f"«{texto}»",
+                     font=ctk.CTkFont("Segoe UI", 11, slant="italic"),
+                     text_color="#94A3B8", wraplength=700,
+                     anchor="w", justify="left").pack(anchor="w")
+
+        ctk.CTkLabel(txt_frame, text=f"— {referencia}",
+                     font=ctk.CTkFont("Segoe UI", 10, "bold"),
+                     text_color="#FFD700", anchor="w").pack(anchor="w", pady=(2, 0))
+
+    # ── Clase Actual según Horario ─────────────────────────────────────
+    def _widget_clase_actual(self, parent):
+        """Muestra qué clase tiene el docente en este momento."""
+        if not TAREAS_OK:
+            return
+        try:
+            horario = self.engine.obtener_horario()
+        except Exception:
+            return
+
+        materia, rango, dia = obtener_clase_actual(horario)
+
+        frame = ctk.CTkFrame(parent, fg_color="#0F2744", corner_radius=10,
+                             border_width=1, border_color="#1E3A5F")
+        frame.pack(fill="x", padx=24, pady=(8, 4))
+
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(fill="x", padx=16, pady=10)
+
+        ahora = datetime.datetime.now()
+        dias_es = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves",
+                   4: "Viernes", 5: "Sábado", 6: "Domingo"}
+        dia_nombre = dias_es.get(ahora.weekday(), "")
+        hora_str = ahora.strftime("%I:%M %p")
+
+        if materia:
+            # Clase en progreso
+            ctk.CTkLabel(inner, text="🟢",
+                         font=ctk.CTkFont("Segoe UI", 18)).pack(side="left", padx=(0, 8))
+
+            txt_f = ctk.CTkFrame(inner, fg_color="transparent")
+            txt_f.pack(side="left", fill="x", expand=True)
+
+            ctk.CTkLabel(txt_f, text=f"Clase Actual: {materia}",
+                         font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                         text_color="#00FF88", anchor="w").pack(anchor="w")
+
+            ctk.CTkLabel(txt_f, text=f"{dia_nombre} — {rango} — {hora_str}",
+                         font=ctk.CTkFont("Segoe UI", 11),
+                         text_color="#94A3B8", anchor="w").pack(anchor="w")
+        else:
+            # No hay clase ahora — mostrar la próxima
+            prox_mat, prox_rango = obtener_proxima_clase(horario)
+
+            ctk.CTkLabel(inner, text="🕐",
+                         font=ctk.CTkFont("Segoe UI", 18)).pack(side="left", padx=(0, 8))
+
+            txt_f = ctk.CTkFrame(inner, fg_color="transparent")
+            txt_f.pack(side="left", fill="x", expand=True)
+
+            if prox_mat:
+                ctk.CTkLabel(txt_f, text=f"Próxima clase: {prox_mat}",
+                             font=ctk.CTkFont("Segoe UI", 13, "bold"),
+                             text_color="#38BDF8", anchor="w").pack(anchor="w")
+                ctk.CTkLabel(txt_f, text=f"{dia_nombre} — {prox_rango} — Ahora: {hora_str}",
+                             font=ctk.CTkFont("Segoe UI", 11),
+                             text_color="#94A3B8", anchor="w").pack(anchor="w")
+            else:
+                msg = "No hay más clases hoy" if ahora.weekday() < 5 else "Fin de semana — ¡descanse!"
+                ctk.CTkLabel(txt_f, text=msg,
+                             font=ctk.CTkFont("Segoe UI", 13, "bold"),
+                             text_color="#94A3B8", anchor="w").pack(anchor="w")
+                ctk.CTkLabel(txt_f, text=f"{dia_nombre} — {hora_str}",
+                             font=ctk.CTkFont("Segoe UI", 11),
+                             text_color="#64748B", anchor="w").pack(anchor="w")
+
+    # ── Tareas Pendientes ──────────────────────────────────────────────
+    def _widget_tareas_pendientes(self, parent):
+        """Muestra las tareas/evaluaciones programadas pendientes."""
+        if not TAREAS_OK:
+            return
+
+        pendientes = obtener_pendientes()
+        if not pendientes:
+            return
+
+        frame = ctk.CTkFrame(parent, fg_color="#0F2744", corner_radius=10,
+                             border_width=1, border_color="#1E3A5F")
+        frame.pack(fill="x", padx=24, pady=(8, 4))
+
+        # Header
+        hdr = ctk.CTkFrame(frame, fg_color="transparent")
+        hdr.pack(fill="x", padx=16, pady=(10, 4))
+
+        ctk.CTkLabel(hdr, text=f"📋 Tareas Pendientes ({len(pendientes)})",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color="#00DDEB", anchor="w").pack(side="left")
+
+        # Lista de tareas (máximo 5 visibles) — clickables
+        for t in pendientes[:5]:
+            urgencia = t.get("_urgencia", "normal")
+            dias = t.get("_dias_restantes", 999)
+
+            colores = {
+                "vencida": ("#EF4444", "⛔ VENCIDA"),
+                "hoy": ("#F59E0B", "⚠️ HOY"),
+                "urgente": ("#FB923C", f"🔔 En {dias} días"),
+                "normal": ("#3B82F6", f"📅 En {dias} días"),
+            }
+            color, badge_txt = colores.get(urgencia, ("#3B82F6", ""))
+
+            info = f"{badge_txt}  {t['titulo']} — {t.get('grado', '')} — {t.get('fecha_limite', '')}"
+
+            def _ir_notas(app=self.app):
+                if app:
+                    try: app.mostrar_notas()
+                    except: pass
+
+            ctk.CTkButton(frame, text=info,
+                          font=ctk.CTkFont("Segoe UI", 11),
+                          fg_color="#0A1628", hover_color=C["hover"],
+                          text_color=color, anchor="w", height=30,
+                          command=_ir_notas).pack(fill="x", padx=16, pady=2)
+
+        # Espaciado final
+        ctk.CTkFrame(frame, fg_color="transparent", height=8).pack()
 
     # ── Título ─────────────────────────────────────────────────────────
     def _titulo_seccion(self, parent):
@@ -229,6 +388,10 @@ class DashboardFrame(ctk.CTkFrame):
             self._cards_frame.destroy()
             self._tarjetas_metricas(self._panel_container)
 
+        if hasattr(self, "_habitos_panel") and self._habitos_panel.winfo_exists():
+            self._habitos_panel.destroy()
+        self._panel_habitos(self._panel_container)
+
         if hasattr(self, "_graph_frame") and self._graph_frame.winfo_exists():
             self._graph_frame.destroy()
             self._graficas(self._panel_container)
@@ -254,26 +417,89 @@ class DashboardFrame(ctk.CTkFrame):
         if self._current_student:
             # Contextual mode for individual student
             nombre_est = self._current_student["nombre"]
+            grado_est = self._current_student["grado"]
+            
+            # Find student index/ID
+            id_est = None
+            try:
+                estudiantes = self.engine.obtener_estudiantes_completos(grado_est)
+                for idx, est in enumerate(estudiantes):
+                    if est["nombre"] == nombre_est:
+                        id_est = str(idx + 1)
+                        break
+            except Exception:
+                pass
+                
+            # Averages & Risk
+            prom_val = None
+            try:
+                proms = self.engine.obtener_promedios_reales(grado_est, None, "Anual")
+                if not proms:
+                    proms = self.engine.obtener_promedios_reales(grado_est, None, "Trimestre 1")
+                if proms and nombre_est in proms:
+                    prom_val = proms[nombre_est]
+            except Exception:
+                pass
+                
+            if prom_val is not None:
+                risk_status = "En Riesgo" if prom_val < 3.0 else "Estable"
+                risk_sub = f"Promedio: {prom_val:.2f}"
+                risk_color = C["rojo"] if prom_val < 3.0 else C["verde"]
+            else:
+                risk_status = "Sin notas"
+                risk_sub = "No registrado"
+                risk_color = C["texto_sec"]
+
+            # Attendance calculations for individual
+            total_dias = 0
+            ausencias = 0
+            tardanzas = 0
+            excusas = 0
+            if id_est:
+                try:
+                    for trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                        res = self.engine.obtener_estadisticas_asistencia(grado_est, trim, id_est)
+                        total_dias += res.get("total_dias", 0)
+                        ausencias += res.get("ausencias", 0)
+                        tardanzas += res.get("tardanzas", 0)
+                        excusas += res.get("excusas", 0)
+                except Exception:
+                    pass
+            
+            asist_pct = "0%"
+            asist_sub = "Sin datos"
+            if total_dias > 0:
+                presentes = total_dias - ausencias
+                pct = (presentes / total_dias) * 100
+                asist_pct = f"{pct:.0f}%"
+                asist_sub = f"{ausencias} faltas / {excusas} excusas"
 
             datos = [
-                ("👤",  "Estudiante",           "1",    nombre_est,                 self._acento),
-                ("⚠️",  "Estatus de Riesgo",    "Estable", "Promedio normal",       C["verde"]),
+                ("👤",  "Estudiante",           grado_est, nombre_est[:20],            self._acento),
+                ("⚠️",  "Estatus de Riesgo",    risk_status, risk_sub,                 risk_color),
                 ("🏆",  "Cuadro de Honor",      "—",    "No aplica",                C["texto_sec"]),
-                ("📊",  "Asistencia Indiv.",    "100%", "Sin ausencias",            self._acento),
+                ("📊",  "Asistencia Indiv.",    asist_pct, asist_sub,                  self._acento),
             ]
         else:
             # General mode
             s = self._stats
-            total    = str(s.get("total", 0))
-            riesgo   = str(s.get("riesgo", 0))
-            honor    = str(s.get("honor", "—"))
-            asist    = str(s.get("asistencia", "0%"))
+            total = str(s.get("total", 0))
+            riesgo = str(s.get("riesgo", 0))
+            honor = str(s.get("honor", "N/A"))
+            asistencia = str(s.get("asistencia", "0%"))
+
+            if honor == "N/A" or not honor or honor.strip() == "":
+                honor_val = "—"
+                honor_sub = "Sin registros"
+            else:
+                honor_val = "1"
+                honor_sub = honor
 
             datos = [
                 ("👥",  "Total Alumnos",       total,  "Matriculados",             self._acento),
-                ("⚠️",  "Alumnos en Riesgo",   riesgo, "Nota promedio < 3.0",      "#EF4444"),
-                ("🏆",  "Cuadro de Honor",     "1",    honor[:18],                 C["amarillo"]),
-                ("📊",  "Asistencia",          asist,  "Promedio general",         C["verde"]),
+                ("⚠️",  "Alumnos en Riesgo",   riesgo, "Nota promedio < 3.0",      C["rojo"]),
+                ("🏆",  "Cuadro de Honor",     honor_val, honor_sub[:18],          C["amarillo"]),
+                ("📊",  "Asistencia",          asistencia, "Promedio general",     C["verde"]),
             ]
 
         for col, (ico, titulo, valor, sub, color) in enumerate(datos):
@@ -310,6 +536,48 @@ class DashboardFrame(ctk.CTkFrame):
                      text_color=C["texto_sec"],
                      wraplength=150,
                      justify="left").pack(anchor="w", padx=16, pady=(0, 14))
+
+    def _panel_habitos(self, parent):
+        if self._current_student:
+            return
+
+        hab_stats = self._stats.get("habitos", {"S": 0, "R": 0, "X": 0})
+        s_val = hab_stats.get("S", 0)
+        r_val = hab_stats.get("R", 0)
+        x_val = hab_stats.get("X", 0)
+        total_vals = s_val + r_val + x_val
+
+        self._habitos_panel = ctk.CTkFrame(parent, fg_color=C["card"], border_width=1, border_color=C["borde"], corner_radius=12)
+        self._habitos_panel.pack(fill="x", padx=20, pady=(6, 10))
+
+        # Title
+        ctk.CTkLabel(self._habitos_panel, text="🧠 Indicador General de Hábitos y Actitudes (Grupo Consejero 8° B)",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["cian"]).pack(anchor="w", padx=20, pady=(15, 10))
+
+        # Container columns
+        cols_frame = ctk.CTkFrame(self._habitos_panel, fg_color="transparent")
+        cols_frame.pack(fill="x", padx=20, pady=(0, 20))
+        cols_frame.columnconfigure((0, 1, 2), weight=1, uniform="habito_col")
+
+        metrics = [
+            ("Satisfactorio (S)", s_val, C["verde"]),
+            ("Regular (R)", r_val, C["amarillo"]),
+            ("No Satisface (X)", x_val, C["rojo"])
+        ]
+
+        for idx, (label, count, color) in enumerate(metrics):
+            col_frame = ctk.CTkFrame(cols_frame, fg_color="transparent")
+            col_frame.grid(row=0, column=idx, padx=10, pady=5, sticky="nsew")
+
+            pct = (count / total_vals) * 100 if total_vals > 0 else 0
+            
+            ctk.CTkLabel(col_frame, text=label, font=ctk.CTkFont("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+            ctk.CTkLabel(col_frame, text=f"{count} evaluaciones ({pct:.1f}%)", font=ctk.CTkFont("Segoe UI", 11), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 6))
+
+            pb = ctk.CTkProgressBar(col_frame, progress_color=color, fg_color=C["borde"], height=8)
+            pb.pack(fill="x")
+            pb.set(pct / 100.0)
 
     # ── Gráficas ─────────────────────────────────────────────────────────
     def _graficas(self, parent):
@@ -459,30 +727,7 @@ class DashboardFrame(ctk.CTkFrame):
         self._footer_frame = ctk.CTkFrame(parent, fg_color="transparent")
         ff = self._footer_frame
         ff.pack(fill="x", padx=20, pady=(4, 20))
-        ff.columnconfigure((0, 1, 2, 3), weight=1, uniform="bot")
-# Exportaciones
-        ex = ctk.CTkFrame(ff, fg_color=C["card"],
-                          border_width=1, border_color=C["borde"],
-                          corner_radius=12)
-        ex.grid(row=0, column=3, padx=(8, 0), sticky="nsew", pady=4)
-
-        ctk.CTkLabel(ex, text="Exportar Calificaciones",
-                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
-                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
-
-        exf = ctk.CTkFrame(ex, fg_color="transparent")
-        exf.pack(fill="both", expand=True, padx=16, pady=(0, 14))
-
-        self.cb_trim_export = ctk.CTkOptionMenu(exf, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los trimestres"])
-        self.cb_trim_export.pack(fill="x", pady=5)
-        self.cb_trim_export.set("Todos los trimestres")
-
-        btn_f_ex = ctk.CTkFrame(exf, fg_color="transparent")
-        btn_f_ex.pack(fill="x", pady=5)
-
-        ctk.CTkButton(btn_f_ex, text="📄 PDF", width=40, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
-        ctk.CTkButton(btn_f_ex, text="📝 Word", width=40, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)
-        ctk.CTkButton(btn_f_ex, text="📊 Excel", width=40, fg_color="#059669", command=lambda: self.exportar_calificaciones("xlsx")).pack(side="left", padx=2, expand=True)
+        ff.columnconfigure((0, 1, 2), weight=1, uniform="bot")
 
         # Grados activos
         gc = ctk.CTkFrame(ff, fg_color=C["card"],
@@ -511,78 +756,87 @@ class DashboardFrame(ctk.CTkFrame):
                 padx=12, pady=6)
             pill.pack(side="left", padx=4)
 
-        # Horario sincronizado
+        # Tareas Próximas (reemplaza el horario duplicado)
         hc = ctk.CTkFrame(ff, fg_color=C["card"],
                           border_width=1, border_color=C["borde"],
                           corner_radius=12)
         hc.grid(row=0, column=1, padx=(0, 8), sticky="nsew", pady=4)
 
-        ctk.CTkLabel(hc, text="Horario del Día",
+        ctk.CTkLabel(hc, text="📌 Tareas Próximas",
                      font=ctk.CTkFont("Segoe UI", 14, "bold"),
                      text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
 
         hf = ctk.CTkFrame(hc, fg_color="transparent")
         hf.pack(fill="x", padx=16, pady=(0, 14))
 
-        # Obtener horario actual
-        materia_actual, hora_actual = self._obtener_materia_actual()
-        
-        if materia_actual:
-            ctk.CTkLabel(hf, text=f"📚 {materia_actual}",
-                        font=ctk.CTkFont("Segoe UI", 16, "bold"),
-                        text_color=self._acento).pack(anchor="w")
-            ctk.CTkLabel(hf, text=f"🕐 {hora_actual}",
-                        font=ctk.CTkFont("Segoe UI", 12),
-                        text_color=C["texto_sec"]).pack(anchor="w", pady=(2, 0))
-        else:
-            ctk.CTkLabel(hf, text="📚 Fuera de horario escolar",
-                        font=ctk.CTkFont("Segoe UI", 14),
-                        text_color=C["texto_sec"]).pack(anchor="w")
-            ctk.CTkLabel(hf, text="🕐 No hay clases programadas",
-                        font=ctk.CTkFont("Segoe UI", 12),
-                        text_color=C["texto_sec"]).pack(anchor="w", pady=(2, 0))
+        # Mostrar próximas tareas si el módulo está disponible
+        try:
+            from tareas import obtener_pendientes as _pend
+            pendientes = _pend()
+            if pendientes:
+                for t in pendientes[:3]:
+                    urgencia = t.get("_urgencia", "normal")
+                    colores_u = {"vencida": "#EF4444", "hoy": "#F59E0B",
+                                 "urgente": "#FB923C", "normal": "#3B82F6"}
+                    color = colores_u.get(urgencia, "#3B82F6")
 
-        # Accesos rápidos
-        ac = ctk.CTkFrame(ff, fg_color=C["card"],
+                    # Botón clickable que lleva a Notas
+                    def _ir_notas_tarea(g=t.get("grado"), m=t.get("materia"), app=self.app):
+                        if app:
+                            try:
+                                app.mostrar_notas()
+                                notas_frame = app._frames.get("NotasFrame")
+                                if notas_frame:
+                                    if g:
+                                        notas_frame.combo_grado.set(g)
+                                        notas_frame.al_cambiar_grado(g)
+                                    if m and m != "General":
+                                        opts = notas_frame.combo_materia.cget("values")
+                                        if m in opts:
+                                            notas_frame.combo_materia.set(m)
+                                        notas_frame.cargar_descripciones()
+                                    notas_frame.tabs.set("Tareas")
+                            except Exception:
+                                pass
+
+                    btn = ctk.CTkButton(hf, text=f"📝 {t['titulo'][:25]}",
+                                        font=ctk.CTkFont("Segoe UI", 11),
+                                        fg_color=C["card_alt"], hover_color=C["hover"],
+                                        text_color=color, anchor="w", height=28,
+                                        command=_ir_notas_tarea)
+                    btn.pack(fill="x", pady=2)
+            else:
+                ctk.CTkLabel(hf, text="✅ Sin tareas pendientes",
+                             font=ctk.CTkFont("Segoe UI", 12),
+                             text_color=C["verde"]).pack(anchor="w")
+        except Exception:
+            ctk.CTkLabel(hf, text="📌 Use Tareas para programar",
+                         font=ctk.CTkFont("Segoe UI", 12),
+                         text_color=C["texto_sec"]).pack(anchor="w")
+
+        # Exportaciones
+        ex = ctk.CTkFrame(ff, fg_color=C["card"],
                           border_width=1, border_color=C["borde"],
                           corner_radius=12)
-        ac.grid(row=0, column=2, sticky="nsew", pady=4)
+        ex.grid(row=0, column=2, padx=(8, 0), sticky="nsew", pady=4)
 
-        ctk.CTkLabel(ac, text="Accesos Rápidos",
+        ctk.CTkLabel(ex, text="Exportar Calificaciones",
                      font=ctk.CTkFont("Segoe UI", 14, "bold"),
                      text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
 
-        af = ctk.CTkFrame(ac, fg_color="transparent")
-        af.pack(fill="x", padx=16, pady=(0, 14))
-        af.columnconfigure((0, 1, 2), weight=1)
+        exf = ctk.CTkFrame(ex, fg_color="transparent")
+        exf.pack(fill="both", expand=True, padx=16, pady=(0, 14))
 
-        def nav_notas():
-            if self.app:
-                try: self.app.mostrar_notas()
-                except Exception as e: print(f"[!] Navigation error: {e}")
+        self.cb_trim_export = ctk.CTkOptionMenu(exf, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los trimestres"])
+        self.cb_trim_export.pack(fill="x", pady=5)
+        self.cb_trim_export.set("Todos los trimestres")
 
-        def nav_asistencia():
-            if self.app:
-                try: self.app.mostrar_asistencia()
-                except Exception as e: print(f"[!] Navigation error: {e}")
+        btn_f_ex = ctk.CTkFrame(exf, fg_color="transparent")
+        btn_f_ex.pack(fill="x", pady=5)
 
-        def nav_config():
-            if self.app:
-                try: self.app.mostrar_configuracion()
-                except Exception as e: print(f"[!] Navigation error: {e}")
-
-        botones = [
-            ("📝 Notas",      "#2563EB", nav_notas),
-            ("📅 Asistencia", "#059669", nav_asistencia),
-            ("⚙️ Config",     "#7C3AED", nav_config),
-        ]
-        for i, (txt, col, cmd) in enumerate(botones):
-            ctk.CTkButton(af, text=txt, height=48,
-                          font=ctk.CTkFont("Segoe UI", 13, "bold"),
-                          fg_color=col, hover_color=col,
-                          corner_radius=10,
-                          command=cmd).grid(
-                row=0, column=i, padx=5, sticky="ew")
+        ctk.CTkButton(btn_f_ex, text="📄 PDF", width=40, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📝 Word", width=40, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📊 Excel", width=40, fg_color="#059669", command=lambda: self.exportar_calificaciones("xlsx")).pack(side="left", padx=2, expand=True)
 
 
 
@@ -729,6 +983,126 @@ class DashboardFrame(ctk.CTkFrame):
             
         except Exception:
             return None, None
+
+    def _asistente_docente(self, parent):
+        frame = ctk.CTkFrame(parent, fg_color=C["card"], border_width=1, border_color=C["borde"], corner_radius=12)
+        frame.pack(fill="x", padx=24, pady=(10, 15))
+        frame.columnconfigure(0, weight=6, uniform="asist")
+        frame.columnconfigure(1, weight=4, uniform="asist")
+
+        # Columna Izquierda: Alertas y Alumnos en Riesgo
+        col_izq = ctk.CTkFrame(frame, fg_color="transparent")
+        col_izq.grid(row=0, column=0, padx=16, pady=16, sticky="nsew")
+
+        ctk.CTkLabel(col_izq, text="🔔 Estado y Alertas de Alumnos",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["cian"]).pack(anchor="w", pady=(0, 6))
+
+        # Analizar promedios para buscar alumnos con notas < 3.0
+        alertas = []
+        try:
+            grados = self.engine.obtener_grados_activos()
+            for g in grados:
+                proms = self.engine.obtener_promedios_reales(g, None, "Trimestre 1")
+                if not proms:
+                    proms = self.engine.obtener_promedios_reales(g, None, "Anual")
+                for nom, prom in proms.items():
+                    if prom is not None and prom < 3.0:
+                        alertas.append(f"⚠️ {nom} (Promedio: {prom:.2f}) — {g}")
+        except Exception:
+            pass
+
+        if not alertas:
+            lbl_ex = ctk.CTkLabel(col_izq, text="✅ Todo en orden. Ningún estudiante se encuentra en riesgo académico actualmente.",
+                                  font=ctk.CTkFont("Segoe UI", 12),
+                                  text_color=C["verde"], anchor="w", justify="left")
+            lbl_ex.pack(fill="x", pady=10)
+        else:
+            scroll_al = ctk.CTkScrollableFrame(col_izq, fg_color="#0A1628", height=90, corner_radius=8)
+            scroll_al.pack(fill="both", expand=True, pady=4)
+            for alert in alertas:
+                ctk.CTkLabel(scroll_al, text=alert,
+                             font=ctk.CTkFont("Segoe UI", 12),
+                             text_color=C["rojo"], anchor="w").pack(fill="x", padx=8, pady=2)
+
+        # Columna Derecha: Accesos Rápidos
+        col_der = ctk.CTkFrame(frame, fg_color="transparent")
+        col_der.grid(row=0, column=1, padx=16, pady=16, sticky="nsew")
+
+        ctk.CTkLabel(col_der, text="⚡ Acciones Rápidas (Un Clic)",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["cian"]).pack(anchor="w", pady=(0, 8))
+
+        btn_grid = ctk.CTkFrame(col_der, fg_color="transparent")
+        btn_grid.pack(fill="both", expand=True)
+        btn_grid.columnconfigure((0, 1), weight=1, uniform="btns")
+        btn_grid.rowconfigure((0, 1), weight=1)
+
+        # Navegaciones de botones
+        def ir_notas():
+            if self.app: self.app.mostrar_notas()
+        def ir_asistencia():
+            if self.app: self.app.mostrar_asistencia()
+        def ir_observaciones():
+            if self.app: self.app.mostrar_observaciones()
+
+        btn_n = ctk.CTkButton(btn_grid, text="📝 Notas", font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                              fg_color=C["input"], hover_color=C["hover"], height=32, command=ir_notas)
+        btn_n.grid(row=0, column=0, padx=4, pady=4, sticky="ew")
+
+        btn_a = ctk.CTkButton(btn_grid, text="📅 Asistencia", font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                              fg_color=C["input"], hover_color=C["hover"], height=32, command=ir_asistencia)
+        btn_a.grid(row=0, column=1, padx=4, pady=4, sticky="ew")
+
+        btn_o = ctk.CTkButton(btn_grid, text="🔍 Observar", font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                              fg_color=C["input"], hover_color=C["hover"], height=32, command=ir_observaciones)
+        btn_o.grid(row=1, column=0, padx=4, pady=4, sticky="ew")
+
+        btn_r = ctk.CTkButton(btn_grid, text="💾 Respaldo", font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                              fg_color="#10B981", hover_color="#059669", height=32, command=self._ejecutar_respaldo_manual)
+        btn_r.grid(row=1, column=1, padx=4, pady=4, sticky="ew")
+
+    def _ejecutar_respaldo_manual(self):
+        import shutil
+        import datetime
+        import os
+        from tkinter import messagebox
+        try:
+            ruta_original = self.engine.ruta
+            if not os.path.exists(ruta_original):
+                messagebox.showerror("Error", "No se encontró el archivo de datos original para respaldar.")
+                return
+                
+            dir_base = os.path.dirname(os.path.abspath(ruta_original))
+            dir_respaldos = os.path.join(dir_base, "Respaldos_Locales")
+            if not os.path.exists(dir_respaldos):
+                os.makedirs(dir_respaldos)
+                
+            ahora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            nombre_base = os.path.basename(ruta_original).replace(".xlsx", "")
+            nombre_respaldo = f"{nombre_base}_respaldo_{ahora}.xlsx"
+            ruta_destino = os.path.join(dir_respaldos, nombre_respaldo)
+            
+            shutil.copy2(ruta_original, ruta_destino)
+            
+            # Limpiar antiguos
+            respaldos = sorted(
+                [os.path.join(dir_respaldos, f) for f in os.listdir(dir_respaldos) if f.endswith(".xlsx")],
+                key=os.path.getmtime
+            )
+            while len(respaldos) > 15:
+                viejo = respaldos.pop(0)
+                try: os.remove(viejo)
+                except: pass
+                
+            # Buscar root window para invocar mostrar_toast si existe
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast("✓ ¡Respaldo local creado con éxito!", color="#10B981")
+            else:
+                messagebox.showinfo("Éxito", f"Respaldo creado con éxito en:\n{ruta_destino}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo crear el respaldo: {e}")
 
 
 # ─── MOCK PARA PRUEBA STANDALONE ─────────────────────────────────────────────

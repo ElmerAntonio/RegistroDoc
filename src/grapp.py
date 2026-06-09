@@ -1,24 +1,46 @@
 import customtkinter as ctk
+import tkinter as tk
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import threading
+from theme import FONT_BODY
+
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+
+    def show_tooltip(self, event=None):
+        if self.tooltip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + 25
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(tw, text=self.text, justify='left',
+                         background="#1e293b", foreground="#f8fafc",
+                         relief='solid', borderwidth=1,
+                         font=("Segoe UI", 9), padx=8, pady=6)
+        label.pack()
+
+    def hide_tooltip(self, event=None):
+        tw = self.tooltip_window
+        self.tooltip_window = None
+        if tw:
+            tw.destroy()
 
 class GraficosFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.engine = engine
 
-        # Tema de colores
-        self.C = {
-            "fondo":        "#0A1628",
-            "card":         "#0F2744",
-            "cian":         "#00DDEB",
-            "verde":        "#00FF88",
-            "rojo":         "#FF4444",
-            "amarillo":     "#FFD700",
-            "purpura":      "#A855F7",
-            "texto":        "#E2E8F0",
-        }
+        from theme import C
+        self.C = C
 
         # Estructura principal
         self.grid_columnconfigure(0, weight=1)
@@ -94,7 +116,21 @@ class GraficosFrame(ctk.CTkFrame):
             ("chk_box", "Box-plot", False),
             ("chk_lineas", "Lineas Trim", True),
             ("chk_heat", "Heatmap", False),
+            ("chk_habitos", "Hábitos", True),
         ]
+
+        descripciones_tips = {
+            "chk_pastel": "Porcentajes de Aprobados, En Riesgo y Reprobados del grupo.",
+            "chk_barras": "Comparación visual del promedio final de cada estudiante.",
+            "chk_tendencia": "Progresión promedio grupal a lo largo de las actividades.",
+            "chk_hist": "Distribución y cantidad de notas en rangos de 1.0 a 5.0.",
+            "chk_pareto": "Identifica de forma ordenada el rendimiento acumulativo.",
+            "chk_scatter": "Relación entre Calificaciones y el Porcentaje de Asistencia.",
+            "chk_box": "Analiza la dispersión, mediana y valores atípicos de notas.",
+            "chk_lineas": "Evolución comparativa del promedio entre T1, T2 y T3.",
+            "chk_heat": "Visualización matricial coloreada del rendimiento por materias.",
+            "chk_habitos": "Frecuencia evaluada en Hábitos y Aptitudes (S, R, X)."
+        }
 
         grid_idx = 0
         for attr_name, label, should_grid in check_specs:
@@ -111,14 +147,44 @@ class GraficosFrame(ctk.CTkFrame):
             else:
                 chk.deselect()
             setattr(self, attr_name, chk)
+            tip_text = descripciones_tips.get(attr_name, "")
+            if tip_text:
+                ToolTip(chk, tip_text)
 
         ctk.CTkButton(f_top, text="ℹ️ Guía de Uso", fg_color="#00DDEB", text_color="#0A1628", hover_color="#00C0CD", font=("Segoe UI", 12, "bold"), command=self.mostrar_guia_graficas).pack(side="right", padx=5)
         ctk.CTkButton(f_top, text="Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=5)
         self.al_cambiar_grado(grados[0])
 
+    def mostrar_guia_graficas(self):
+        from tkinter import messagebox
+        guia_texto = (
+            "📊 Guía de Gráficos de Rendimiento:\n\n"
+            "• Pastel: Porcentajes de aprobación, riesgo y reprobación.\n"
+            "• Barras: Comparación del promedio final de cada estudiante.\n"
+            "• Tendencia: Línea de progresión grupal del salón.\n"
+            "• Histograma: Distribución y frecuencia de las calificaciones.\n"
+            "• Pareto: Identifica la concentración de alumnos en rangos clave.\n"
+            "• Dispersión: Relación entre notas obtenidas y la asistencia.\n"
+            "• Box-plot: Visualiza la distribución de notas, mediana y dispersión.\n"
+            "• Líneas Trim: Muestra el progreso académico del T1 al T3.\n"
+            "• Heatmap: Mapa de calor de rendimiento de notas por materia.\n"
+            "• Hábitos: Frecuencia de Hábitos y Aptitudes (S, R, X)."
+        )
+        messagebox.showinfo("Guía de Uso — Gráficos", guia_texto)
+
     def al_cambiar_grado(self, grado):
         if grado == "Sin datos": return
-        materias = self.engine.obtener_materias_por_grado(grado)
+        if grado == "Todos los Grados":
+            grados_activos = self.engine.obtener_grados_activos()
+            todas_materias = []
+            for g in grados_activos:
+                todas_materias.extend(self.engine.obtener_materias_por_grado(g))
+            materias = sorted(list(set(todas_materias)))
+            if "Sin materias registradas" in materias:
+                materias.remove("Sin materias registradas")
+        else:
+            materias = self.engine.obtener_materias_por_grado(grado)
+
         if materias:
             materias = ["Todas las Materias"] + materias
             self.combo_materia.configure(values=materias)
@@ -127,10 +193,14 @@ class GraficosFrame(ctk.CTkFrame):
             self.combo_materia.configure(values=["No hay materias"])
             self.combo_materia.set("No hay materias")
 
-        estudiantes = self.engine.obtener_estudiantes_completos(grado)
-        nombres = ["Todos los Estudiantes"] + [e['nombre'] for e in estudiantes]
-        self.combo_estudiante.configure(values=nombres)
-        self.combo_estudiante.set("Todos los Estudiantes")
+        if grado == "Todos los Grados":
+            self.combo_estudiante.configure(values=["Todos los Estudiantes"])
+            self.combo_estudiante.set("Todos los Estudiantes")
+        else:
+            estudiantes = self.engine.obtener_estudiantes_completos(grado)
+            nombres = ["Todos los Estudiantes"] + [e['nombre'] for e in estudiantes]
+            self.combo_estudiante.configure(values=nombres)
+            self.combo_estudiante.set("Todos los Estudiantes")
 
         self.actualizar_graficos()
 
@@ -175,89 +245,179 @@ class GraficosFrame(ctk.CTkFrame):
     def actualizar_graficos(self):
         self.limpiar_graficos()
 
+        # Mostrar indicador de carga
+        self.lbl_loading = ctk.CTkLabel(
+            self.scroll_canvas,
+            text="🔄 Cargando datos y generando gráficos...",
+            font=(FONT_BODY, 14, "bold"),
+            text_color=self.C["cian"]
+        )
+        self.lbl_loading.pack(pady=60)
+
+        # Leer filtros en el hilo principal
         grado = self.combo_grado.get()
         materia = self.combo_materia.get()
         trimestre = self.combo_trimestre.get()
         estudiante_sel = self.combo_estudiante.get()
+        
+        chk_states = {
+            "pastel": self.chk_pastel.get(),
+            "barras": self.chk_barras.get(),
+            "tendencia": self.chk_tendencia.get(),
+            "hist": self.chk_hist.get(),
+            "pareto": self.chk_pareto.get(),
+            "scatter": self.chk_scatter.get(),
+            "box": self.chk_box.get(),
+            "lineas": self.chk_lineas.get(),
+            "heat": self.chk_heat.get(),
+            "habitos": self.chk_habitos.get()
+        }
 
-        estudiantes = []
-        try:
-            estudiantes = self.engine.obtener_estudiantes_completos(grado)
-        except Exception: pass
+        def bg_work():
+            estudiantes = []
+            try:
+                if grado == "Todos los Grados":
+                    for g in self.engine.obtener_grados_activos():
+                        estudiantes.extend(self.engine.obtener_estudiantes_completos(g))
+                else:
+                    estudiantes = self.engine.obtener_estudiantes_completos(grado)
+            except Exception: pass
 
-        aprobados = 0; reprobados = 0; en_riesgo = 0
+            aprobados = 0; reprobados = 0; en_riesgo = 0
 
-        promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, trimestre)
+            # Obtener promedios
+            promedios_por_est = {}
+            obtener_promedios = getattr(self.engine, 'obtener_promedios_reales', None)
+            if obtener_promedios:
+                if grado == "Todos los Grados":
+                    for g in self.engine.obtener_grados_activos():
+                        try:
+                            proms = obtener_promedios(g, materia, trimestre)
+                            for k, v in proms.items():
+                                promedios_por_est[f"{k} ({g})"] = v
+                        except Exception: pass
+                else:
+                    try:
+                        promedios_por_est = obtener_promedios(grado, materia, trimestre)
+                    except Exception: pass
 
-        if not promedios_por_est and estudiantes:
-            # Fallback a 1.0 si no hay calificaciones válidas registradas aún
-            for est in estudiantes:
-                promedios_por_est[est['nombre']] = 1.0
+            if not promedios_por_est and estudiantes:
+                # Fallback a 1.0 si no hay calificaciones válidas registradas aún
+                for est in estudiantes:
+                    promedios_por_est[est['nombre']] = 1.0
 
-        for nom, promedio in promedios_por_est.items():
-            if promedio >= 3.0: aprobados += 1
-            elif promedio >= 2.5: en_riesgo += 1
-            else: reprobados += 1
+            for nom, promedio in promedios_por_est.items():
+                if promedio >= 3.0: aprobados += 1
+                elif promedio >= 2.5: en_riesgo += 1
+                else: reprobados += 1
+
+            historial = []
+            if estudiante_sel != "Todos los Estudiantes":
+                historial = getattr(self.engine, 'obtener_historial_real', lambda g,m,e: [3.0, 3.0])(grado, materia, estudiante_sel)
+                if len(historial) < 2: historial = [3.0, 3.0]
+
+            datos = {
+                "grado": grado,
+                "materia": materia,
+                "trimestre": trimestre,
+                "estudiante_sel": estudiante_sel,
+                "aprobados": aprobados,
+                "reprobados": reprobados,
+                "en_riesgo": en_riesgo,
+                "promedios_por_est": promedios_por_est,
+                "historial": historial,
+                "chk_states": chk_states
+            }
+            
+            # Enviar al hilo principal para renderizado de widgets
+            try:
+                self.after(0, lambda: self._dibujar_con_datos(datos))
+            except Exception:
+                pass
+
+        # Iniciar hilo secundario
+        t = threading.Thread(target=bg_work, daemon=True)
+        t.start()
+
+    def _dibujar_con_datos(self, datos):
+        # Destruir indicador de carga
+        if hasattr(self, "lbl_loading") and self.lbl_loading.winfo_exists():
+            self.lbl_loading.destroy()
+
+        grado = datos["grado"]
+        materia = datos["materia"]
+        trimestre = datos["trimestre"]
+        estudiante_sel = datos["estudiante_sel"]
+        aprobados = datos["aprobados"]
+        reprobados = datos["reprobados"]
+        en_riesgo = datos["en_riesgo"]
+        promedios_por_est = datos["promedios_por_est"]
+        historial = datos["historial"]
+        chk = datos["chk_states"]
 
         if estudiante_sel != "Todos los Estudiantes":
             # Vista individual
-            historial = getattr(self.engine, 'obtener_historial_real', lambda g,m,e: [3.0, 3.0])(grado, materia, estudiante_sel)
-            if len(historial) < 2: historial = [3.0, 3.0] # Fallback minimo de regresion
             self.dibujar_proyeccion(estudiante_sel, historial, 0, 0, colspan=2)
         else:
             # Vista general
             row = 0
             col = 0
-            if self.chk_pastel.get():
+            if chk["pastel"]:
                 self.dibujar_pastel(aprobados, en_riesgo, reprobados, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_barras.get():
+            if chk["barras"]:
                 self.dibujar_barras(promedios_por_est, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_tendencia.get():
+            if chk["tendencia"]:
                 self.dibujar_tendencia(list(promedios_por_est.values()), row, col, colspan=1)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_hist.get():
+            if chk["hist"]:
                 self.dibujar_histograma(list(promedios_por_est.values()), row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_pareto.get():
+            if chk["pareto"]:
                 self.dibujar_pareto(grado, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_scatter.get():
+            if chk["scatter"]:
                 self.dibujar_scatter(grado, promedios_por_est, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_box.get():
+            if chk["box"]:
                 self.dibujar_boxplot(grado, materia, promedios_por_est, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_lineas.get():
+            if chk["lineas"]:
                 self.dibujar_lineas_trimestrales(grado, materia, row, col)
                 col += 1
                 if col > 1:
                     col = 0
                     row += 1
-            if self.chk_heat.get():
+            if chk["heat"]:
                 self.dibujar_heatmap(grado, row, col, colspan=2 if col == 0 else 1)
+                col += 1
+                if col > 1:
+                    col = 0
+                    row += 1
+            if chk.get("habitos", False):
+                self.dibujar_habitos(grado, trimestre, row, col, colspan=2 if col == 0 else 1)
 
     def dibujar_proyeccion(self, nombre, historial, row, col, colspan=1):
         import numpy as np
@@ -471,17 +631,31 @@ class GraficosFrame(ctk.CTkFrame):
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
 
-        materias = self.engine.obtener_materias_por_grado(grado)
-        if not materias or materias == ["Sin materias"]:
+        if grado == "Todos los Grados":
+            grados_activos = self.engine.obtener_grados_activos()
+        else:
+            grados_activos = [grado]
+
+        # Obtener lista unificada de materias
+        todas_materias = []
+        for g in grados_activos:
+            todas_materias.extend(self.engine.obtener_materias_por_grado(g))
+        materias = sorted(list(set(todas_materias)))
+        if "Sin materias registradas" in materias:
+            materias.remove("Sin materias registradas")
+
+        if not materias:
             ax.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='white')
         else:
             reprobados_por_materia = {}
             for mat in materias:
-                promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Anual")
-                if not promedios:
-                    # Intenta cualquier trimestre si Anual está vacío
-                    promedios = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, mat, "Trimestre 1")
-                reps = sum(1 for v in promedios.values() if v < 3.0)
+                reps = 0
+                for g in grados_activos:
+                    promedios = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, mat, "Anual")
+                    if not promedios:
+                        # Intenta cualquier trimestre si Anual está vacío
+                        promedios = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, mat, "Trimestre 1")
+                    reps += sum(1 for v in promedios.values() if v < 3.0)
                 reprobados_por_materia[mat] = reps
 
             reprobados_ordenado = dict(sorted(reprobados_por_materia.items(), key=lambda item: item[1], reverse=True))
@@ -644,13 +818,26 @@ class GraficosFrame(ctk.CTkFrame):
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
 
-        promedios_t1 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 1")
-        promedios_t2 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 2")
-        promedios_t3 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 3")
+        if grado == "Todos los Grados":
+            grados_activos = self.engine.obtener_grados_activos()
+        else:
+            grados_activos = [grado]
 
-        t1_avg = sum(promedios_t1.values()) / len(promedios_t1) if promedios_t1 else 0
-        t2_avg = sum(promedios_t2.values()) / len(promedios_t2) if promedios_t2 else 0
-        t3_avg = sum(promedios_t3.values()) / len(promedios_t3) if promedios_t3 else 0
+        t1_vals = []
+        t2_vals = []
+        t3_vals = []
+
+        for g in grados_activos:
+            p_t1 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 1")
+            p_t2 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 2")
+            p_t3 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 3")
+            t1_vals.extend(p_t1.values())
+            t2_vals.extend(p_t2.values())
+            t3_vals.extend(p_t3.values())
+
+        t1_avg = sum(t1_vals) / len(t1_vals) if t1_vals else 0
+        t2_avg = sum(t2_vals) / len(t2_vals) if t2_vals else 0
+        t3_avg = sum(t3_vals) / len(t3_vals) if t3_vals else 0
 
         y = [t1_avg, t2_avg, t3_avg]
         x = [1, 2, 3]
@@ -688,6 +875,11 @@ class GraficosFrame(ctk.CTkFrame):
         fig.patch.set_facecolor(self.C["card"])
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
+
+        if grado == "Todos los Grados":
+            grados_activos = self.engine.obtener_grados_activos()
+            if grados_activos:
+                grado = grados_activos[0]
 
         materias = self.engine.obtener_materias_por_grado(grado)
         estudiantes = []
@@ -811,3 +1003,81 @@ class GraficosFrame(ctk.CTkFrame):
             font=("Segoe UI", 12, "bold"),
             command=win.destroy
         ).pack(pady=(10, 15))
+
+    def dibujar_habitos(self, grado, trimestre, row, col, colspan=1):
+        import os
+        f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
+        if colspan > 1:
+            f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
+        else:
+            f_grafico.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)
+
+        fig = Figure(figsize=(6.5, 4), dpi=100)
+        ax = fig.add_subplot(111)
+        fig.patch.set_facecolor(self.C["card"])
+        ax.set_facecolor(self.C["card"])
+        self.fig_objs.append(fig)
+
+        import json
+        ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
+        criterios_dict = {}
+        try:
+            if os.path.exists(ruta_json):
+                with open(ruta_json, "r", encoding="utf-8") as f:
+                    habitos_data = json.load(f)
+                
+                for key, val_entry in habitos_data.items():
+                    parts = key.split("::")
+                    k_grado = parts[0]
+                    k_trim = parts[1] if len(parts) > 1 else ""
+                    
+                    if (grado == "Todos los Grados" or grado.replace("°","") in k_grado.replace("°","")) and \
+                       (trimestre == "Todos los Trimestres" or k_trim.lower() == trimestre.lower()):
+                        
+                        est_evals = val_entry.get("estudiantes", {})
+                        for est_id, crit_vals in est_evals.items():
+                            for crit, score in crit_vals.items():
+                                if crit not in criterios_dict:
+                                    criterios_dict[crit] = {"S": 0, "R": 0, "X": 0}
+                                if score in ["S", "R", "X"]:
+                                    criterios_dict[crit][score] += 1
+        except Exception as e:
+            print(f"Error cargando habitos para grafico: {e}")
+
+        if not criterios_dict:
+            ax.text(0.5, 0.5, "Sin Datos de Hábitos", ha='center', va='center', color='white')
+            ax.set_axis_off()
+        else:
+            criterios = list(criterios_dict.keys())
+            s_vals = [criterios_dict[c]["S"] for c in criterios]
+            r_vals = [criterios_dict[c]["R"] for c in criterios]
+            x_vals = [criterios_dict[c]["X"] for c in criterios]
+
+            import numpy as np
+            ind = np.arange(len(criterios))
+            width = 0.5
+
+            # Stacked bars
+            ax.bar(ind, s_vals, width, label="S (Satisfactorio)", color=self.C["verde"])
+            ax.bar(ind, r_vals, width, bottom=s_vals, label="R (Regular)", color=self.C["amarillo"])
+            bottom_x = [s + r for s, r in zip(s_vals, r_vals)]
+            ax.bar(ind, x_vals, width, bottom=bottom_x, label="X (No Satisface)", color=self.C["rojo"])
+
+            criterios_clean = [c.replace(" y ", "\ny ").replace(" en ", "\nen ").replace(" a la ", "\na la ").replace(" de la ", "\nde la ") for c in criterios]
+            ax.set_xticks(ind)
+            ax.set_xticklabels(criterios_clean, color="white", fontsize=7, rotation=35, ha='right')
+            ax.tick_params(colors="white", labelsize=8)
+            ax.legend(facecolor=self.C["card"], edgecolor=self.C["borde"], labelcolor="white", fontsize=8)
+            ax.grid(axis='y', color=self.C["borde"], linestyle='--', alpha=0.5)
+            
+            for spine in ['top', 'right']:
+                ax.spines[spine].set_visible(False)
+            ax.spines['left'].set_color(self.C["borde"])
+            ax.spines['bottom'].set_color(self.C["borde"])
+
+        ax.set_title("Hábitos y Actitudes del Salón", color=self.C["cian"], pad=20, fontweight="bold")
+
+        canvas = FigureCanvasTkAgg(fig, master=f_grafico)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+        ctk.CTkButton(f_grafico, text="⬇️ a Word", width=80, height=24, fg_color="#334155", hover_color="#475569", command=lambda f=fig, t=ax.get_title(): self.exportar_grafico_individual(f, t)).place(relx=0.98, rely=0.02, anchor="ne")

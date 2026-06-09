@@ -16,8 +16,8 @@ except ImportError:
     DOCX_DISPONIBLE = False
 
 # DICCIONARIOS DE TRADUCCIÓN PANTALLA <-> EXCEL
-UI_A_EXCEL = {"P": ".", "A": "-", "T": "T"}
-EXCEL_A_UI = {".": "P", "-": "A", "T": "T", None: "P"}
+UI_A_EXCEL = {"P": ".", "A": "-", "T": "T", "E": "E"}
+EXCEL_A_UI = {".": "P", "-": "A", "T": "T", "E": "E", None: "P"}
 
 
 class AsistenciaFrame(ctk.CTkFrame):
@@ -165,6 +165,34 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.entry_fecha.insert(0, datetime.datetime.now().strftime("%d-%m"))
         self.entry_fecha.pack(fill="x", padx=10, pady=5)
 
+        # ─── ACCIONES RÁPIDAS ───
+        quick_frame = ctk.CTkFrame(tab_nueva, fg_color="transparent")
+        quick_frame.pack(fill="x", padx=10, pady=(15, 5))
+
+        ctk.CTkButton(
+            quick_frame,
+            text="✅ Todos Presentes",
+            fg_color="#10B981",
+            hover_color="#059669",
+            font=("Segoe UI", 11, "bold"),
+            height=30,
+            command=lambda: self._marcar_todos("P")).pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        ctk.CTkButton(
+            quick_frame,
+            text="❌ Todos Ausentes",
+            fg_color="#EF4444",
+            hover_color="#DC2626",
+            font=("Segoe UI", 11, "bold"),
+            height=30,
+            command=lambda: self._marcar_todos("A")).pack(side="left", expand=True, fill="x", padx=(4, 0))
+
+        ctk.CTkLabel(
+            tab_nueva,
+            text="💡 Marque todos presentes y corrija solo las excepciones",
+            font=("Segoe UI", 10),
+            text_color="#94A3B8").pack(padx=10, pady=(2, 8))
+
         self.btn_guardar_nueva = ctk.CTkButton(
             tab_nueva,
             text="💾 GUARDAR ASISTENCIA",
@@ -176,7 +204,7 @@ class AsistenciaFrame(ctk.CTkFrame):
                 "bold"),
             height=40,
             command=self.guardar_asistencia)
-        self.btn_guardar_nueva.pack(pady=30, padx=10, fill="x")
+        self.btn_guardar_nueva.pack(pady=10, padx=10, fill="x")
 
         # ====== TAB: MODIFICAR ASISTENCIA ======
         ctk.CTkLabel(
@@ -272,8 +300,9 @@ class AsistenciaFrame(ctk.CTkFrame):
                 values=[
                     "P",
                     "A",
-                    "T"],
-                width=120,
+                    "T",
+                    "E"],
+                width=160,
                 selected_color="#3B82F6")
             seg_btn.set("P")
             seg_btn.pack(side="left", padx=10)
@@ -281,7 +310,7 @@ class AsistenciaFrame(ctk.CTkFrame):
             # Bloqueado por defecto porque inicia en "P" (Presente)
             entry_exc = ctk.CTkEntry(
                 row,
-                placeholder_text="Solo si falta o llega tarde",
+                placeholder_text="Solo si falta, tarde o excusa",
                 fg_color="#0F1923",
                 state="disabled")
             entry_exc.pack(side="left", fill="x", expand=True, padx=5)
@@ -292,12 +321,17 @@ class AsistenciaFrame(ctk.CTkFrame):
                     valor,
                     entry))
 
+            # Bind keyboard navigation on the excuse entries
+            entry_exc.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+            entry_exc.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+            entry_exc.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+
             self.entradas_asistencia[est['id']] = {
                 "nombre": est['nombre'], "btn": seg_btn, "exc": entry_exc}
 
     def activar_excusa(self, valor, entry_widget):
-        """Habilita la casilla SOLO para ausencias y tardanzas."""
-        if valor in ["A", "T"]:
+        """Habilita la casilla SOLO para ausencias, tardanzas y excusas."""
+        if valor in ["A", "T", "E"]:
             entry_widget.configure(
                 state="normal",
                 placeholder_text="Escriba la justificación...")
@@ -305,7 +339,23 @@ class AsistenciaFrame(ctk.CTkFrame):
             entry_widget.delete(0, "end")
             entry_widget.configure(
                 state="disabled",
-                placeholder_text="Solo si falta o llega tarde")
+                placeholder_text="Solo si falta, tarde o excusa")
+
+    def _marcar_todos(self, estado):
+        """Marca todos los alumnos con el estado dado (P, A, T, E)."""
+        for id_est, widgets in self.entradas_asistencia.items():
+            widgets["btn"].set(estado)
+            self.activar_excusa(estado, widgets["exc"])
+        # Toast feedback
+        root = self.winfo_toplevel()
+        if estado == "P":
+            msg = "✅ Todos marcados como PRESENTES — corrija las excepciones"
+            color = "#10B981"
+        else:
+            msg = "❌ Todos marcados como AUSENTES — corrija las excepciones"
+            color = "#EF4444"
+        if hasattr(root, "mostrar_toast"):
+            root.mostrar_toast(msg, color=color)
 
     def cargar_fechas(self, *args):
         grado = self.combo_grado.get()
@@ -330,15 +380,40 @@ class AsistenciaFrame(ctk.CTkFrame):
             estado_excel = UI_A_EXCEL.get(estado_ui, ".")
             dic_asistencia[id_est] = {"estado": estado_excel}
 
-            # Solo guardamos excusas si es Ausencia o Tardanza
-            if estado_ui in ["A", "T"]:
-                tipo_reg = "Ausencia" if estado_ui == "A" else "Tardanza"
+            # Guardamos excusas si es Ausencia, Tardanza o Excusa
+            if estado_ui in ["A", "T", "E"]:
+                if estado_ui == "A":
+                    tipo_reg = "Ausencia"
+                elif estado_ui == "T":
+                    tipo_reg = "Tardanza"
+                else:
+                    tipo_reg = "Excusa Justificada"
                 lista_excusas.append({
                     "nombre": widgets["nombre"],
                     "estado": tipo_reg,
                     "motivo": excusa if excusa else "Falta sin justificar"
                 })
         return dic_asistencia, lista_excusas
+
+    def _obtener_justificacion_word(self, nombre_est, grado, fecha):
+        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
+        nombre_archivo = f"{nombre_est} - {grado.replace('°', '')}.docx".replace("/", "-")
+        ruta_archivo = os.path.join(carpeta, nombre_archivo)
+        if os.path.exists(ruta_archivo) and DOCX_DISPONIBLE:
+            try:
+                doc = Document(ruta_archivo)
+                if doc.tables:
+                    tabla = doc.tables[0]
+                    for row in reversed(tabla.rows[1:]):
+                        if len(row.cells) >= 4:
+                            f = row.cells[1].text.strip()
+                            t = row.cells[2].text.strip()
+                            desc = row.cells[3].text.strip()
+                            if f == fecha and t in ["Ausencia", "Tardanza", "Excusa Justificada"]:
+                                return desc
+            except Exception as e:
+                print(f"Error cargando justificación de Word para {nombre_est}: {e}")
+        return ""
 
     def guardar_asistencia(self):
         grado = self.combo_grado.get()
@@ -350,6 +425,17 @@ class AsistenciaFrame(ctk.CTkFrame):
             return
 
         dic_asistencia, lista_excusas = self.recopilar_datos()
+
+        # Validar si hay faltas/tardanzas/excusas sin justificación escrita
+        for exc in lista_excusas:
+            if exc["motivo"] == "Falta sin justificar":
+                msg_alerta = (
+                    f"El estudiante {exc['nombre']} está marcado como '{exc['estado']}' pero no se ha escrito un motivo o justificación.\n\n"
+                    "Recuerde preguntar al grupo o acudiente si se sabe la razón (ej. cita, enfermedad, transporte).\n\n"
+                    "¿Desea guardarlo como 'Falta sin justificar'?"
+                )
+                if not messagebox.askyesno("Justificación Faltante", msg_alerta):
+                    return
 
         self.btn_guardar_nueva.configure(
             text="⏳ GUARDANDO...",
@@ -376,8 +462,11 @@ class AsistenciaFrame(ctk.CTkFrame):
             return
 
         self.cargar_fechas()
-        self.procesar_expedientes_word(
-            grado, fecha, lista_excusas, "Guardado exitoso.")
+        threading.Thread(
+            target=self.procesar_expedientes_word,
+            args=(grado, fecha, lista_excusas, "Guardado exitoso."),
+            daemon=True
+        ).start()
         self.cargar_estudiantes(grado)
 
     def buscar_modificar(self):
@@ -403,6 +492,10 @@ class AsistenciaFrame(ctk.CTkFrame):
                 widgets["btn"].set(estado_ui)
                 self.activar_excusa(estado_ui, widgets["exc"])
                 widgets["exc"].delete(0, 'end')
+                if estado_ui in ["A", "T", "E"]:
+                    motivo_guardado = self._obtener_justificacion_word(widgets["nombre"], grado, fecha)
+                    if motivo_guardado:
+                        widgets["exc"].insert(0, motivo_guardado)
 
         messagebox.showinfo(
             "Modo Edición",
@@ -416,6 +509,17 @@ class AsistenciaFrame(ctk.CTkFrame):
         trimestre = self.combo_trimestre_mod.get()
         fecha = self.combo_fechas_mod.get()
         dic_asistencia, lista_excusas = self.recopilar_datos()
+
+        # Validar si hay faltas/tardanzas/excusas sin justificación escrita en el modo edición
+        for exc in lista_excusas:
+            if exc["motivo"] == "Falta sin justificar":
+                msg_alerta = (
+                    f"El estudiante {exc['nombre']} está marcado como '{exc['estado']}' pero no se ha escrito un motivo o justificación.\n\n"
+                    "Recuerde preguntar al grupo o acudiente si se sabe la razón (ej. cita, enfermedad, transporte).\n\n"
+                    "¿Desea guardarlo como 'Falta sin justificar'?"
+                )
+                if not messagebox.askyesno("Justificación Faltante", msg_alerta):
+                    return
 
         self.btn_actualizar.configure(
             text="⏳ ACTUALIZANDO...",
@@ -439,8 +543,11 @@ class AsistenciaFrame(ctk.CTkFrame):
             state="normal")
         if exito:
             self.col_a_modificar = None
-            self.procesar_expedientes_word(
-                grado, fecha, lista_excusas, "Asistencia actualizada correctamente.")
+            threading.Thread(
+                target=self.procesar_expedientes_word,
+                args=(grado, fecha, lista_excusas, "Asistencia actualizada correctamente."),
+                daemon=True
+            ).start()
             self.cargar_estudiantes(grado)
         else:
             messagebox.showerror("Error", "No se pudo actualizar.")
@@ -455,15 +562,11 @@ class AsistenciaFrame(ctk.CTkFrame):
             lista_excusas,
             mensaje_base):
         if not lista_excusas:
-            root = self.winfo_toplevel()
-            if hasattr(root, "mostrar_toast"):
-                root.mostrar_toast(f"✓ {mensaje_base} (Asistencia perfecta)", color="#10B981")
+            self.after(0, lambda: self._mostrar_toast_safe(f"✓ {mensaje_base} (Asistencia perfecta)", "#10B981"))
             return
 
         if not DOCX_DISPONIBLE:
-            root = self.winfo_toplevel()
-            if hasattr(root, "mostrar_toast"):
-                root.mostrar_toast(f"✓ {mensaje_base} (Falta python-docx)", color="#F59E0B")
+            self.after(0, lambda: self._mostrar_toast_safe(f"✓ {mensaje_base} (Falta python-docx)", "#F59E0B"))
             return
 
         carpeta_expedientes = os.path.join(
@@ -480,9 +583,8 @@ class AsistenciaFrame(ctk.CTkFrame):
                 exc['estado'],
                 exc['motivo'])
 
-        root = self.winfo_toplevel()
-        if hasattr(root, "mostrar_toast"):
-            root.mostrar_toast(f"✓ {mensaje_base} (Expedientes actualizados)", color="#10B981")
+        self.after(0, lambda: self._mostrar_toast_safe(f"✓ {mensaje_base} (Expedientes actualizados)", "#10B981"))
+
 
     def _actualizar_o_crear_word(
             self,
@@ -503,12 +605,27 @@ class AsistenciaFrame(ctk.CTkFrame):
                 doc = Document(ruta_archivo)
                 if doc.tables:
                     tabla = doc.tables[0]
-                    num_reg = str(len(tabla.rows))
-                    fila = tabla.add_row()
-                    fila.cells[0].text = num_reg
-                    fila.cells[1].text = fecha
-                    fila.cells[2].text = tipo
-                    fila.cells[3].text = motivo
+                    
+                    # Buscar si ya existe una fila de asistencia para esta fecha
+                    fila_existente = None
+                    for row in tabla.rows[1:]:
+                        if len(row.cells) >= 4:
+                            f = row.cells[1].text.strip()
+                            t = row.cells[2].text.strip()
+                            if f == fecha and t in ["Ausencia", "Tardanza", "Excusa Justificada"]:
+                                fila_existente = row
+                                break
+                    
+                    if fila_existente:
+                        fila_existente.cells[2].text = tipo
+                        fila_existente.cells[3].text = motivo
+                    else:
+                        num_reg = str(len(tabla.rows))
+                        fila = tabla.add_row()
+                        fila.cells[0].text = num_reg
+                        fila.cells[1].text = fecha
+                        fila.cells[2].text = tipo
+                        fila.cells[3].text = motivo
                 doc.save(ruta_archivo)
             except Exception as e:
                 print(f"No se pudo actualizar el Word de {nombre_est}: {e}")
@@ -528,25 +645,32 @@ class AsistenciaFrame(ctk.CTkFrame):
             run1.bold = True
             run1.font.size = Pt(14)
 
-            run2 = p_head.add_run("ESCUELA CERRO CACICÓN\n")
+            from rdsecurity import cargar_config_segura
+            cfg = cargar_config_segura({})
+            docente = cfg.get("docente_nombre", "Elmer Tugri")
+            escuela = cfg.get("escuela_nombre", "ESCUELA CERRO CACICÓN")
+            ano = cfg.get("ano_lectivo", "2026")
+
+            run2 = p_head.add_run(f"{escuela.upper()}\n")
             run2.bold = True
             run2.font.size = Pt(12)
 
-            run3 = p_head.add_run("DIRECCIÓN REGIONAL COMARCA NGÄBE BUGLÉ")
+            run3 = p_head.add_run("DIRECCIÓN REGIONAL DE EDUCACIÓN")
             run3.font.size = Pt(11)
 
             doc.add_paragraph("\n")
 
             p_info = doc.add_paragraph()
             p_info.add_run("Docente: ").bold = True
-            p_info.add_run("Elmer Tugri\t\t\t")
+            p_info.add_run(f"{docente}\t\t\t")
             p_info.add_run("Estudiante: ").bold = True
             p_info.add_run(f"{nombre_est}\n")
 
             p_info.add_run("Grado: ").bold = True
             p_info.add_run(f"{grado}\t\t\t\t")
             p_info.add_run("Año Lectivo: ").bold = True
-            p_info.add_run("2026")
+            p_info.add_run(ano)
+
 
             doc.add_paragraph("\n")
 
@@ -592,3 +716,54 @@ class AsistenciaFrame(ctk.CTkFrame):
                 doc.save(ruta_archivo)
             except Exception as e:
                 print(f"Error guardando Word: {e}")
+
+    def _mostrar_toast_safe(self, mensaje, color):
+        root = self.winfo_toplevel()
+        if hasattr(root, "mostrar_toast"):
+            root.mostrar_toast(mensaje, color=color)
+
+    def al_presionar_enter(self, id_est):
+        self.al_presionar_abajo(id_est)
+        return "break"
+
+    def al_presionar_abajo(self, id_est):
+        ids = sorted(list(self.entradas_asistencia.keys()))
+        try:
+            curr_idx = ids.index(id_est)
+            for i in range(curr_idx + 1, len(ids)):
+                next_id = ids[i]
+                widgets = self.entradas_asistencia[next_id]
+                entry = widgets["exc"]
+                if entry.cget("state") != "disabled":
+                    entry.focus_set()
+                    entry.select_range(0, 'end')
+                    break
+        except ValueError:
+            pass
+
+    def al_presionar_arriba(self, id_est):
+        ids = sorted(list(self.entradas_asistencia.keys()))
+        try:
+            curr_idx = ids.index(id_est)
+            for i in range(curr_idx - 1, -1, -1):
+                prev_id = ids[i]
+                widgets = self.entradas_asistencia[prev_id]
+                entry = widgets["exc"]
+                if entry.cget("state") != "disabled":
+                    entry.focus_set()
+                    entry.select_range(0, 'end')
+                    break
+        except ValueError:
+            pass
+
+    def actualizar_vista(self):
+        """Recarga la lista de grados y estudiantes."""
+        opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=opciones)
+        if old_sel in opciones:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(opciones[0])
+        self.al_cambiar_grado(self.combo_grado.get())
+

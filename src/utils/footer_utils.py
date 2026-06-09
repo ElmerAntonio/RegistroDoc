@@ -67,3 +67,17 @@ def get_school_logo_path():
         return internal_path
 
     return ""
+
+def abrir_documento(ruta):
+    """Abre el archivo recién creado en el visor predeterminado del sistema (multiplataforma)."""
+    import subprocess
+    try:
+        if sys.platform == "win32":
+            os.startfile(ruta)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", ruta])
+        else:
+            subprocess.run(["xdg-open", ruta])
+    except Exception:
+        pass # No bloquear si no se puede abrir
+

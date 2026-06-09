@@ -10,6 +10,8 @@ class NotasFrame(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.engine = engine
         self.entradas_notas = {}
+        self.pills_notas = {}
+        self.estudiantes_notas = {}
         self.col_a_modificar = None
 
         self.grid_columnconfigure(0, weight=8)
@@ -64,6 +66,21 @@ class NotasFrame(ctk.CTkFrame):
 
         tab_nueva = self.tabs.add("Nueva Nota")
         tab_mod = self.tabs.add("Modificar")
+        tab_puntos = self.tabs.add("Escala Puntos")
+        tab_tareas = self.tabs.add("Tareas")
+
+        self.scroll_tareas_tab = ctk.CTkScrollableFrame(tab_tareas, fg_color="transparent")
+        self.scroll_tareas_tab.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.btn_nueva_t = ctk.CTkButton(
+            tab_tareas,
+            text="➕ Programar Tarea",
+            fg_color="#10B981",
+            hover_color="#059669",
+            font=("Segoe UI", 12, "bold"),
+            command=self.abrir_modal_programar_tarea
+        )
+        self.btn_nueva_t.pack(fill="x", padx=10, pady=(5, 10))
 
         # ====== TAB: NUEVA NOTA ======
         self.combo_trimestre = ctk.CTkOptionMenu(
@@ -102,7 +119,18 @@ class NotasFrame(ctk.CTkFrame):
                 "bold"),
             height=40,
             command=self.guardar_notas)
-        self.btn_guardar_nueva.pack(pady=20, padx=10, fill="x")
+        self.btn_guardar_nueva.pack(pady=10, padx=10, fill="x")
+
+        self.btn_programar_tarea = ctk.CTkButton(
+            tab_nueva,
+            text="📅 PROGRAMAR COMO TAREA",
+            fg_color="#6366F1",
+            hover_color="#4F46E5",
+            font=("Segoe UI", 12, "bold"),
+            height=32,
+            command=self.abrir_modal_programar_tarea
+        )
+        self.btn_programar_tarea.pack(pady=(5, 10), padx=10, fill="x")
 
         # ====== TAB: MODIFICAR NOTA ======
         self.combo_trimestre_mod = ctk.CTkOptionMenu(
@@ -148,6 +176,36 @@ class NotasFrame(ctk.CTkFrame):
             command=self.actualizar_notas)
         self.btn_actualizar.pack(pady=5, padx=10, fill="x")
 
+        # ====== TAB: ESCALA PUNTOS ======
+        self.var_usar_puntos = ctk.BooleanVar(value=False)
+        self.switch_puntos = ctk.CTkSwitch(
+            tab_puntos, text="Habilitar Conversor",
+            variable=self.var_usar_puntos, command=self.al_cambiar_modo_puntos
+        )
+        self.switch_puntos.pack(fill="x", padx=10, pady=15)
+
+        ctk.CTkLabel(tab_puntos, text="Puntaje Máximo:", font=("Segoe UI", 12)).pack(anchor="w", padx=10)
+        self.entry_pts_max = ctk.CTkEntry(tab_puntos, justify="center")
+        self.entry_pts_max.insert(0, "40")
+        self.entry_pts_max.pack(fill="x", padx=10, pady=5)
+        self.entry_pts_max.bind("<KeyRelease>", lambda e: self.recalcular_escala_visual())
+
+        ctk.CTkLabel(tab_puntos, text="Nivel de Exigencia:", font=("Segoe UI", 12)).pack(anchor="w", padx=10)
+        self.combo_exigencia = ctk.CTkOptionMenu(
+            tab_puntos, values=["50%", "60%", "70%"],
+            command=lambda _: self.recalcular_escala_visual()
+        )
+        self.combo_exigencia.set("60%")
+        self.combo_exigencia.pack(fill="x", padx=10, pady=5)
+
+        self.btn_ver_tabla_puntos = ctk.CTkButton(
+            tab_puntos, text="📋 Ver Tabla de Escala",
+            fg_color="#8B5CF6", hover_color="#7C3AED",
+            font=("Segoe UI", 12, "bold"),
+            command=self.abrir_tabla_puntos_modal
+        )
+        self.btn_ver_tabla_puntos.pack(fill="x", padx=10, pady=20)
+
     def actualizar_contador_desc(self, *args):
         texto = self.var_desc.get()
         if len(texto) > 25:
@@ -189,6 +247,8 @@ class NotasFrame(ctk.CTkFrame):
         for w in self.scroll_estudiantes.winfo_children():
             w.destroy()
         self.entradas_notas.clear()
+        self.pills_notas.clear()
+        self.estudiantes_notas.clear()
         self.col_a_modificar = None
 
         # Header Row
@@ -204,9 +264,37 @@ class NotasFrame(ctk.CTkFrame):
             row.pack(fill="x", pady=2)
             ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
             ctk.CTkLabel(row, text=est['nombre'], anchor="w").pack(side="left", fill="x", expand=True, padx=(10, 10))
+            
+            # Botón de informe individual (boletín)
+            btn_inf = ctk.CTkButton(
+                row, text="📄 Boletín", width=78, height=24,
+                fg_color="transparent", hover_color="#2A3B50",
+                text_color="#10B981", font=("Segoe UI", 11, "bold"),
+                command=lambda e=est: self.generar_informe_estudiante(e)
+            )
+            btn_inf.pack(side="right", padx=5)
+
+            # Pill/Badge de nota calculada por puntos en tiempo real (si está activo el conversor)
+            lbl_pill = ctk.CTkLabel(
+                row, text="", width=45, height=20, corner_radius=10,
+                font=("Segoe UI", 10, "bold"), text_color="white", fg_color="transparent"
+            )
+            lbl_pill.pack(side="right", padx=5)
+
             entry = ctk.CTkEntry(row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
             entry.pack(side="right", padx=10)
+            
+            # Evento key release para calcular la nota por puntos en tiempo real
+            entry.bind("<KeyRelease>", lambda e, eid=est['id']: self.al_cambiar_puntos_estudiante(eid))
+            
+            # Keyboard navigation
+            entry.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+            entry.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+            entry.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+            
             self.entradas_notas[est['id']] = [entry]
+            self.pills_notas[est['id']] = lbl_pill
+            self.estudiantes_notas[est['id']] = est
 
     def cargar_descripciones(self, *args):
         grado = self.combo_grado.get()
@@ -224,14 +312,255 @@ class NotasFrame(ctk.CTkFrame):
             self.combo_desc_mod.configure(values=vacio)
             self.combo_desc_mod.set(vacio[0])
 
+        if hasattr(self, 'scroll_tareas_tab'):
+            self.actualizar_tab_tareas()
+
+    def actualizar_vista(self):
+        self.al_cambiar_grado(self.combo_grado.get())
+
+    def actualizar_tab_tareas(self):
+        for w in self.scroll_tareas_tab.winfo_children():
+            w.destroy()
+            
+        grado = self.combo_grado.get()
+        materia = self.combo_materia.get()
+        
+        if not grado or not materia:
+            return
+            
+        from tareas import cargar_tareas
+        all_tareas = cargar_tareas()
+        
+        filtered_tareas = [
+            t for t in all_tareas
+            if t.get("grado") == grado and (t.get("materia") == materia or t.get("materia") == "General")
+        ]
+        
+        if not filtered_tareas:
+            ctk.CTkLabel(
+                self.scroll_tareas_tab,
+                text="No hay tareas programadas\npara esta materia.",
+                font=("Segoe UI", 12),
+                text_color="#94A3B8"
+            ).pack(pady=30)
+            return
+            
+        pendientes = [t for t in filtered_tareas if not t.get("completada")]
+        completadas = [t for t in filtered_tareas if t.get("completada")]
+        
+        import datetime
+        hoy = datetime.date.today()
+        
+        def calculate_urgencia(fecha_str):
+            try:
+                partes = fecha_str.split("-")
+                fecha = datetime.date(int(partes[2]), int(partes[1]), int(partes[0]))
+                dias = (fecha - hoy).days
+                if dias < 0:
+                    return "vencida", dias
+                elif dias == 0:
+                    return "hoy", 0
+                elif dias <= 2:
+                    return "urgente", dias
+                else:
+                    return "normal", dias
+            except Exception:
+                return "normal", 999
+                
+        if pendientes:
+            ctk.CTkLabel(
+                self.scroll_tareas_tab,
+                text="⏳ PENDIENTES",
+                font=("Segoe UI", 11, "bold"),
+                text_color="#F59E0B"
+            ).pack(anchor="w", padx=5, pady=(5, 5))
+            
+            for t in pendientes:
+                urg, dias = calculate_urgencia(t["fecha_limite"])
+                colores_urg = {
+                    "vencida": "#EF4444", "hoy": "#F59E0B",
+                    "urgente": "#FB923C", "normal": "#475569"
+                }
+                color_b = colores_urg.get(urg, "#475569")
+                
+                card = ctk.CTkFrame(
+                    self.scroll_tareas_tab,
+                    fg_color="#1E293B",
+                    border_width=1,
+                    border_color=color_b,
+                    corner_radius=8
+                )
+                card.pack(fill="x", pady=4, padx=2)
+                
+                ctk.CTkLabel(
+                    card,
+                    text=t["titulo"],
+                    font=("Segoe UI", 12, "bold"),
+                    text_color="white",
+                    anchor="w",
+                    justify="left"
+                ).pack(anchor="w", padx=10, pady=(6, 0))
+                
+                dias_txt = ""
+                if urg == "vencida":
+                    dias_txt = f" (Vencida hace {-dias}d)"
+                elif urg == "hoy":
+                    dias_txt = " (Hoy!)"
+                elif urg == "urgente":
+                    dias_txt = f" (En {dias}d)"
+                
+                ctk.CTkLabel(
+                    card,
+                    text=f"{t['tipo']} | Lim: {t['fecha_limite']}{dias_txt}",
+                    font=("Segoe UI", 10),
+                    text_color=color_b,
+                    anchor="w"
+                ).pack(anchor="w", padx=10, pady=(0, 4))
+                
+                btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+                btn_frame.pack(fill="x", padx=10, pady=(0, 6))
+                
+                def marcar_comp(tid=t["id"]):
+                    from tareas import marcar_completada
+                    marcar_completada(tid)
+                    self.actualizar_tab_tareas()
+                    root = self.winfo_toplevel()
+                    if hasattr(root, "mostrar_toast"):
+                        root.mostrar_toast("✓ Tarea completada")
+                    if hasattr(root, "main_app") and hasattr(root.main_app, "_frames"):
+                        dashboard = root.main_app._frames.get("DashboardFrame")
+                        if dashboard and hasattr(dashboard, "actualizar_vista"):
+                            dashboard.actualizar_vista()
+                
+                ctk.CTkButton(
+                    btn_frame,
+                    text="✓",
+                    width=28,
+                    height=24,
+                    fg_color="#10B981",
+                    hover_color="#059669",
+                    command=marcar_comp
+                ).pack(side="left", padx=2)
+                
+                def calificar_tarea(tit=t["titulo"], ttype=t["tipo"], date=t["fecha_limite"]):
+                    self.tabs.set("Nueva Nota")
+                    self.var_desc.set(tit[:20])
+                    
+                    mapped_type = "Diaria / Parcial"
+                    if ttype in ["Apreciación", "Asistencia", "Hábitos"]:
+                        mapped_type = "Apreciación"
+                    elif ttype == "Examen":
+                        mapped_type = "Examen"
+                    
+                    self.combo_tipo.set(mapped_type)
+                    self.al_cambiar_tipo_nota(mapped_type)
+                    
+                    try:
+                        partes = date.split("-")
+                        fecha_mm_dd = f"{partes[1]}-{partes[0]}"
+                        self.entry_fecha.delete(0, "end")
+                        self.entry_fecha.insert(0, fecha_mm_dd)
+                    except Exception:
+                        pass
+                        
+                ctk.CTkButton(
+                    btn_frame,
+                    text="📝 Calificar",
+                    width=75,
+                    height=24,
+                    fg_color="#3B82F6",
+                    hover_color="#2563EB",
+                    font=("Segoe UI", 10, "bold"),
+                    command=calificar_tarea
+                ).pack(side="left", padx=2)
+                
+                def del_t(tid=t["id"]):
+                    if messagebox.askyesno("Confirmar", "¿Desea eliminar esta tarea programada?"):
+                        from tareas import eliminar_tarea
+                        eliminar_tarea(tid)
+                        self.actualizar_tab_tareas()
+                        root = self.winfo_toplevel()
+                        if hasattr(root, "mostrar_toast"):
+                            root.mostrar_toast("Tarea eliminada")
+                        if hasattr(root, "main_app") and hasattr(root.main_app, "_frames"):
+                            dashboard = root.main_app._frames.get("DashboardFrame")
+                            if dashboard and hasattr(dashboard, "actualizar_vista"):
+                                dashboard.actualizar_vista()
+                                
+                ctk.CTkButton(
+                    btn_frame,
+                    text="🗑️",
+                    width=28,
+                    height=24,
+                    fg_color="#EF4444",
+                    hover_color="#DC2626",
+                    command=del_t
+                ).pack(side="right", padx=2)
+                
+        if completadas:
+            ctk.CTkLabel(
+                self.scroll_tareas_tab,
+                text="✅ COMPLETADAS",
+                font=("Segoe UI", 11, "bold"),
+                text_color="#10B981"
+            ).pack(anchor="w", padx=5, pady=(12, 5))
+            
+            for t in completadas[-5:]:
+                card = ctk.CTkFrame(
+                    self.scroll_tareas_tab,
+                    fg_color="#0F172A",
+                    border_width=1,
+                    border_color="#334155",
+                    corner_radius=8
+                )
+                card.pack(fill="x", pady=4, padx=2)
+                
+                ctk.CTkLabel(
+                    card,
+                    text=t["titulo"],
+                    font=("Segoe UI", 11, "bold", "overstrike"),
+                    text_color="#64748B",
+                    anchor="w",
+                    justify="left"
+                ).pack(anchor="w", padx=10, pady=(6, 0))
+                
+                ctk.CTkLabel(
+                    card,
+                    text=f"{t['tipo']} | Lim: {t['fecha_limite']}",
+                    font=("Segoe UI", 9),
+                    text_color="#475569",
+                    anchor="w"
+                ).pack(anchor="w", padx=10, pady=(0, 6))
+                
+                btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+                btn_frame.pack(fill="x", padx=10, pady=(0, 6))
+                
+                def del_t(tid=t["id"]):
+                    if messagebox.askyesno("Confirmar", "¿Desea eliminar esta tarea programada?"):
+                        from tareas import eliminar_tarea
+                        eliminar_tarea(tid)
+                        self.actualizar_tab_tareas()
+                        root = self.winfo_toplevel()
+                        if hasattr(root, "mostrar_toast"):
+                            root.mostrar_toast("Tarea eliminada")
+                        if hasattr(root, "main_app") and hasattr(root.main_app, "_frames"):
+                            dashboard = root.main_app._frames.get("DashboardFrame")
+                            if dashboard and hasattr(dashboard, "actualizar_vista"):
+                                dashboard.actualizar_vista()
+                                
+                ctk.CTkButton(
+                    btn_frame,
+                    text="🗑️",
+                    width=28,
+                    height=24,
+                    fg_color="#EF4444",
+                    hover_color="#DC2626",
+                    command=del_t
+                ).pack(side="right", padx=2)
+
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
         for id_est, entries_list in self.entradas_notas.items():
-            # Only read the first one for backwards compatibility
-            # or the last active if requested
-            # Since the original code had 1 entry, and the prompt implies
-            # a grid of many, we adapt it to pick up whatever the user typed.
-            # For simplicity, we get the first non-empty.
             val = ""
             for entry in entries_list:
                 if entry.get().strip():
@@ -239,6 +568,24 @@ class NotasFrame(ctk.CTkFrame):
                     break
 
             if val:
+                # Si el conversor de puntos está habilitado, convertir los puntos a nota
+                if self.var_usar_puntos.get():
+                    try:
+                        pts_max = float(self.entry_pts_max.get())
+                    except (ValueError, TypeError):
+                        pts_max = 40.0
+                    pct_str = self.combo_exigencia.get().replace("%", "")
+                    try:
+                        exigencia = float(pct_str) / 100.0
+                    except (ValueError, TypeError):
+                        exigencia = 0.60
+                    try:
+                        pts_obtenidos = float(val)
+                        nota = self.calcular_nota_meduca_puntos(pts_obtenidos, pts_max, exigencia)
+                        val = f"{nota:.1f}"
+                    except Exception:
+                        pass
+                
                 valido, nota, msg = validar_nota_meduca(val)
                 if not valido:
                     messagebox.showerror("Error", f"Error en la nota para {id_est}: {msg}")
@@ -373,3 +720,328 @@ class NotasFrame(ctk.CTkFrame):
         else:
             messagebox.showerror(
                 "Error", "No se pudieron actualizar las notas.")
+
+    def abrir_modal_programar_tarea(self):
+        from rdsecurity import cargar_config_segura
+        import tareas
+        import datetime
+        
+        grado = self.combo_grado.get()
+        materia = self.combo_materia.get()
+        tipo_nota = self.combo_tipo.get()
+        desc = self.entry_desc.get().strip()
+        if desc.startswith("Automático"):
+            desc = ""
+        fecha_nota = self.entry_fecha.get().strip()
+        
+        tipo_map = {
+            "Diaria / Parcial": "Parcial",
+            "Apreciación": "Apreciación",
+            "Examen": "Examen"
+        }
+        tipo_tarea = tipo_map.get(tipo_nota, "Otro")
+        
+        cfg = cargar_config_segura({})
+        ano = cfg.get("ano_lectivo", str(datetime.datetime.now().year))
+        
+        fecha_limite = ""
+        if fecha_nota and "-" in fecha_nota:
+            partes = fecha_nota.split("-")
+            if len(partes) == 2:
+                fecha_limite = f"{partes[1]}-{partes[0]}-{ano}"
+        
+        if not fecha_limite:
+            fecha_limite = datetime.datetime.now().strftime(f"%d-%m-%Y")
+            
+        modal = ctk.CTkToplevel(self)
+        modal.title("📅 Programar Nueva Tarea")
+        modal.geometry("380x360")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+        
+        modal.update_idletasks()
+        w = modal.winfo_width()
+        h = modal.winfo_height()
+        x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
+        y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
+        modal.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(modal, text="Grado:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(15, 0))
+        entry_g = ctk.CTkEntry(modal, width=340)
+        entry_g.insert(0, grado)
+        entry_g.configure(state="disabled")
+        entry_g.pack(padx=20, pady=2)
+        
+        ctk.CTkLabel(modal, text="Materia:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
+        entry_m = ctk.CTkEntry(modal, width=340)
+        entry_m.insert(0, materia)
+        entry_m.configure(state="disabled")
+        entry_m.pack(padx=20, pady=2)
+        
+        ctk.CTkLabel(modal, text="Título/Tema de la Tarea:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
+        entry_t = ctk.CTkEntry(modal, width=340)
+        entry_t.insert(0, desc)
+        entry_t.pack(padx=20, pady=2)
+        
+        ctk.CTkLabel(modal, text="Tipo:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
+        combo_t = ctk.CTkOptionMenu(modal, values=["Parcial", "Apreciación", "Examen", "Otro"], width=340)
+        combo_t.set(tipo_tarea)
+        combo_t.pack(padx=20, pady=2)
+        
+        ctk.CTkLabel(modal, text="Fecha Límite (DD-MM-YYYY):", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
+        entry_f = ctk.CTkEntry(modal, width=340)
+        entry_f.insert(0, fecha_limite)
+        entry_f.pack(padx=20, pady=2)
+        
+        def guardar():
+            tit = entry_t.get().strip()
+            fl = entry_f.get().strip()
+            if not tit:
+                messagebox.showwarning("Atención", "Escriba un título para la tarea.")
+                return
+            tareas.agregar_tarea(tit, grado, materia, combo_t.get(), fl, f"Programada desde Notas. Tipo: {tipo_nota}")
+            modal.destroy()
+            
+            if hasattr(self, 'scroll_tareas_tab'):
+                self.actualizar_tab_tareas()
+                
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast("✓ Tarea programada exitosamente", color="#10B981")
+            if hasattr(root, "main_app") and hasattr(root.main_app, "_frames"):
+                dashboard = root.main_app._frames.get("DashboardFrame")
+                if dashboard and hasattr(dashboard, "actualizar_vista"):
+                    dashboard.actualizar_vista()
+                
+        btn_save = ctk.CTkButton(modal, text="Agendar Tarea", fg_color="#10B981", hover_color="#059669", command=guardar)
+        btn_save.pack(pady=20)
+
+    def generar_informe_estudiante(self, est):
+        from rdsecurity import cargar_config_segura
+        from documentos_maestro import generar_informe_calificaciones
+        from utils.footer_utils import abrir_documento
+        import datetime
+        
+        grado = self.combo_grado.get()
+        # Recopilar materias con al menos una nota registrada en T1, T2 o T3
+        materias_con_nota = set()
+        notas_por_trimestre = {}
+        for t_num in [1, 2, 3]:
+            notas_t = self.engine.obtener_notas_estudiante(est["nombre"], grado, trimestre=t_num)
+            notas_por_trimestre[t_num] = notas_t
+            for mat_nombre, nota_val in notas_t.items():
+                try:
+                    val = float(nota_val)
+                    if val >= 1.0:
+                        materias_con_nota.add(mat_nombre)
+                except (TypeError, ValueError):
+                    pass
+
+        # Fallback: si el alumno no tiene ninguna nota en todo el año, usar todas las del grado
+        if not materias_con_nota:
+            all_mats = self.engine.obtener_materias_por_grado(grado)
+            materias_con_nota = set([m for m in all_mats if m not in ["Sin materias registradas", "Sin materias", "No hay materias", "General"]])
+
+        cfg = cargar_config_segura({})
+        trimestres = {}
+        for t_key, t_num in [("T1", 1), ("T2", 2), ("T3", 3)]:
+            notas_t = notas_por_trimestre[t_num]
+            materias = []
+            for mat_nombre in sorted(list(materias_con_nota)):
+                nota_val = notas_t.get(mat_nombre, None)
+                if nota_val is not None:
+                    try:
+                        val = float(nota_val)
+                    except (TypeError, ValueError):
+                        val = 0.0
+                else:
+                    val = 0.0
+                
+                materias.append({
+                    "nombre": mat_nombre,
+                    "nota": val,
+                    "estado": "APROBADO" if val >= 3.0 else "REPROBADO"
+                })
+            prom = sum(m["nota"] for m in materias if m["nota"] > 0) / len([m for m in materias if m["nota"] > 0]) if any(m["nota"] > 0 for m in materias) else 0
+            trimestres[t_key] = {"materias": materias, "promedio": round(prom, 1)}
+        
+        datos = {
+            "alumno":          est["nombre"],
+            "cedula":          est.get("cedula", ""),
+            "grado":           grado,
+            "docente_nombre":  cfg.get("docente_nombre", ""),
+            "escuela_nombre":  cfg.get("escuela_nombre", ""),
+            "ano_lectivo":     cfg.get("ano_lectivo", "2026"),
+            "fecha":           datetime.datetime.now().strftime("%d-%m-%Y"),
+            "trimestres":      trimestres,
+            "observacion_general": "",
+            "estado_final":    "EN PROCESO"
+        }
+        proms = [trimestres[tk]["promedio"] for tk in trimestres if trimestres[tk].get("promedio")]
+        if proms:
+            prom_global = sum(proms) / len(proms)
+            datos["estado_final"] = "APROBADO" if prom_global >= 3.0 else "REPROBADO"
+            
+        ruta = generar_informe_calificaciones(datos)
+        if ruta:
+            abrir_documento(ruta)
+            messagebox.showinfo("✓ Informe Generado", f"Informe de calificaciones individual generado:\n{ruta}")
+
+    def abrir_tabla_puntos_modal(self):
+        try:
+            pts_max = int(float(self.entry_pts_max.get()))
+        except Exception:
+            pts_max = 40
+            
+        pct_str = self.combo_exigencia.get().replace("%", "")
+        try:
+            exigencia = float(pct_str) / 100.0
+        except Exception:
+            exigencia = 0.60
+            
+        modal = ctk.CTkToplevel(self)
+        modal.title(f"⚖️ Tabla de Escala ({pts_max} pts, {pct_str}%)")
+        modal.geometry("300x450")
+        modal.resizable(False, False)
+        modal.transient(self)
+        
+        modal.update_idletasks()
+        w = modal.winfo_width()
+        h = modal.winfo_height()
+        x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
+        y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
+        modal.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(modal, text=f"Conversión de Puntos a Nota", font=("Segoe UI", 13, "bold")).pack(pady=10)
+        
+        scroll = ctk.CTkScrollableFrame(modal, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=15, pady=5)
+        
+        # Header of table
+        hdr = ctk.CTkFrame(scroll, fg_color="#253650")
+        hdr.pack(fill="x", pady=2)
+        ctk.CTkLabel(hdr, text="Puntos Obtenidos", width=120, font=("Segoe UI", 11, "bold")).pack(side="left", padx=10)
+        ctk.CTkLabel(hdr, text="Nota MEDUCA", width=100, font=("Segoe UI", 11, "bold")).pack(side="right", padx=10)
+        
+        for p in range(pts_max, -1, -1):
+            nota = self.calcular_nota_meduca_puntos(p, pts_max, exigencia)
+            row = ctk.CTkFrame(scroll, fg_color="#1A2638" if p % 2 == 0 else "transparent")
+            row.pack(fill="x", pady=1)
+            
+            ctk.CTkLabel(row, text=f"{p} pts", width=120).pack(side="left", padx=10)
+            color_nota = "#10B981" if nota >= 3.0 else "#EF4444"
+            ctk.CTkLabel(row, text=f"{nota:.1f}", width=100, text_color=color_nota, font=("Segoe UI", 11, "bold")).pack(side="right", padx=10)
+
+    def al_cambiar_puntos_estudiante(self, id_est):
+        if not self.var_usar_puntos.get():
+            self.pills_notas[id_est].configure(text="", fg_color="transparent")
+            return
+            
+        entry = self.entradas_notas[id_est][0]
+        val = entry.get().strip()
+        if not val:
+            self.pills_notas[id_est].configure(text="", fg_color="transparent")
+            return
+            
+        try:
+            pts_max = float(self.entry_pts_max.get())
+        except (ValueError, TypeError):
+            pts_max = 40.0
+            
+        pct_str = self.combo_exigencia.get().replace("%", "")
+        try:
+            exigencia = float(pct_str) / 100.0
+        except (ValueError, TypeError):
+            exigencia = 0.60
+            
+        try:
+            pts_obtenidos = float(val)
+            nota = self.calcular_nota_meduca_puntos(pts_obtenidos, pts_max, exigencia)
+            bg = "#10B981" if nota >= 3.0 else "#EF4444"
+            self.pills_notas[id_est].configure(text=f"{nota:.1f}", fg_color=bg)
+        except Exception:
+            self.pills_notas[id_est].configure(text="Err", fg_color="#F59E0B")
+
+    def calcular_nota_meduca_puntos(self, puntos, max_puntos, exigencia=0.6):
+        if max_puntos <= 0:
+            return 1.0
+        try:
+            pts = float(puntos)
+        except (ValueError, TypeError):
+            return 1.0
+        
+        if pts < 0:
+            pts = 0
+        if pts > max_puntos:
+            pts = max_puntos
+            
+        p_aprob = exigencia * max_puntos
+        
+        if pts < p_aprob:
+            if p_aprob == 0:
+                nota = 3.0
+            else:
+                nota = 1.0 + 2.0 * (pts / p_aprob)
+        else:
+            den = max_puntos - p_aprob
+            if den == 0:
+                nota = 5.0
+            else:
+                nota = 3.0 + 2.0 * ((pts - p_aprob) / den)
+                
+        nota = round(nota, 1)
+        if nota < 1.0:
+            nota = 1.0
+        if nota > 5.0:
+            nota = 5.0
+        return nota
+
+    def recalcular_escala_visual(self):
+        for id_est in self.entradas_notas.keys():
+            self.al_cambiar_puntos_estudiante(id_est)
+
+    def al_cambiar_modo_puntos(self):
+        self.recalcular_escala_visual()
+
+    def al_presionar_enter(self, id_est):
+        self.al_presionar_abajo(id_est)
+        return "break"
+
+    def al_presionar_abajo(self, id_est):
+        ids = sorted(list(self.entradas_notas.keys()))
+        try:
+            curr_idx = ids.index(id_est)
+            if curr_idx + 1 < len(ids):
+                next_id = ids[curr_idx + 1]
+                next_entry = self.entradas_notas[next_id][0]
+                next_entry.focus_set()
+                next_entry.select_range(0, 'end')
+        except ValueError:
+            pass
+
+    def al_presionar_arriba(self, id_est):
+        ids = sorted(list(self.entradas_notas.keys()))
+        try:
+            curr_idx = ids.index(id_est)
+            if curr_idx - 1 >= 0:
+                prev_id = ids[curr_idx - 1]
+                prev_entry = self.entradas_notas[prev_id][0]
+                prev_entry.focus_set()
+                prev_entry.select_range(0, 'end')
+        except ValueError:
+            pass
+
+    def actualizar_vista(self):
+        """Recarga los grados activos y actualiza los estudiantes."""
+        opciones = self.engine.obtener_grados_activos()
+        if not opciones:
+            opciones = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["1°"]
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=opciones)
+        if old_sel in opciones:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(opciones[0])
+        self.al_cambiar_grado(self.combo_grado.get())
+

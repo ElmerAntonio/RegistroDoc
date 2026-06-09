@@ -19,6 +19,7 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkButton(acciones_frame, text="🖨️ Solo Gráficos", fg_color="#F59E0B", command=self.imprimir_graficos).pack(side="left", padx=10)
         ctk.CTkButton(acciones_frame, text="⬇️ Gráficos a Word", fg_color="#334155", command=self.descargar_graficos).pack(side="left", padx=10)
         ctk.CTkButton(acciones_frame, text="⬇️ Exportar a Word", fg_color="#4F46E5", command=self.descargar_reportes_word).pack(side="left", padx=10)
+        ctk.CTkButton(acciones_frame, text="📄 Informe del Estudiante", fg_color="#10B981", hover_color="#059669", command=self.generar_informe_estudiante_modal).pack(side="left", padx=10)
 
         # Panel de Controles
         self.frame_controles = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=8)
@@ -38,6 +39,7 @@ class ReportesFrame(ctk.CTkFrame):
         self.tab_docente = self.tabs.add("Reporte Docente")
         self.tab_aprobados = self.tabs.add("Aprobados / Reprobados")
         self.tab_direccion = self.tabs.add("Reporte Dirección")
+        self.tab_habitos = self.tabs.add("Hábitos y Aptitudes")
 
         # Docente
         self.scroll_docente = ctk.CTkScrollableFrame(self.tab_docente, fg_color="transparent")
@@ -51,12 +53,17 @@ class ReportesFrame(ctk.CTkFrame):
         self.scroll_direccion = ctk.CTkScrollableFrame(self.tab_direccion, fg_color="transparent")
         self.scroll_direccion.pack(fill="both", expand=True)
 
+        # Habitos
+        self.scroll_habitos = ctk.CTkScrollableFrame(self.tab_habitos, fg_color="transparent")
+        self.scroll_habitos.pack(fill="both", expand=True)
+
         self.cargar_reportes(self.combo_grado.get())
 
     def cargar_reportes(self, grado):
         self._limpiar(self.scroll_docente)
         self._limpiar(self.scroll_aprobados)
         self._limpiar(self.scroll_direccion)
+        self._limpiar(self.scroll_habitos)
 
         reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
 
@@ -64,6 +71,7 @@ class ReportesFrame(ctk.CTkFrame):
             ctk.CTkLabel(self.scroll_docente, text="No hay datos de resumen para mostrar.", font=("Segoe UI", 16)).pack(pady=20)
             ctk.CTkLabel(self.scroll_aprobados, text="No hay datos de resumen para mostrar.", font=("Segoe UI", 16)).pack(pady=20)
             ctk.CTkLabel(self.scroll_direccion, text="No hay datos de resumen para mostrar.", font=("Segoe UI", 16)).pack(pady=20)
+            ctk.CTkLabel(self.scroll_habitos, text="No hay datos de resumen para mostrar.", font=("Segoe UI", 16)).pack(pady=20)
             return
 
         # DOCENTE HEADER
@@ -110,8 +118,173 @@ class ReportesFrame(ctk.CTkFrame):
             color_est = "#10B981" if str(fila[3]).upper() == "APROBADO" else "#EF4444"
             ctk.CTkLabel(row_dir, text=str(fila[3]), width=150, anchor="w", text_color=color_est, font=("Segoe UI", 12, "bold")).pack(side="left", padx=10)
 
+        # HABITOS TAB
+        self._limpiar(self.scroll_habitos)
+        
+        import json
+        ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
+        
+        estudiantes = self.engine.obtener_estudiantes_completos(grado)
+        
+        # Header
+        f_h_hab = ctk.CTkFrame(self.scroll_habitos, fg_color="#253650")
+        f_h_hab.pack(fill="x", pady=2)
+        ctk.CTkLabel(f_h_hab, text="Estudiante", width=250, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
+        ctk.CTkLabel(f_h_hab, text="Satisfactorios (S)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#10B981").pack(side="left", padx=10)
+        ctk.CTkLabel(f_h_hab, text="Regulares (R)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#F59E0B").pack(side="left", padx=10)
+        ctk.CTkLabel(f_h_hab, text="Insatisfactorios (X)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#EF4444").pack(side="left", padx=10)
+
+        # Aggregate stats per student
+        stats_por_est = {}
+        if os.path.exists(ruta_json):
+            try:
+                with open(ruta_json, "r", encoding="utf-8") as f:
+                    habitos_data = json.load(f)
+                
+                for key, val_entry in habitos_data.items():
+                    k_grado = key.split("::")[0]
+                    if grado.replace("°","") in k_grado.replace("°",""):
+                        est_evals = val_entry.get("estudiantes", {})
+                        for est_id, crit_vals in est_evals.items():
+                            e_idx = int(est_id) - 1
+                            if e_idx not in stats_por_est:
+                                stats_por_est[e_idx] = {"S": 0, "R": 0, "X": 0}
+                            for score in crit_vals.values():
+                                if score in ["S", "R", "X"]:
+                                    stats_por_est[e_idx][score] += 1
+            except Exception as e:
+                print(f"Error loading habits report stats: {e}")
+
+        for idx, est in enumerate(estudiantes):
+            row_h = ctk.CTkFrame(self.scroll_habitos, fg_color="#1A2638")
+            row_h.pack(fill="x", pady=1)
+            
+            ctk.CTkLabel(row_h, text=est["nombre"], width=250, anchor="w").pack(side="left", padx=10)
+            
+            stats = stats_por_est.get(idx, {"S": 0, "R": 0, "X": 0})
+            total = sum(stats.values())
+            
+            s_txt = f"{stats['S']} ({(stats['S']/total*100):.0f}%)" if total > 0 else "0 (0%)"
+            r_txt = f"{stats['R']} ({(stats['R']/total*100):.0f}%)" if total > 0 else "0 (0%)"
+            x_txt = f"{stats['X']} ({(stats['X']/total*100):.0f}%)" if total > 0 else "0 (0%)"
+            
+            ctk.CTkLabel(row_h, text=s_txt, width=130, anchor="w", text_color="#10B981").pack(side="left", padx=10)
+            ctk.CTkLabel(row_h, text=r_txt, width=130, anchor="w", text_color="#F59E0B").pack(side="left", padx=10)
+            ctk.CTkLabel(row_h, text=x_txt, width=130, anchor="w", text_color="#EF4444").pack(side="left", padx=10)
+
     def _limpiar(self, frame):
         for w in frame.winfo_children(): w.destroy()
+
+    def generar_informe_estudiante_modal(self):
+        from rdsecurity import cargar_config_segura
+        from documentos_maestro import generar_informe_calificaciones
+        from utils.footer_utils import abrir_documento
+        import datetime
+        
+        grado = self.combo_grado.get()
+        if grado == "Sin datos":
+            messagebox.showwarning("Atención", "No hay un grado válido seleccionado.")
+            return
+            
+        ests = self.engine.obtener_estudiantes_completos(grado)
+        if not ests:
+            messagebox.showwarning("Atención", "No hay estudiantes registrados en este grado.")
+            return
+            
+        # Modal para elegir estudiante
+        modal = ctk.CTkToplevel(self)
+        modal.title("📄 Generar Informe Individual")
+        modal.geometry("350x200")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+        
+        modal.update_idletasks()
+        w = modal.winfo_width()
+        h = modal.winfo_height()
+        x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
+        y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
+        modal.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(modal, text="Seleccione el Estudiante:", font=("Segoe UI", 14, "bold")).pack(pady=15)
+        
+        nombres_ests = [e["nombre"] for e in ests]
+        combo_est = ctk.CTkOptionMenu(modal, values=nombres_ests, width=280)
+        combo_est.pack(pady=10)
+        
+        def generar():
+            nombre_sel = combo_est.get()
+            est = next(e for e in ests if e["nombre"] == nombre_sel)
+            modal.destroy()
+            
+            # Recopilar materias con al menos una nota registrada en T1, T2 o T3
+            materias_con_nota = set()
+            notas_por_trimestre = {}
+            for t_num in [1, 2, 3]:
+                notas_t = self.engine.obtener_notas_estudiante(est["nombre"], grado, trimestre=t_num)
+                notas_por_trimestre[t_num] = notas_t
+                for mat_nombre, nota_val in notas_t.items():
+                    try:
+                        val = float(nota_val)
+                        if val >= 1.0:
+                            materias_con_nota.add(mat_nombre)
+                    except (TypeError, ValueError):
+                        pass
+
+            # Fallback: si el alumno no tiene ninguna nota en todo el año, usar todas las del grado
+            if not materias_con_nota:
+                all_mats = self.engine.obtener_materias_por_grado(grado)
+                materias_con_nota = set([m for m in all_mats if m not in ["Sin materias registradas", "Sin materias", "No hay materias", "General"]])
+
+            cfg = cargar_config_segura({})
+            trimestres = {}
+            for t_key, t_num in [("T1", 1), ("T2", 2), ("T3", 3)]:
+                notas_t = notas_por_trimestre[t_num]
+                materias = []
+                for mat_nombre in sorted(list(materias_con_nota)):
+                    nota_val = notas_t.get(mat_nombre, None)
+                    if nota_val is not None:
+                        try:
+                            val = float(nota_val)
+                        except (TypeError, ValueError):
+                            val = 0.0
+                    else:
+                        val = 0.0
+                    
+                    materias.append({
+                        "nombre": mat_nombre,
+                        "nota": val,
+                        "estado": "APROBADO" if val >= 3.0 else "REPROBADO"
+                    })
+                prom = sum(m["nota"] for m in materias if m["nota"] > 0) / len([m for m in materias if m["nota"] > 0]) if any(m["nota"] > 0 for m in materias) else 0
+                trimestres[t_key] = {"materias": materias, "promedio": round(prom, 1)}
+            
+            datos = {
+                "alumno":          est["nombre"],
+                "cedula":          est.get("cedula", ""),
+                "grado":           grado,
+                "docente_nombre":  cfg.get("docente_nombre", ""),
+                "escuela_nombre":  cfg.get("escuela_nombre", ""),
+                "ano_lectivo":     cfg.get("ano_lectivo", "2026"),
+                "fecha":           datetime.datetime.now().strftime("%d-%m-%Y"),
+                "trimestres":      trimestres,
+                "observacion_general": "",
+                "estado_final":    "EN PROCESO"
+            }
+            
+            # Promedio global
+            proms = [trimestres[tk]["promedio"] for tk in trimestres if trimestres[tk].get("promedio")]
+            if proms:
+                prom_global = sum(proms) / len(proms)
+                datos["estado_final"] = "APROBADO" if prom_global >= 3.0 else "REPROBADO"
+            
+            ruta = generar_informe_calificaciones(datos)
+            if ruta:
+                abrir_documento(ruta)
+                messagebox.showinfo("✓ Informe Generado", f"Informe de calificaciones generado exitosamente:\n{ruta}")
+                
+        btn_gen = ctk.CTkButton(modal, text="Generar Word", fg_color="#10B981", hover_color="#059669", command=generar)
+        btn_gen.pack(pady=15)
 
     def imprimir_reporte(self):
         # Abre el Excel para imprimir desde la hoja de resumen del grado seleccionado
@@ -660,3 +833,52 @@ class ReportesFrame(ctk.CTkFrame):
             tmp_docx = tmp.name
 
         messagebox.showinfo("Descarga DOCX", f"Reportes generados en Word:\n{tmp_docx}")
+
+class ReportesYGraficosFrame(ctk.CTkFrame):
+    def __init__(self, master, engine, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.engine = engine
+
+        # Tab view superior
+        self.tabs = ctk.CTkTabview(self)
+        self.tabs.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Agregar pestañas
+        self.tab_reportes = self.tabs.add("📋 Reportes y Descargas")
+        self.tab_graficos = self.tabs.add("📈 Gráficos de Rendimiento")
+
+        # Cargar los sub-frames correspondientes
+        from grapp import GraficosFrame
+        
+        self.frame_reportes = ReportesFrame(self.tab_reportes, self.engine)
+        self.frame_reportes.pack(fill="both", expand=True)
+
+        self.frame_graficos = GraficosFrame(self.tab_graficos, self.engine)
+        self.frame_graficos.pack(fill="both", expand=True)
+
+    def actualizar_vista(self):
+        """Actualiza ambos sub-frames cuando la vista activa cambia."""
+        if hasattr(self.frame_reportes, "actualizar_vista"):
+            try:
+                self.frame_reportes.actualizar_vista()
+            except Exception:
+                pass
+        
+        if hasattr(self.frame_reportes, "cargar_reportes"):
+            try:
+                self.frame_reportes.cargar_reportes(self.frame_reportes.combo_grado.get())
+            except Exception:
+                pass
+
+        if hasattr(self.frame_graficos, "actualizar_vista"):
+            try:
+                self.frame_graficos.actualizar_vista()
+            except Exception:
+                pass
+        
+        if hasattr(self.frame_graficos, "actualizar_graficos"):
+            try:
+                self.frame_graficos.actualizar_graficos()
+            except Exception:
+                pass
+

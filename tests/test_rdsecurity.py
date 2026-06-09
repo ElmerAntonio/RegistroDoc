@@ -9,6 +9,21 @@ import json
 os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT"
 
 import rdsecurity
+import tempfile
+import os
+
+# Redirect all security files to a temporary directory so we never touch/delete the real user config/license files!
+TEMP_DIR = tempfile.mkdtemp()
+rdsecurity.CONFIG_FILE = os.path.join(TEMP_DIR, "config.enc")
+rdsecurity.TOKEN_FILE = os.path.join(TEMP_DIR, "rd_token.bin")
+rdsecurity.LICENSE_FILE = os.path.join(TEMP_DIR, "licencia.dat")
+rdsecurity.BRUTE_FILE = os.path.join(TEMP_DIR, "rd_brute.bin")
+rdsecurity.AUDIT_FILE = os.path.join(TEMP_DIR, "rd_audit.bin")
+rdsecurity.EXCEL_HASH_FILE = os.path.join(TEMP_DIR, "rd_excel_hash.bin")
+
+import config
+config.CONFIG_FILE = os.path.join(TEMP_DIR, "perfil.json")
+
 from rdsecurity import (
     cifrar, descifrar, guardar_cifrado, cargar_cifrado,
     _hw_fingerprint, verificar_licencia, validar_nota_meduca,
@@ -18,6 +33,7 @@ from unittest.mock import patch
 
 @pytest.fixture
 def temp_file():
+
     fd, path = tempfile.mkstemp()
     os.close(fd)
     yield path

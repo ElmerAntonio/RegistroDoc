@@ -39,6 +39,17 @@ class EstudiantesFrame(ctk.CTkFrame):
         self.combo_grado = ctk.CTkOptionMenu(self.frame_controles, values=opciones_grado, command=self.cargar_lista)
         self.combo_grado.pack(side="left", padx=10)
 
+        self.btn_lista = ctk.CTkButton(
+            self.frame_controles,
+            text="🖨️ Lista de Clase",
+            fg_color="#6366F1",
+            hover_color="#4F46E5",
+            font=("Segoe UI", 12, "bold"),
+            height=32,
+            command=self.imprimir_lista_clase
+        )
+        self.btn_lista.pack(side="right", padx=15)
+
         # --- ENCABEZADOS DE LA LISTA ---
         self.frame_encabezados = ctk.CTkFrame(self, fg_color="#253650", corner_radius=5)
         self.frame_encabezados.pack(fill="x", pady=(10, 0), ipady=5)
@@ -206,3 +217,43 @@ class EstudiantesFrame(ctk.CTkFrame):
         fmt = self.formatear_cedula_panamena(val)
         ent.delete(0, 'end')
         ent.insert(0, fmt)
+
+    def imprimir_lista_clase(self):
+        from rdsecurity import cargar_config_segura
+        from documentos_maestro import generar_lista_clase
+        from utils.footer_utils import abrir_documento
+        
+        grado = self.combo_grado.get()
+        if grado == "Sin datos":
+            messagebox.showwarning("Atención", "No hay un grado válido seleccionado.")
+            return
+            
+        estudiantes = self.engine.obtener_estudiantes_completos(grado)
+        if not estudiantes:
+            messagebox.showwarning("Atención", "No hay estudiantes en este grado.")
+            return
+            
+        cfg = cargar_config_segura({})
+        datos = {
+            "grado": grado,
+            "docente_nombre": cfg.get("docente_nombre", ""),
+            "escuela_nombre": cfg.get("escuela_nombre", ""),
+            "ano_lectivo": cfg.get("ano_lectivo", "2026"),
+            "estudiantes": estudiantes
+        }
+        
+        ruta = generar_lista_clase(datos)
+        if ruta:
+            abrir_documento(ruta)
+            messagebox.showinfo("✓ Lista Generada", f"Lista de clase en Word generada exitosamente:\n{ruta}")
+
+    def actualizar_vista(self):
+        """Recarga la lista de grados activos y refresca la vista."""
+        opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=opciones)
+        if old_sel in opciones:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(opciones[0])
+        self.cargar_lista(self.combo_grado.get())

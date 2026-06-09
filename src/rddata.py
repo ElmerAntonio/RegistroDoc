@@ -12,6 +12,7 @@ class DataEngine:
         self.cleaner = ExcelCleaner()
         self.fila_desc = 39 if self.modalidad == "primaria" else 42
         self._wb_cache = None
+        self._wb_formulas_cache = None
         self._last_mtime = 0.0
         self._cargar_en_memoria()
 
@@ -39,13 +40,21 @@ class DataEngine:
             except Exception:
                 pass
             self._wb_cache = None
+        if self._wb_formulas_cache is not None:
+            try:
+                self._wb_formulas_cache.close()
+            except Exception:
+                pass
+            self._wb_formulas_cache = None
 
         if os.path.exists(self.ruta):
             try:
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
+                self._wb_formulas_cache = openpyxl.load_workbook(self.ruta, data_only=False)
                 self._last_mtime = os.path.getmtime(self.ruta)
             except Exception:
                 self._wb_cache = None
+                self._wb_formulas_cache = None
                 self._last_mtime = 0.0
     def _verificar_y_recargar_cache(self):
         if os.path.exists(self.ruta):
@@ -56,15 +65,128 @@ class DataEngine:
             except Exception:
                 pass
 
+    def _parse_cell_ref(self, cell_ref):
+        match = re.match(r"^([A-Z]+)([0-9]+)$", cell_ref)
+        if not match:
+            return 1, 1
+        col_str = match.group(1)
+        row = int(match.group(2))
+        col = 0
+        for char in col_str:
+            col = col * 26 + (ord(char) - ord('A') + 1)
+        return row, col
+
+    def _resolver_celda(self, sheet_name, row, col, wb_data=None, wb_formulas=None):
+        if wb_data is None:
+            wb_data = self._wb_cache
+        if wb_formulas is None:
+            wb_formulas = self._wb_formulas_cache
+
+        if not wb_data or not wb_formulas:
+            return None
+
+        if sheet_name not in wb_formulas or sheet_name not in wb_data:
+            return None
+
+        ws_f = wb_formulas[sheet_name]
+        ws_d = wb_data[sheet_name]
+        val = ws_f.cell(row=row, column=col).value
+        if val is None:
+            return None
+        
+        if not str(val).startswith("="):
+            return ws_d.cell(row=row, column=col).value
+
+        formula = str(val)
+        
+        # Strip IF wrapper if present e.g. =IF(MAESTRO!D5="","",...)
+        if formula.startswith("=IF(") and ',"",' in formula:
+            parts = formula.split(',"",', 1)
+            actual_part = parts[1]
+            if actual_part.endswith(")"):
+                actual_part = actual_part[:-1]
+            formula = "=" + actual_part
+
+        # 1. Resolve sheet references inside IFERROR or direct sheet references
+        ref_match = re.search(r"IFERROR\('?([^']+)'?!([A-Z]+[0-9]+)", formula)
+        if ref_match:
+            target_sheet = ref_match.group(1)
+            target_cell = ref_match.group(2)
+            t_row, t_col = self._parse_cell_ref(target_cell)
+            return self._resolver_celda(target_sheet, t_row, t_col, wb_data, wb_formulas)
+
+        direct_ref = re.search(r"([A-Za-z0-9_]+)!([A-Z]+[0-9]+)", formula)
+        if direct_ref:
+            target_sheet = direct_ref.group(1)
+            target_cell = direct_ref.group(2)
+            t_row, t_col = self._parse_cell_ref(target_cell)
+            return self._resolver_celda(target_sheet, t_row, t_col, wb_data, wb_formulas)
+
+        # 2. Resolve average formulas in PROM sheets
+        if "AVERAGE" in formula or "PROMEDIO" in formula:
+            args_match = re.search(r"AVERAGE\(([^)]+)\)", formula)
+            if args_match:
+                args_str = args_match.group(1)
+                parts = [p.strip() for p in args_str.split(",")]
+                vals = []
+                for part in parts:
+                    if ":" in part:
+                        start_cell, end_cell = part.split(":")
+                        r_start, c_start = self._parse_cell_ref(start_cell)
+                        r_end, c_end = self._parse_cell_ref(end_cell)
+                        for r_idx in range(r_start, r_end + 1):
+                            for c_idx in range(c_start, c_end + 1):
+                                val_d = self._resolver_celda(sheet_name, r_idx, c_idx, wb_data, wb_formulas)
+                                if val_d is not None and isinstance(val_d, (int, float)):
+                                    vals.append(val_d)
+                    else:
+                        r_ref, c_ref = self._parse_cell_ref(part)
+                        val_d = self._resolver_celda(sheet_name, r_ref, c_ref, wb_data, wb_formulas)
+                        if val_d is not None and isinstance(val_d, (int, float)):
+                            vals.append(val_d)
+                
+                if vals:
+                    avg = sum(vals) / len(vals)
+                    if "TRUNC" in formula:
+                        return int(avg * 10) / 10.0
+                    return round(avg, 2)
+                return None
+
+        # Fallback
+        return ws_d.cell(row=row, column=col).value
+
     def _save_wb(self, wb):
         import shutil
         import tempfile
+        import datetime
 
         # 1. Backup de seguridad antes de guardar
         bak_ruta = self.ruta.replace(".xlsx", "_bak.xlsx")
         if os.path.exists(self.ruta):
             try:
                 shutil.copy2(self.ruta, bak_ruta)
+                
+                # Respaldo histórico local automatizado (offline)
+                dir_base = os.path.dirname(os.path.abspath(self.ruta))
+                dir_respaldos = os.path.join(dir_base, "Respaldos_Locales")
+                if not os.path.exists(dir_respaldos):
+                    os.makedirs(dir_respaldos)
+                
+                # Crear nombre con timestamp
+                ahora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                nombre_base = os.path.basename(self.ruta).replace(".xlsx", "")
+                nombre_respaldo = f"{nombre_base}_respaldo_{ahora}.xlsx"
+                shutil.copy2(self.ruta, os.path.join(dir_respaldos, nombre_respaldo))
+                
+                # Auto-limpieza: mantener solo los últimos 15 respaldos
+                respaldos = sorted(
+                    [os.path.join(dir_respaldos, f) for f in os.listdir(dir_respaldos) if f.endswith(".xlsx")],
+                    key=os.path.getmtime
+                )
+                while len(respaldos) > 15:
+                    viejo = respaldos.pop(0)
+                    try: os.remove(viejo)
+                    except: pass
             except Exception:
                 pass
 
@@ -99,6 +221,14 @@ class DataEngine:
             self._cargar_en_memoria()
         return result
 
+    def _encontrar_hoja_maestro(self, wb):
+        if "MAESTRO" in wb.sheetnames:
+            return "MAESTRO"
+        for s in wb.sheetnames:
+            if "MAESTRO" in s.upper():
+                return s
+        return wb.sheetnames[0] if wb.sheetnames else "MAESTRO"
+
     def _obtener_columna_nombres(self, grado, wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
@@ -107,10 +237,8 @@ class DataEngine:
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
-        if "MAESTRO" not in wb.sheetnames: 
-            if should_close: wb.close()
-            return 2
-        ws = wb["MAESTRO"]
+        nombre_maestro = self._encontrar_hoja_maestro(wb)
+        ws = wb[nombre_maestro]
         grado_limpio = grado.replace("°", "").strip()
         col = 2
         for r in [3, 4]:
@@ -448,7 +576,8 @@ class DataEngine:
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
-        ws_m = wb["MAESTRO"]
+        nombre_maestro = self._encontrar_hoja_maestro(wb)
+        ws_m = wb[nombre_maestro]
         col_nom = self._obtener_columna_nombres(grado, wb=wb)
         ws_planilla = None
         if self.modalidad == "premedia":
@@ -481,7 +610,7 @@ class DataEngine:
             return False
 
         wb = openpyxl.load_workbook(self.ruta)
-        ws_m = wb["MAESTRO"]
+        ws_m = wb[self._encontrar_hoja_maestro(wb)]
         col_nom = self._obtener_columna_nombres(grado)
         fila_vacia = None
         for r in range(5, 5 + max_estudiantes):
@@ -508,7 +637,7 @@ class DataEngine:
     def guardar_cambios_estudiantes(self, grado, datos_modificados):
         if not os.path.exists(self.ruta): return False
         wb = openpyxl.load_workbook(self.ruta)
-        ws_m = wb["MAESTRO"]
+        ws_m = wb[self._encontrar_hoja_maestro(wb)]
         col_nom = self._obtener_columna_nombres(grado)
         for id_est, datos in datos_modificados.items():
             fila = 4 + int(id_est)
@@ -536,10 +665,15 @@ class DataEngine:
         datos = {}
         grado_num = grado.replace("°", "")
 
-        if trimestre == "Trimestre 1": col_b = "T.1"
-        elif trimestre == "Trimestre 2": col_b = "T.2"
-        elif trimestre == "Trimestre 3": col_b = "T.3"
-        else: col_b = "ANUAL"
+        # Normalizar trimestre a variantes
+        if trimestre == "Trimestre 1":
+            col_b_variants = ["T.1", "T1", "T-1"]
+        elif trimestre == "Trimestre 2":
+            col_b_variants = ["T.2", "T2", "T-2"]
+        elif trimestre == "Trimestre 3":
+            col_b_variants = ["T.3", "T3", "T-3"]
+        else:
+            col_b_variants = ["ANUAL", "FINAL", "PROMEDIO"]
 
         hoja_res = None
         for s in wb.sheetnames:
@@ -549,24 +683,26 @@ class DataEngine:
 
         if hoja_res:
             ws_res = wb[hoja_res]
-            # Buscamos la fila de materias para encontrar la columna correcta de la materia y trimestre
-            # En premedia, cada materia tiene columnas de T.1, T.2, T.3, PROMEDIO
-            # Si materia="General", sacamos el promedio ANUAL final
-
             col_nom = None
-            col_nota = None
-
             for c in range(1, 40):
-                val = str(ws_res.cell(row=9, column=c).value or "").upper()
-                if "NOMBRE" in val: col_nom = c
+                val = str(ws_res.cell(row=3, column=c).value or "").upper()
+                if "NOMBRE" in val:
+                    col_nom = c
+                    break
+            if not col_nom:
+                col_nom = 2
 
-            if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+            col_nota = None
+            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
+
+            if materia and materia not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]:
                 # Buscar materia
                 fila_materias = None
                 col_inicio_materia = None
                 for r in range(4, 15):
                     for c in range(2, 40):
-                        if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
+                        val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
+                        if materia.upper() in val_cell:
                             fila_materias = r
                             col_inicio_materia = c
                             break
@@ -577,31 +713,79 @@ class DataEngine:
                     for c in range(col_inicio_materia, col_inicio_materia + 5):
                         val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
                         val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                        if col_b in val or col_b in val2:
+                        if any(variant in val or variant in val2 for variant in col_b_variants):
                             col_nota = c
                             break
-            else:
-                # General o todas las materias -> Anual
-                for c in range(1, 40):
-                    val = str(ws_res.cell(row=9, column=c).value or "").upper()
-                    val2 = str(ws_res.cell(row=8, column=c).value or "").upper()
-                    if "ANUAL" in val or "FINAL" in val or "ANUAL" in val2 or "FINAL" in val2:
-                        col_nota = c
-                        break
-
-            if col_nom and col_nota:
-                for r in range(10, 50):
-                    nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
-                    if nom:
-                        try:
-                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
+                    
+                    if col_nota:
+                        for est in estudiantes:
+                            r = est["id"] + 4
+                            val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
+                            valido, nota, _ = validar_nota_meduca(val)
                             if valido:
-                                datos[nom] = nota
-                        except (ValueError, TypeError):
-                            pass
+                                datos[est["nombre"]] = nota
+            else:
+                # Caso materia general: promedio de todas las materias del trimestre
+                materias_grado = self.obtener_materias_por_grado(grado, wb=wb)
+                materias_limpias = [m for m in materias_grado if m and m not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]]
+                
+                if materias_limpias:
+                    bulk_data = self.obtener_promedios_reales_bulk(grado, materias_limpias, trimestre, wb=wb)
+                    estudiantes_notas = {}
+                    for mat, nom_notas in bulk_data.items():
+                        for nom, nota in nom_notas.items():
+                            if nom not in estudiantes_notas:
+                                estudiantes_notas[nom] = []
+                            estudiantes_notas[nom].append(nota)
+                    
+                    for nom, list_notas in estudiantes_notas.items():
+                        if list_notas:
+                            datos[nom] = round(sum(list_notas) / len(list_notas), 2)
+                
+                # Fallback a la columna ANUAL/FINAL si no hay materias cargadas o falló
+                if not datos:
+                    col_nota = None
+                    for c in range(1, 40):
+                        val = str(ws_res.cell(row=3, column=c).value or "").upper()
+                        val2 = str(ws_res.cell(row=4, column=c).value or "").upper()
+                        if any(variant in val or variant in val2 for variant in ["ANUAL", "FINAL", "PROMEDIO"]):
+                            col_nota = c
+                            break
+                    if col_nota:
+                        for est in estudiantes:
+                            r = est["id"] + 4
+                            val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
+                            valido, nota, _ = validar_nota_meduca(val)
+                            if valido:
+                                datos[est["nombre"]] = nota
 
         if should_close: wb.close()
         return datos
+
+    def obtener_notas_estudiante(self, nombre_estudiante, grado, trimestre, wb=None):
+        """
+        Obtiene las notas finales (promedios) de cada materia para un estudiante en un trimestre.
+        trimestre: int (1, 2, 3) o str ("Trimestre 1", etc.)
+        Retorna: dict {materia_nombre: nota_valor}
+        """
+        if wb is None:
+            self._verificar_y_recargar_cache()
+            
+        nombre_est_clean = nombre_estudiante.strip().lower()
+        trim_str = f"Trimestre {trimestre}" if isinstance(trimestre, int) else trimestre
+        
+        materias = self.obtener_materias_por_grado(grado, wb=wb)
+        notas_estudiante = {}
+        
+        for mat in materias:
+            if mat in ["Sin materias registradas", "Sin materias", "No hay materias", "General"]:
+                continue
+            proms = self.obtener_promedios_reales(grado, mat, trim_str, wb=wb)
+            for est_nom, nota in proms.items():
+                if est_nom.strip().lower() == nombre_est_clean:
+                    notas_estudiante[mat] = nota
+                    break
+        return notas_estudiante
 
     def obtener_promedios_reales_bulk(self, grado, materias, trimestre, wb=None):
         if wb is None:
@@ -614,10 +798,14 @@ class DataEngine:
         resultados = {m: {} for m in materias}
         grado_num = grado.replace("°", "")
 
-        if trimestre == "Trimestre 1": col_b = "T.1"
-        elif trimestre == "Trimestre 2": col_b = "T.2"
-        elif trimestre == "Trimestre 3": col_b = "T.3"
-        else: col_b = "ANUAL"
+        if trimestre == "Trimestre 1":
+            col_b_variants = ["T.1", "T1", "T-1"]
+        elif trimestre == "Trimestre 2":
+            col_b_variants = ["T.2", "T2", "T-2"]
+        elif trimestre == "Trimestre 3":
+            col_b_variants = ["T.3", "T3", "T-3"]
+        else:
+            col_b_variants = ["ANUAL", "FINAL", "PROMEDIO"]
 
         hoja_res = None
         for s in wb.sheetnames:
@@ -629,43 +817,44 @@ class DataEngine:
             ws_res = wb[hoja_res]
             col_nom = None
             for c in range(1, 40):
-                val = str(ws_res.cell(row=9, column=c).value or "").upper()
+                val = str(ws_res.cell(row=3, column=c).value or "").upper()
                 if "NOMBRE" in val:
                     col_nom = c
                     break
+            if not col_nom:
+                col_nom = 2
 
-            if col_nom:
-                materia_to_col = {}
-                for materia in materias:
-                    if materia and materia not in ["Sin materias", "No hay materias", "General"]:
-                        fila_materias = None
-                        col_inicio_materia = None
-                        for r in range(4, 15):
-                            for c in range(2, 40):
-                                if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
-                                    fila_materias = r
-                                    col_inicio_materia = c
-                                    break
-                            if col_inicio_materia: break
+            materia_to_col = {}
+            for materia in materias:
+                if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+                    fila_materias = None
+                    col_inicio_materia = None
+                    for r in range(4, 15):
+                        for c in range(2, 40):
+                            val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
+                            if materia.upper() in val_cell:
+                                fila_materias = r
+                                col_inicio_materia = c
+                                break
+                        if col_inicio_materia: break
 
-                        if col_inicio_materia:
-                            for c in range(col_inicio_materia, col_inicio_materia + 5):
-                                val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
-                                val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                                if col_b in val or col_b in val2:
-                                    materia_to_col[materia] = c
-                                    break
+                    if col_inicio_materia:
+                        for c in range(col_inicio_materia, col_inicio_materia + 5):
+                            val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
+                            val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
+                            if any(variant in val or variant in val2 for variant in col_b_variants):
+                                materia_to_col[materia] = c
+                                break
 
-                for r in range(10, 50):
-                    nom = str(ws_res.cell(row=r, column=col_nom).value or "").strip()
-                    if nom:
-                        for materia, col_nota in materia_to_col.items():
-                            try:
-                                valido, nota, _ = validar_nota_meduca(ws_res.cell(row=r, column=col_nota).value)
-                                if valido:
-                                    resultados[materia][nom] = nota
-                            except (ValueError, TypeError, Exception):
-                                pass
+            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
+            for est in estudiantes:
+                r = est["id"] + 4
+                for materia, col_nota in materia_to_col.items():
+                    if col_nota:
+                        val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
+                        valido, nota, _ = validar_nota_meduca(val)
+                        if valido:
+                            resultados[materia][est["nombre"]] = nota
 
         if should_close: wb.close()
         return resultados
@@ -691,22 +880,28 @@ class DataEngine:
             ws_res = wb[hoja_res]
             col_nom = None
             for c in range(1, 40):
-                val = str(ws_res.cell(row=9, column=c).value or "").upper()
-                if "NOMBRE" in val: col_nom = c
+                val = str(ws_res.cell(row=3, column=c).value or "").upper()
+                if "NOMBRE" in val:
+                    col_nom = c
+                    break
+            if not col_nom:
+                col_nom = 2
 
+            # Encontrar el ID/fila del estudiante a través de obtener_estudiantes_completos
+            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
             fila_estudiante = None
-            if col_nom:
-                for r in range(10, 50):
-                    if nombre_estudiante.upper() == str(ws_res.cell(row=r, column=col_nom).value or "").strip().upper():
-                        fila_estudiante = r
-                        break
+            for est in estudiantes:
+                if est["nombre"].upper() == nombre_estudiante.strip().upper():
+                    fila_estudiante = est["id"] + 4
+                    break
 
             if fila_estudiante:
                 if materia and materia not in ["Sin materias", "No hay materias", "General"]:
                     col_inicio_materia = None
                     for r in range(4, 15):
                         for c in range(2, 40):
-                            if materia.upper() in str(ws_res.cell(row=r, column=c).value or "").upper():
+                            val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
+                            if materia.upper() in val_cell:
                                 col_inicio_materia = c
                                 break
                         if col_inicio_materia: break
@@ -715,32 +910,36 @@ class DataEngine:
                         # Buscar columnas de trimestre debajo de la materia
                         fila_materias = None
                         for rmat in range(4, 15):
-                            if materia.upper() in str(ws_res.cell(row=rmat, column=col_inicio_materia).value or "").upper():
+                            val_cell = str(ws_res.cell(row=rmat, column=col_inicio_materia).value or "").upper()
+                            if materia.upper() in val_cell:
                                 fila_materias = rmat
                                 break
                         cols_trimestres = []
                         for c in range(col_inicio_materia, col_inicio_materia + 5):
                             val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
                             val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                            if "T.1" in val or "T.1" in val2 or "T.2" in val or "T.2" in val2 or "T.3" in val or "T.3" in val2:
+                            if any(v in val or v in val2 for v in ["T.1", "T1", "T-1", "T.2", "T2", "T-2", "T.3", "T3", "T-3"]):
                                 cols_trimestres.append(c)
                         for c in cols_trimestres:
                             try:
-                                valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                                val = self._resolver_celda(hoja_res, fila_estudiante, c, wb_data=wb, wb_formulas=self._wb_formulas_cache)
+                                valido, nota, _ = validar_nota_meduca(val)
                                 if valido:
                                     historial.append(nota)
                             except (ValueError, TypeError): pass
                 else:
                     cols_promedios = []
-                    for c in range(5, 40):
-                        val = str(ws_res.cell(row=9, column=c).value or "").upper()
-                        val2 = str(ws_res.cell(row=8, column=c).value or "").upper()
-                        if "PROMEDIO" in val or "T.1" in val or "T.2" in val or "T.3" in val:
-                            cols_promedios.append(c)
+                    for c in range(2, 60):
+                        val = str(ws_res.cell(row=3, column=c).value or "").upper()
+                        val2 = str(ws_res.cell(row=4, column=c).value or "").upper()
+                        if any(v in val or v in val2 for v in ["T.1", "T1", "T-1", "T.2", "T2", "T-2", "T.3", "T3", "T-3", "PROMEDIO", "ANUAL", "FINAL"]):
+                            if c not in cols_promedios:
+                                cols_promedios.append(c)
 
                     for c in cols_promedios:
                         try:
-                            valido, nota, _ = validar_nota_meduca(ws_res.cell(row=fila_estudiante, column=c).value)
+                            val = self._resolver_celda(hoja_res, fila_estudiante, c, wb_data=wb, wb_formulas=self._wb_formulas_cache)
+                            valido, nota, _ = validar_nota_meduca(val)
                             if valido:
                                 historial.append(nota)
                         except (ValueError, TypeError): pass
@@ -751,75 +950,173 @@ class DataEngine:
     def obtener_datos_reportes(self, grado, wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"docente": [], "aprobados": [], "direccion": []}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return {"docente": [], "aprobados": [], "direccion": []}
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
         datos = {"docente": [], "aprobados": [], "direccion": []}
-        grado_num = grado.replace("°", "")
+        try:
+            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
+            proms = self.obtener_promedios_reales(grado, None, "Anual", wb=wb)
+            if not proms:
+                proms = self.obtener_promedios_reales(grado, None, "Trimestre 1", wb=wb)
 
-        def extraer_de_hoja(palabra_clave):
-            hoja_obj = None
-            for s in wb.sheetnames:
-                if palabra_clave in s.upper() and (self.modalidad == "primaria" or grado_num in s):
-                    hoja_obj = wb[s]
-                    break
+            for est in estudiantes:
+                nom = est["nombre"]
+                ced = est.get("cedula", "")
+                prom_val = proms.get(nom, None)
+                
+                # Format average
+                if prom_val is not None:
+                    prom_str = f"{prom_val:.2f}"
+                    estado = "APROBADO" if prom_val >= 3.0 else "REPROBADO"
+                else:
+                    prom_str = "—"
+                    estado = "SIN NOTAS"
 
-            filas = []
-            if hoja_obj:
-                col_nom = None; col_ced = None; col_estado = None; col_anual = None
-                for c in range(1, 40):
-                    for r in [3, 4, 8, 9]:
-                        val = str(hoja_obj.cell(row=r, column=c).value or "").upper()
-                        if "NOMBRE" in val or "APELLIDO" in val: col_nom = c
-                        if "CÉDULA" in val or "CEDULA" in val: col_ced = c
-                        if "ESTADO" in val: col_estado = c
-                        if "ANUAL" in val or "FINAL" in val: col_anual = c
+                datos["docente"].append([nom, ced, prom_str])
+                datos["aprobados"].append([nom, estado])
+                datos["direccion"].append([nom, ced, prom_str, estado])
+        except Exception as e:
+            print(f"Error generando datos de reportes: {e}")
+        finally:
+            if should_close: wb.close()
 
-                if col_nom:
-                    for r in range(5, 50):
-                        nom = hoja_obj.cell(row=r, column=col_nom).value
-                        if nom:
-                            ced = hoja_obj.cell(row=r, column=col_ced).value if col_ced else ""
-                            estado = hoja_obj.cell(row=r, column=col_estado).value if col_estado else ""
-                            anual = hoja_obj.cell(row=r, column=col_anual).value if col_anual else ""
-                            filas.append([nom, ced, anual, estado])
-            return filas
-
-        # Si las hojas dedicadas existen, leemos de ahí, de lo contrario fallback a RESUMEN
-
-        docente_data = extraer_de_hoja("REPORTE_DOCENTE")
-        aprobados_data = extraer_de_hoja("REPORTE_APROBADOS")
-        direccion_data = extraer_de_hoja("REPORTE_DIRECCIÓN")
-
-        if not docente_data: docente_data = extraer_de_hoja("RESUMEN")
-        if not aprobados_data: aprobados_data = extraer_de_hoja("RESUMEN")
-        if not direccion_data: direccion_data = extraer_de_hoja("RESUMEN")
-
-        for fila in docente_data: datos["docente"].append([fila[0], fila[1], fila[2]])
-        for fila in aprobados_data: datos["aprobados"].append([fila[0], fila[3]])
-        for fila in direccion_data: datos["direccion"].append(fila)
-
-        if should_close: wb.close()
         return datos
 
     def get_dashboard_stats(self, wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "0%"}
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "—", "tareas_sin_nota": 0, "excusas": 0}
 
-        # Optimization: Use a single workbook load for all dashboard stats
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        
+        total = 0
+        riesgo = 0
+        excusas = 0
+        tareas_sin_nota = 0
+        best_student = "N/A"
+        best_prom = 0.0
+        total_asist_dias = 0
+        total_asist_ausencias = 0
+
         try:
             grados = self.obtener_grados_activos(wb=wb)
-            total = sum(len(self.obtener_estudiantes_completos(g, wb=wb)) for g in grados)
+            for g in grados:
+                estudiantes = self.obtener_estudiantes_completos(g, wb=wb)
+                total += len(estudiantes)
+                
+                # Promedios de riesgo e Honor
+                proms = self.obtener_promedios_reales(g, None, "Anual", wb=wb)
+                if not proms:
+                    proms = self.obtener_promedios_reales(g, None, "Trimestre 1", wb=wb)
+                for nom, prom in proms.items():
+                    if prom is not None:
+                        if prom < 3.0:
+                            riesgo += 1
+                        if prom > best_prom:
+                            best_prom = prom
+                            best_student = nom
+
+                # Conteo de excusas E y promedio de asistencia
+                hoja_asist = None
+                g_clean = g.replace("°", "")
+                for s in wb.sheetnames:
+                    if "ASISTENCIA" in s.upper() and (self.modalidad == "primaria" or g_clean in s):
+                        hoja_asist = s
+                        break
+                if hoja_asist:
+                    ws_as = wb[hoja_asist]
+                    for r in range(5, 5 + len(estudiantes)):
+                        for c in range(4, 100):
+                            val_fecha = ws_as.cell(row=4, column=c).value
+                            if val_fecha:
+                                val = ws_as.cell(row=r, column=c).value
+                                if val is not None and str(val).strip():
+                                    total_asist_dias += 1
+                                    if val == "E":
+                                        excusas += 1
+                                    elif val == "-":
+                                        total_asist_ausencias += 1
+
+                # Conteo de tareas sin nota (vacias)
+                materias = self.obtener_materias_por_grado(g, wb=wb)
+                for mat in materias:
+                    if mat in ["Sin materias", "No hay materias", "General"]:
+                        continue
+                    hoja_prom = self._encontrar_hoja_prom(wb, g, mat)
+                    if not hoja_prom:
+                        continue
+                    ws_pm = wb[hoja_prom]
+                    for trimestre in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                        for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
+                            col_inicio, col_fin = self._obtener_rango_columnas(ws_pm, trimestre, tipo_nota)
+                            if col_inicio is None or col_fin is None:
+                                continue
+                            for c in range(col_inicio, col_fin + 1):
+                                desc = ws_pm.cell(row=self.fila_desc, column=c).value
+                                if desc and str(desc).strip():
+                                    for r in range(5, 5 + len(estudiantes)):
+                                        nota = ws_pm.cell(row=r, column=c).value
+                                        if nota is None or str(nota).strip() == "":
+                                            tareas_sin_nota += 1
+        except Exception as e:
+            print(f"[!] Error loading dashboard stats: {e}")
         finally:
             if should_close: wb.close()
 
-        return {"total": total, "riesgo": 0, "honor": "SANTOS FIDEL (4.9)", "asistencia": "98%"}
+        asistencia_pct = "—"
+        if total_asist_dias > 0:
+            presentes = total_asist_dias - total_asist_ausencias
+            pct = (presentes / total_asist_dias) * 100
+            asistencia_pct = f"{pct:.1f}%"
+
+        honor = f"{best_student} ({best_prom:.2f})" if best_prom > 0.0 else "N/A"
+
+        # Conteo de habitos y actitudes
+        s_count = 0
+        r_count = 0
+        x_count = 0
+        try:
+            import json
+            ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
+            if os.path.exists(ruta_json):
+                with open(ruta_json, "r", encoding="utf-8") as f:
+                    habitos_data = json.load(f)
+                grados_activos = self.obtener_grados_activos(wb=wb)
+                for key, val_entry in habitos_data.items():
+                    grade_part = key.split("::")[0]
+                    if any(g.replace("°","") in grade_part.replace("°","") for g in grados_activos):
+                        est_evals = val_entry.get("estudiantes", {})
+                        for est_id, crit_vals in est_evals.items():
+                            for score in crit_vals.values():
+                                if score == "S":
+                                    s_count += 1
+                                elif score == "R":
+                                    r_count += 1
+                                elif score == "X":
+                                    x_count += 1
+        except Exception as e:
+            print(f"Error calculating habits stats in dashboard: {e}")
+
+        return {
+            "total": total,
+            "riesgo": riesgo,
+            "honor": honor,
+            "asistencia": asistencia_pct,
+            "tareas_sin_nota": tareas_sin_nota,
+            "excusas": excusas,
+            "habitos": {
+                "S": s_count,
+                "R": r_count,
+                "X": x_count
+            }
+        }
 
     def _encontrar_hoja_prom(self, wb, grado, materia):
         materia_clean = materia.lower().replace(" ", "").replace(".", "")
@@ -1097,11 +1394,11 @@ class DataEngine:
     def actualizar_datos_generales(self, nombre_docente, ano_lectivo):
         if not os.path.exists(self.ruta): return False
         wb = openpyxl.load_workbook(self.ruta)
-        if "MAESTRO" in wb.sheetnames:
-            ws_m = wb["MAESTRO"]
-            titulo_actual = str(ws_m.cell(row=1, column=1).value or "")
-            nuevo_titulo = re.sub(r'20\d{2}', str(ano_lectivo), titulo_actual)
-            self._safe_set_value(ws_m, 1, 1, nuevo_titulo)
+        nombre_maestro = self._encontrar_hoja_maestro(wb)
+        ws_m = wb[nombre_maestro]
+        titulo_actual = str(ws_m.cell(row=1, column=1).value or "")
+        nuevo_titulo = re.sub(r'20\d{2}', str(ano_lectivo), titulo_actual)
+        self._safe_set_value(ws_m, 1, 1, nuevo_titulo)
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1209,18 +1506,18 @@ class DataEngine:
                         except AttributeError: pass
                     self._safe_set_value(ws_maestro_nueva, 3, 2, f"GRADO {nuevo_grado}")
         else:
-            if "MAESTRO" in wb.sheetnames:
-                ws_m = wb["MAESTRO"]
-                col_vacia = None
-                for c in range(2, 40, 2):
-                    if not ws_m.cell(row=4, column=c).value:
-                        col_vacia = c
-                        break
-                if col_vacia:
-                    self._safe_set_value(ws_m, 3, col_vacia, f"GRADO {nuevo_grado}")
-                    self._safe_set_value(ws_m, 4, col_vacia, "NOMBRES Y APELLIDOS")
-                    if self.modalidad == "premedia":
-                        self._safe_set_value(ws_m, 4, col_vacia+1, "N° DE CÉDULA")
+            nombre_maestro = self._encontrar_hoja_maestro(wb)
+            ws_m = wb[nombre_maestro]
+            col_vacia = None
+            for c in range(2, 40, 2):
+                if not ws_m.cell(row=4, column=c).value:
+                    col_vacia = c
+                    break
+            if col_vacia:
+                self._safe_set_value(ws_m, 3, col_vacia, f"GRADO {nuevo_grado}")
+                self._safe_set_value(ws_m, 4, col_vacia, "NOMBRES Y APELLIDOS")
+                if self.modalidad == "premedia":
+                    self._safe_set_value(ws_m, 4, col_vacia+1, "N° DE CÉDULA")
                     
         hoja_base_resumen = None
         for sheet in wb.sheetnames:
@@ -1258,17 +1555,17 @@ class DataEngine:
 
         for h in hojas_borrar: del wb[h]
 
-        if "MAESTRO" in wb.sheetnames:
-            ws_m = wb["MAESTRO"]
-            for c in range(1, 40):
-                val = str(ws_m.cell(row=3, column=c).value or "")
-                if grado in val:
-                    for r in range(3, 51):
-                        try:
-                            self._safe_clear_value(ws_m, r, c)
-                            self._safe_clear_value(ws_m, r, c+1)
-                        except AttributeError: pass
-                    break
+        nombre_maestro = self._encontrar_hoja_maestro(wb)
+        ws_m = wb[nombre_maestro]
+        for c in range(1, 40):
+            val = str(ws_m.cell(row=3, column=c).value or "")
+            if grado in val:
+                for r in range(3, 51):
+                    try:
+                        self._safe_clear_value(ws_m, r, c)
+                        self._safe_clear_value(ws_m, r, c+1)
+                    except AttributeError: pass
+                break
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1474,3 +1771,90 @@ class DataEngine:
         wb.close()
         self._cargar_en_memoria()
         return True
+
+    def obtener_estadisticas_asistencia(self, grado, trimestre, id_estudiante, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return {"total_dias": 0, "ausencias": 0, "tardanzas": 0, "excusas": 0}
+        should_close = not bool(self._wb_cache) if wb is None else False
+        if wb is None:
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        hoja = self._encontrar_hoja_asistencia(wb, grado)
+        if not hoja:
+            if should_close: wb.close()
+            return {"total_dias": 0, "ausencias": 0, "tardanzas": 0, "excusas": 0}
+        ws = wb[hoja]
+        mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
+        fila_fechas = mapa_trimestres.get(trimestre, 2)
+        
+        total_dias = 0
+        ausencias = 0
+        tardanzas = 0
+        excusas = 0
+        
+        for c in range(3, 61):
+            fecha_val = ws.cell(row=fila_fechas, column=c).value
+            if not fecha_val:
+                continue
+            val = ws.cell(row=fila_fechas + int(id_estudiante), column=c).value
+            if val is not None and str(val).strip():
+                total_dias += 1
+                if val == "-":
+                    ausencias += 1
+                elif val == "T":
+                    tardanzas += 1
+                elif val == "E":
+                    excusas += 1
+                
+        if should_close: wb.close()
+        return {
+            "total_dias": total_dias,
+            "ausencias": ausencias,
+            "tardanzas": tardanzas,
+            "excusas": excusas
+        }
+
+    def obtener_tareas_sin_nota(self, grado, trimestre, id_estudiante, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return {"tareas_vacias_por_materia": {}, "total_vacias": 0}
+        should_close = not bool(self._wb_cache) if wb is None else False
+        if wb is None:
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            
+        materias = self.obtener_materias_por_grado(grado, wb=wb)
+        tareas_vacias = {}
+        total_vacias = 0
+        
+        row_est = 4 + int(id_estudiante)
+        
+        for mat in materias:
+            if mat == "Sin materias registradas":
+                continue
+            hoja = self._encontrar_hoja_prom(wb, grado, mat)
+            if not hoja:
+                continue
+            ws = wb[hoja]
+            
+            cnt_mat = 0
+            for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
+                col_inicio, col_fin = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
+                if col_inicio is None or col_fin is None:
+                    continue
+                for c in range(col_inicio, col_fin + 1):
+                    desc = ws.cell(row=self.fila_desc, column=c).value
+                    if desc and str(desc).strip():
+                        nota = ws.cell(row=row_est, column=c).value
+                        if nota is None or str(nota).strip() == "":
+                            cnt_mat += 1
+            if cnt_mat > 0:
+                tareas_vacias[mat] = cnt_mat
+                total_vacias += cnt_mat
+                
+        if should_close: wb.close()
+        return {
+            "tareas_vacias_por_materia": tareas_vacias,
+            "total_vacias": total_vacias
+        }

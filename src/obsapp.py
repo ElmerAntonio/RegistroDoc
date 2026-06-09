@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import datetime
 import os
+import threading
 from config import BASE_DIR
 try:
     from docx import Document
@@ -131,6 +132,34 @@ class ObservacionesFrame(ctk.CTkFrame):
 
         ctk.CTkLabel(
             panel_obs,
+            text="Sugerir plantilla (opcional - puedes editarla después):",
+            font=(
+                "Segoe UI",
+                12)).pack(
+            anchor="w",
+            padx=20,
+            pady=(
+                15,
+                5))
+        self.combo_plantilla = ctk.CTkOptionMenu(
+            panel_obs,
+            values=[
+                "Seleccionar plantilla...",
+                "Conducta: Excelente comportamiento",
+                "Conducta: Falta de respeto a compañeros",
+                "Conducta: Uso de celular en clase",
+                "Académico: Excelente esfuerzo y participación",
+                "Académico: Incumplimiento de tareas",
+                "Académico: Desinterés en clase",
+                "Citación: Bajo rendimiento académico",
+                "Citación: Reiteradas fallas de conducta",
+                "Mención: Excelente promedio y conducta"
+            ],
+            command=self.aplicar_plantilla)
+        self.combo_plantilla.pack(fill="x", padx=20)
+
+        ctk.CTkLabel(
+            panel_obs,
             text="Redacte la observación:",
             font=(
                 "Segoe UI",
@@ -145,7 +174,23 @@ class ObservacionesFrame(ctk.CTkFrame):
 
         self.btn_guardar = ctk.CTkButton(self.frame_der, text="📝 GUARDAR EN EXPEDIENTE OFICIAL", fg_color="#10B981", hover_color="#059669",
                                          font=("Segoe UI", 14, "bold"), height=45, command=self.guardar_observacion, state="disabled")
-        self.btn_guardar.pack(pady=20, padx=30, fill="x")
+        self.btn_guardar.pack(pady=(20, 10), padx=30, fill="x")
+
+        # Botones de Acción Extra
+        extra_frame = ctk.CTkFrame(self.frame_der, fg_color="transparent")
+        extra_frame.pack(pady=(0, 20), padx=30, fill="x")
+
+        self.btn_nota_acudiente = ctk.CTkButton(
+            extra_frame, text="✉️ Nota para Acudiente", fg_color="#6366F1", hover_color="#4F46E5",
+            font=("Segoe UI", 12, "bold"), height=35, command=self.enviar_nota_acudiente, state="disabled"
+        )
+        self.btn_nota_acudiente.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        self.btn_abrir_expediente = ctk.CTkButton(
+            extra_frame, text="📂 Abrir Expediente", fg_color="#8B5CF6", hover_color="#7C3AED",
+            font=("Segoe UI", 12, "bold"), height=35, command=self.abrir_expediente_estudiante, state="disabled"
+        )
+        self.btn_abrir_expediente.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
     def al_cambiar_grado(self, grado):
         self.grado_actual = grado
@@ -163,6 +208,9 @@ class ObservacionesFrame(ctk.CTkFrame):
                 16,
                 "italic"))
         self.btn_guardar.configure(state="disabled")
+        self.btn_nota_acudiente.configure(state="disabled")
+        self.btn_abrir_expediente.configure(state="disabled")
+
 
     def filtrar_lista(self, event=None):
         texto = self.entry_buscar.get().lower()
@@ -198,7 +246,40 @@ class ObservacionesFrame(ctk.CTkFrame):
                 18,
                 "bold"))
         self.btn_guardar.configure(state="normal")
+        self.btn_nota_acudiente.configure(state="normal")
+        self.btn_abrir_expediente.configure(state="normal")
         self.texto_obs.delete("1.0", "end")
+
+
+    def aplicar_plantilla(self, opcion):
+        if opcion == "Seleccionar plantilla...":
+            return
+            
+        plantillas = {
+            "Conducta: Excelente comportamiento": "El estudiante demuestra una conducta ejemplar, compañerismo y una actitud de respeto y liderazgo muy positiva en el aula.",
+            "Conducta: Falta de respeto a compañeros": "El estudiante mostró conductas inapropiadas e irrespetuosas hacia sus compañeros durante la jornada de clases.",
+            "Conducta: Uso de celular en clase": "Se observó al estudiante utilizando el teléfono celular durante la clase sin la debida autorización.",
+            "Académico: Excelente esfuerzo y participación": "El estudiante demuestra un alto nivel de compromiso, entrega todas sus asignaciones a tiempo y participa de forma activa y destacada en clase.",
+            "Académico: Incumplimiento de tareas": "El estudiante no entregó las tareas o actividades programadas para la fecha establecida, lo cual afecta negativamente su rendimiento.",
+            "Académico: Desinterés en clase": "Se observa falta de interés y concentración por parte del estudiante en las explicaciones y actividades de clase.",
+            "Citación: Bajo rendimiento académico": "Se cita formalmente al acudiente para conversar acerca del rendimiento académico deficiente y buscar estrategias de mejora conjuntas.",
+            "Citación: Reiteradas fallas de conducta": "Se solicita la presencia urgente del acudiente para abordar las reiteradas conductas inapropiadas reportadas del estudiante.",
+            "Mención: Excelente promedio y conducta": "Se otorga esta mención honorífica por su sobresaliente desempeño académico, esfuerzo constante y conducta impecable durante este período."
+        }
+        
+        texto = plantillas.get(opcion, "")
+        if texto:
+            if "Conducta:" in opcion:
+                self.combo_categoria.set("Conducta")
+            elif "Académico:" in opcion:
+                self.combo_categoria.set("Académico")
+            elif "Citación:" in opcion:
+                self.combo_categoria.set("Citación a Acudiente")
+            elif "Mención:" in opcion:
+                self.combo_categoria.set("Mención Honorífica")
+                
+            self.texto_obs.delete("1.0", "end")
+            self.texto_obs.insert("1.0", texto)
 
     def guardar_observacion(self):
         if not self.estudiante_seleccionado:
@@ -214,28 +295,146 @@ class ObservacionesFrame(ctk.CTkFrame):
                 "Debe redactar la observación antes de guardar.")
             return
 
-        # Guarda en Word usando el mismo generador
+        self.btn_guardar.configure(text="⏳ GUARDANDO...", state="disabled")
+        self.btn_nota_acudiente.configure(state="disabled")
+        self.btn_abrir_expediente.configure(state="disabled")
+
         carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
         if not os.path.exists(carpeta):
             os.makedirs(carpeta)
 
         nombre_est = self.estudiante_seleccionado['nombre']
 
-        try:
-            self._actualizar_o_crear_word(
-                carpeta,
-                nombre_est,
-                self.grado_actual,
-                fecha,
-                categoria,
-                observacion)
+        def tarea_fondo():
+            try:
+                self._actualizar_o_crear_word(
+                    carpeta,
+                    nombre_est,
+                    self.grado_actual,
+                    fecha,
+                    categoria,
+                    observacion)
+                self.after(0, lambda: self.finalizar_guardado_obs(True, nombre_est, carpeta))
+            except Exception as e:
+                self.after(0, lambda: self.finalizar_guardado_obs(False, nombre_est, str(e)))
+
+        threading.Thread(target=tarea_fondo, daemon=True).start()
+
+    def finalizar_guardado_obs(self, exito, nombre_est, extra):
+        self.btn_guardar.configure(text="📝 GUARDAR EN EXPEDIENTE OFICIAL", state="normal")
+        self.btn_nota_acudiente.configure(state="normal")
+        self.btn_abrir_expediente.configure(state="normal")
+
+        if exito:
             root = self.winfo_toplevel()
             if hasattr(root, "mostrar_toast"):
                 root.mostrar_toast(f"✓ Observación agregada al expediente de {nombre_est}", color="#10B981")
-            self.texto_obs.delete("1.0", "end")  # Limpiamos para la siguiente
-        except Exception as e:
-            messagebox.showerror(
-                "Error", f"No se pudo guardar el archivo: {e}")
+            self.texto_obs.delete("1.0", "end")
+
+            # Preguntar al usuario si desea abrir el documento inmediatamente
+            nombre_archivo = f"{nombre_est} - {self.grado_actual.replace('°', '')}.docx".replace("/", "-")
+            ruta_archivo = os.path.join(extra, nombre_archivo)
+            if messagebox.askyesno("Expediente Actualizado", f"Observación guardada.\n\n¿Desea abrir el expediente de {nombre_est} ahora mismo?"):
+                from utils.footer_utils import abrir_documento
+                abrir_documento(ruta_archivo)
+        else:
+            messagebox.showerror("Error", f"No se pudo guardar el expediente: {extra}")
+
+    def enviar_nota_acudiente(self):
+        if not self.estudiante_seleccionado:
+            return
+            
+        nombre_est = self.estudiante_seleccionado['nombre']
+        cedula_est = self.estudiante_seleccionado.get('cedula', '')
+        grado = self.grado_actual
+        
+        modal = ctk.CTkToplevel(self)
+        modal.title(f"✉️ Nota para Acudiente - {nombre_est}")
+        modal.geometry("400x380")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+        
+        modal.update_idletasks()
+        w = modal.winfo_width()
+        h = modal.winfo_height()
+        x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
+        y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
+        modal.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(modal, text="Asunto/Motivo:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(15, 0))
+        combo_asunto = ctk.CTkOptionMenu(modal, values=[
+            "Citación a Acudiente", 
+            "Reporte de Conducta", 
+            "Aviso de Bajo Rendimiento", 
+            "Felicitaciones por Desempeño"
+        ], width=360)
+        combo_asunto.pack(padx=20, pady=5)
+        
+        ctk.CTkLabel(modal, text="Detalle de la nota:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(10, 0))
+        txt_detalle = ctk.CTkTextbox(modal, height=120, width=360)
+        txt_detalle.pack(padx=20, pady=5)
+        
+        def generar():
+            motivo = combo_asunto.get()
+            desc = txt_detalle.get("1.0", "end").strip()
+            if not desc:
+                messagebox.showwarning("Atención", "Escriba el detalle de la nota.")
+                return
+                
+            from rdsecurity import cargar_config_segura
+            from documentos_maestro import generar_nota_acudiente
+            from utils.footer_utils import abrir_documento
+            
+            cfg = cargar_config_segura({})
+            datos = {
+                "alumno": nombre_est,
+                "cedula": cedula_est,
+                "grado": grado,
+                "docente_nombre": cfg.get("docente_nombre", ""),
+                "escuela_nombre": cfg.get("escuela_nombre", ""),
+                "ano_lectivo": cfg.get("ano_lectivo", "2026"),
+                "fecha": datetime.datetime.now().strftime("%d-%m-%Y"),
+                "motivo": motivo,
+                "descripcion": desc
+            }
+            ruta = generar_nota_acudiente(datos)
+            modal.destroy()
+            if ruta:
+                abrir_documento(ruta)
+                root = self.winfo_toplevel()
+                if hasattr(root, "mostrar_toast"):
+                    root.mostrar_toast("✓ Nota generada exitosamente", color="#10B981")
+                    
+        btn_gen = ctk.CTkButton(modal, text="Generar e Imprimir", fg_color="#10B981", hover_color="#059669", command=generar)
+        btn_gen.pack(pady=20)
+
+    def abrir_expediente_estudiante(self):
+        if not self.estudiante_seleccionado:
+            return
+            
+        nombre_est = self.estudiante_seleccionado['nombre']
+        nombre_archivo = f"{nombre_est} - {self.grado_actual.replace('°', '')}.docx".replace("/", "-")
+        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
+        ruta_archivo = os.path.join(carpeta, nombre_archivo)
+        
+        from utils.footer_utils import abrir_documento
+        if os.path.exists(ruta_archivo):
+            abrir_documento(ruta_archivo)
+        else:
+            if messagebox.askyesno("Crear Expediente", f"El expediente de {nombre_est} aún no se ha creado.\n\n¿Desea crearlo ahora?"):
+                try:
+                    self._actualizar_o_crear_word(
+                        carpeta,
+                        nombre_est,
+                        self.grado_actual,
+                        datetime.datetime.now().strftime("%d-%m-%Y"),
+                        "Apertura",
+                        "Apertura de Expediente Oficial de Seguimiento"
+                    )
+                    abrir_documento(ruta_archivo)
+                except Exception as e:
+                    messagebox.showerror("Error", f"No se pudo crear el expediente: {e}")
 
     # ==========================================
     # LÓGICA DE WORD (Plantilla Oficial)
@@ -252,16 +451,58 @@ class ObservacionesFrame(ctk.CTkFrame):
             "/", "-")
         ruta_archivo = os.path.join(carpeta, nombre_archivo)
 
+        def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
+            tcPr = cell._tc.get_or_add_tcPr()
+            tcMar = OxmlElement('w:tcMar')
+            for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+                node = OxmlElement(f'w:{m}')
+                node.set(qn('w:w'), str(val))
+                node.set(qn('w:type'), 'dxa')
+                tcMar.append(node)
+            tcPr.append(tcMar)
+            
+        def set_cell_width(cell, width_dxa):
+            tcPr = cell._tc.get_or_add_tcPr()
+            tcW = OxmlElement('w:tcW')
+            tcW.set(qn('w:w'), str(width_dxa))
+            tcW.set(qn('w:type'), 'dxa')
+            tcPr.append(tcW)
+            cell.width = width_dxa
+
+        def get_categoria_color(cat):
+            cat = cat.lower()
+            if "conducta" in cat:
+                return "E2F0D9" # Verde suave
+            elif "acad" in cat:
+                return "DDEBF7" # Azul suave
+            elif "cita" in cat:
+                return "FCE4D6" # Naranja suave
+            elif "menci" in cat:
+                return "FFF2CC" # Amarillo suave
+            else:
+                return "F2F2F2" # Gris suave
+
+        col_widths = [1152, 1728, 2160, 4320] # N.º, Fecha, Tipo, Descripción
+
         if os.path.exists(ruta_archivo):
             doc = Document(ruta_archivo)
             if doc.tables:
                 tabla = doc.tables[0]
                 num_reg = str(len(tabla.rows))
                 fila = tabla.add_row()
+                
                 fila.cells[0].text = num_reg
                 fila.cells[1].text = fecha
                 fila.cells[2].text = tipo
                 fila.cells[3].text = motivo
+
+                bg_color = get_categoria_color(tipo)
+                for idx, cell in enumerate(fila.cells):
+                    set_cell_width(cell, col_widths[idx])
+                    set_cell_margins(cell, 100, 100, 150, 150)
+                    shading_elm = OxmlElement('w:shd')
+                    shading_elm.set(qn('w:fill'), bg_color)
+                    cell._tc.get_or_add_tcPr().append(shading_elm)
             doc.save(ruta_archivo)
         else:
             doc = Document()
@@ -273,41 +514,42 @@ class ObservacionesFrame(ctk.CTkFrame):
             except Exception:
                 pass
 
+            from rdsecurity import cargar_config_segura
+            cfg = cargar_config_segura({})
+            docente = cfg.get("docente_nombre", "Elmer Tugri")
+            escuela = cfg.get("escuela_nombre", "ESCUELA CERRO CACICÓN")
+            ano = cfg.get("ano_lectivo", "2026")
+
             p_head = doc.add_paragraph()
             p_head.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run1 = p_head.add_run("MINISTERIO DE EDUCACIÓN\n")
             run1.bold = True
             run1.font.size = Pt(14)
 
-            run2 = p_head.add_run("ESCUELA CERRO CACICÓN\n")
+            run2 = p_head.add_run(f"{escuela.upper()}\n")
             run2.bold = True
             run2.font.size = Pt(12)
 
-            run3 = p_head.add_run("DIRECCIÓN REGIONAL COMARCA NGÄBE BUGLÉ")
+            run3 = p_head.add_run("DIRECCIÓN REGIONAL DE EDUCACIÓN")
             run3.font.size = Pt(11)
 
             doc.add_paragraph("\n")
 
             p_info = doc.add_paragraph()
             p_info.add_run("Docente: ").bold = True
-            p_info.add_run("Elmer Tugri\t\t\t")
+            p_info.add_run(f"{docente}\t\t\t")
             p_info.add_run("Estudiante: ").bold = True
             p_info.add_run(f"{nombre_est}\n")
 
             p_info.add_run("Grado: ").bold = True
             p_info.add_run(f"{grado}\t\t\t\t")
             p_info.add_run("Año Lectivo: ").bold = True
-            p_info.add_run("2026")
+            p_info.add_run(ano)
 
             doc.add_paragraph("\n")
 
             tabla = doc.add_table(rows=1, cols=4)
             tabla.style = 'Table Grid'
-
-            for cell in tabla.rows[0].cells:
-                shading_elm = OxmlElement('w:shd')
-                shading_elm.set(qn('w:fill'), 'D9E2F3')
-                cell._tc.get_or_add_tcPr().append(shading_elm)
 
             hdr_cells = tabla.rows[0].cells
             hdr_cells[0].text = 'Registro N.º'
@@ -315,16 +557,31 @@ class ObservacionesFrame(ctk.CTkFrame):
             hdr_cells[2].text = 'Tipo de registro'
             hdr_cells[3].text = 'Descripción (Motivo u observación)'
 
-            for celda in hdr_cells:
-                for p in celda.paragraphs:
+            for idx, cell in enumerate(hdr_cells):
+                set_cell_width(cell, col_widths[idx])
+                set_cell_margins(cell, 100, 100, 150, 150)
+                shading_elm = OxmlElement('w:shd')
+                shading_elm.set(qn('w:fill'), '1F4E78') # MEDUCA azul oscuro
+                cell._tc.get_or_add_tcPr().append(shading_elm)
+                for p in cell.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     for r in p.runs:
                         r.font.bold = True
+                        r.font.color.rgb = RGBColor(255, 255, 255)
 
             fila = tabla.add_row()
             fila.cells[0].text = "1"
             fila.cells[1].text = fecha
             fila.cells[2].text = tipo
             fila.cells[3].text = motivo
+
+            bg_color = get_categoria_color(tipo)
+            for idx, cell in enumerate(fila.cells):
+                set_cell_width(cell, col_widths[idx])
+                set_cell_margins(cell, 100, 100, 150, 150)
+                shading_elm = OxmlElement('w:shd')
+                shading_elm.set(qn('w:fill'), bg_color)
+                cell._tc.get_or_add_tcPr().append(shading_elm)
 
             doc.add_paragraph("\n\n\n\n\n")
             p_firma = doc.add_paragraph(
@@ -340,3 +597,15 @@ class ObservacionesFrame(ctk.CTkFrame):
             p_foot.runs[0].font.color.rgb = RGBColor(128, 128, 128)
 
             doc.save(ruta_archivo)
+
+    def actualizar_vista(self):
+        """Recarga la lista de grados y estudiantes."""
+        opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=opciones)
+        if old_sel in opciones:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(opciones[0])
+        self.al_cambiar_grado(self.combo_grado.get())
+
