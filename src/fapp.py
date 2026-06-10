@@ -149,6 +149,12 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.combo_trimestre = ctk.CTkOptionMenu(
             tab_nueva, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"])
         self.combo_trimestre.pack(fill="x", padx=10, pady=5)
+        try:
+            from utils.date_helpers import obtener_trimestre_actual
+            self.combo_trimestre.set(obtener_trimestre_actual())
+            self.combo_trimestre.configure(state="disabled")
+        except Exception:
+            pass
 
         ctk.CTkLabel(
             tab_nueva,

@@ -199,6 +199,9 @@ class ReportesFrame(ctk.CTkFrame):
         modal.transient(self)
         modal.grab_set()
         
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(modal)
+        
         modal.update_idletasks()
         w = modal.winfo_width()
         h = modal.winfo_height()

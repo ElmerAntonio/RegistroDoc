@@ -3,7 +3,9 @@ from tkinter import messagebox
 import datetime
 import os
 import threading
+import json
 from config import BASE_DIR
+from utils.spellchecker import SpellcheckTextbox
 try:
     from docx import Document
     from docx.shared import Pt, RGBColor
@@ -13,6 +15,7 @@ try:
     DOCX_DISPONIBLE = True
 except ImportError:
     DOCX_DISPONIBLE = False
+
 
 
 class ObservacionesFrame(ctk.CTkFrame):
@@ -130,31 +133,10 @@ class ObservacionesFrame(ctk.CTkFrame):
                 "Otro"])
         self.combo_categoria.pack(fill="x", padx=20)
 
-        ctk.CTkLabel(
-            panel_obs,
-            text="Sugerir plantilla (opcional - puedes editarla después):",
-            font=(
-                "Segoe UI",
-                12)).pack(
-            anchor="w",
-            padx=20,
-            pady=(
-                15,
-                5))
+        self.plantillas = self.cargar_plantillas()
         self.combo_plantilla = ctk.CTkOptionMenu(
             panel_obs,
-            values=[
-                "Seleccionar plantilla...",
-                "Conducta: Excelente comportamiento",
-                "Conducta: Falta de respeto a compañeros",
-                "Conducta: Uso de celular en clase",
-                "Académico: Excelente esfuerzo y participación",
-                "Académico: Incumplimiento de tareas",
-                "Académico: Desinterés en clase",
-                "Citación: Bajo rendimiento académico",
-                "Citación: Reiteradas fallas de conducta",
-                "Mención: Excelente promedio y conducta"
-            ],
+            values=["Seleccionar plantilla..."] + list(self.plantillas.keys()),
             command=self.aplicar_plantilla)
         self.combo_plantilla.pack(fill="x", padx=20)
 
@@ -169,8 +151,14 @@ class ObservacionesFrame(ctk.CTkFrame):
             pady=(
                 15,
                 5))
-        self.texto_obs = ctk.CTkTextbox(panel_obs, height=150)
-        self.texto_obs.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.texto_obs = SpellcheckTextbox(panel_obs, height=110)
+        self.texto_obs.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        self.btn_guardar_plantilla = ctk.CTkButton(
+            panel_obs, text="💾 Guardar como nueva plantilla", fg_color="#334155", hover_color="#475569",
+            font=("Segoe UI", 11, "bold"), height=28, command=self.guardar_como_plantilla
+        )
+        self.btn_guardar_plantilla.pack(fill="x", padx=20, pady=(0, 15))
 
         self.btn_guardar = ctk.CTkButton(self.frame_der, text="📝 GUARDAR EN EXPEDIENTE OFICIAL", fg_color="#10B981", hover_color="#059669",
                                          font=("Segoe UI", 14, "bold"), height=45, command=self.guardar_observacion, state="disabled")
@@ -255,31 +243,16 @@ class ObservacionesFrame(ctk.CTkFrame):
         if opcion == "Seleccionar plantilla...":
             return
             
-        plantillas = {
-            "Conducta: Excelente comportamiento": "El estudiante demuestra una conducta ejemplar, compañerismo y una actitud de respeto y liderazgo muy positiva en el aula.",
-            "Conducta: Falta de respeto a compañeros": "El estudiante mostró conductas inapropiadas e irrespetuosas hacia sus compañeros durante la jornada de clases.",
-            "Conducta: Uso de celular en clase": "Se observó al estudiante utilizando el teléfono celular durante la clase sin la debida autorización.",
-            "Académico: Excelente esfuerzo y participación": "El estudiante demuestra un alto nivel de compromiso, entrega todas sus asignaciones a tiempo y participa de forma activa y destacada en clase.",
-            "Académico: Incumplimiento de tareas": "El estudiante no entregó las tareas o actividades programadas para la fecha establecida, lo cual afecta negativamente su rendimiento.",
-            "Académico: Desinterés en clase": "Se observa falta de interés y concentración por parte del estudiante en las explicaciones y actividades de clase.",
-            "Citación: Bajo rendimiento académico": "Se cita formalmente al acudiente para conversar acerca del rendimiento académico deficiente y buscar estrategias de mejora conjuntas.",
-            "Citación: Reiteradas fallas de conducta": "Se solicita la presencia urgente del acudiente para abordar las reiteradas conductas inapropiadas reportadas del estudiante.",
-            "Mención: Excelente promedio y conducta": "Se otorga esta mención honorífica por su sobresaliente desempeño académico, esfuerzo constante y conducta impecable durante este período."
-        }
-        
-        texto = plantillas.get(opcion, "")
-        if texto:
-            if "Conducta:" in opcion:
-                self.combo_categoria.set("Conducta")
-            elif "Académico:" in opcion:
-                self.combo_categoria.set("Académico")
-            elif "Citación:" in opcion:
-                self.combo_categoria.set("Citación a Acudiente")
-            elif "Mención:" in opcion:
-                self.combo_categoria.set("Mención Honorífica")
-                
+        info = self.plantillas.get(opcion)
+        if info:
+            texto = info.get("texto", "")
+            cat = info.get("categoria", "Otro")
+            
+            self.combo_categoria.set(cat)
             self.texto_obs.delete("1.0", "end")
             self.texto_obs.insert("1.0", texto)
+            if hasattr(self.texto_obs, "check_spelling"):
+                self.texto_obs.check_spelling()
 
     def guardar_observacion(self):
         if not self.estudiante_seleccionado:
@@ -354,6 +327,9 @@ class ObservacionesFrame(ctk.CTkFrame):
         modal.resizable(False, False)
         modal.transient(self)
         modal.grab_set()
+        
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(modal)
         
         modal.update_idletasks()
         w = modal.winfo_width()
@@ -608,4 +584,161 @@ class ObservacionesFrame(ctk.CTkFrame):
         else:
             self.combo_grado.set(opciones[0])
         self.al_cambiar_grado(self.combo_grado.get())
+
+    def cargar_plantillas(self):
+        ruta = os.path.join(BASE_DIR, "..", "observaciones_plantillas.json")
+        if os.path.exists(ruta):
+            try:
+                with open(ruta, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+                
+        # Defaults
+        defaults = {
+            "Conducta: Excelente comportamiento": {
+                "categoria": "Conducta",
+                "texto": "El estudiante demuestra una conducta ejemplar, compañerismo y una actitud de respeto y liderazgo muy positiva en el aula."
+            },
+            "Conducta: Falta de respeto a compañeros": {
+                "categoria": "Conducta",
+                "texto": "El estudiante mostró conductas inapropiadas e irrespetuosas hacia sus compañeros durante la jornada de clases."
+            },
+            "Conducta: Uso de celular en clase": {
+                "categoria": "Conducta",
+                "texto": "Se observó al estudiante utilizando el teléfono celular durante la clase sin la debida autorización."
+            },
+            "Conducta: Interrumpe la clase": {
+                "categoria": "Conducta",
+                "texto": "El estudiante habla constantemente durante las explicaciones, distrayendo a sus compañeros e interrumpiendo el desarrollo normal de la clase."
+            },
+            "Conducta: Actitud desafiante / Indisciplina": {
+                "categoria": "Conducta",
+                "texto": "El estudiante muestra una actitud desafiante ante las indicaciones del docente y se niega a seguir las normas de convivencia."
+            },
+            "Conducta: Agresión física / Riña": {
+                "categoria": "Conducta",
+                "texto": "El estudiante se vio involucrado en una agresión física con un compañero dentro del centro educativo."
+            },
+            "Conducta: Vocabulario inadecuado": {
+                "categoria": "Conducta",
+                "texto": "El estudiante utiliza lenguaje vulgar o expresiones soeces para comunicarse en el aula de clases."
+            },
+            "Conducta: Daño a la propiedad escolar": {
+                "categoria": "Conducta",
+                "texto": "El estudiante causó daños materiales a la propiedad escolar de forma deliberada."
+            },
+            "Conducta: Falta de uniforme / Presentación": {
+                "categoria": "Conducta",
+                "texto": "El estudiante asiste a clases sin cumplir con las normas de uniforme y presentación personal requeridas por la institución."
+            },
+            "Académico: Excelente esfuerzo y participación": {
+                "categoria": "Académico",
+                "texto": "El estudiante demuestra un alto nivel de compromiso, entrega todas sus asignaciones a tiempo y participa de forma activa y destacada en clase."
+            },
+            "Académico: Incumplimiento de tareas": {
+                "categoria": "Académico",
+                "texto": "El estudiante no entregó las tareas o actividades programadas para la fecha establecida, lo cual afecta negativamente su rendimiento."
+            },
+            "Académico: Desinterés en clase": {
+                "categoria": "Académico",
+                "texto": "Se observa falta de interés y concentración por parte del estudiante en las explicaciones y actividades de clase."
+            },
+            "Académico: No trae materiales": {
+                "categoria": "Académico",
+                "texto": "El estudiante asiste a clases de manera recurrente sin sus libros, cuadernos o materiales necesarios para trabajar."
+            },
+            "Académico: Progreso académico notable": {
+                "categoria": "Académico",
+                "texto": "Se felicita al estudiante por mostrar una mejoría significativa en sus calificaciones y nivel de atención."
+            },
+            "Citación: Bajo rendimiento académico": {
+                "categoria": "Citación a Acudiente",
+                "texto": "Se cita formalmente al acudiente para conversar acerca del rendimiento académico deficiente y buscar estrategias de mejora conjuntas."
+            },
+            "Citación: Reiteradas fallas de conducta": {
+                "categoria": "Citación a Acudiente",
+                "texto": "Se solicita la presencia urgente del acudiente para abordar las reiteradas conductas inapropiadas reportadas del estudiante."
+            },
+            "Citación: Inasistencias injustificadas": {
+                "categoria": "Citación a Acudiente",
+                "texto": "Se convoca al acudiente debido a las constantes inasistencias sin justificar que presenta el estudiante."
+            },
+            "Mención: Excelente promedio y conducta": {
+                "categoria": "Mención Honorífica",
+                "texto": "Se otorga esta mención honorífica por su sobresaliente desempeño académico, esfuerzo constante y conducta impecable durante este período."
+            }
+        }
+        
+        try:
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump(defaults, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return defaults
+
+    def guardar_como_plantilla(self):
+        observacion = self.texto_obs.get("1.0", "end").strip()
+        if not observacion:
+            messagebox.showwarning("Atención", "Redacte una observación antes de guardarla como plantilla.")
+            return
+
+        modal = ctk.CTkToplevel(self)
+        modal.title("💾 Guardar como Plantilla")
+        modal.geometry("380x210")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+        
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(modal)
+        
+        modal.update_idletasks()
+        w = modal.winfo_width()
+        h = modal.winfo_height()
+        x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
+        y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
+        modal.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(modal, text="Categoría de la plantilla:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(15, 0))
+        cat_actual = self.combo_categoria.get()
+        combo_cat = ctk.CTkOptionMenu(modal, values=["Conducta", "Académico", "Citación a Acudiente", "Mención Honorífica", "Otro"], width=340)
+        combo_cat.set(cat_actual)
+        combo_cat.pack(padx=20, pady=5)
+        
+        ctk.CTkLabel(modal, text="Nombre/Título de la plantilla:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(10, 0))
+        entry_nombre = ctk.CTkEntry(modal, placeholder_text="Ej: Conducta: Falta grave", width=340)
+        snippet = observacion[:25] + "..." if len(observacion) > 25 else observacion
+        entry_nombre.insert(0, f"{cat_actual}: {snippet}")
+        entry_nombre.pack(padx=20, pady=5)
+        
+        def guardar():
+            nombre = entry_nombre.get().strip()
+            cat = combo_cat.get()
+            if not nombre:
+                messagebox.showwarning("Atención", "Escriba un nombre para la plantilla.")
+                return
+            
+            ruta = os.path.join(BASE_DIR, "..", "observaciones_plantillas.json")
+            self.plantillas[nombre] = {
+                "categoria": cat,
+                "texto": observacion
+            }
+            try:
+                with open(ruta, "w", encoding="utf-8") as f:
+                    json.dump(self.plantillas, f, ensure_ascii=False, indent=2)
+                
+                # Update option menu values
+                self.combo_plantilla.configure(values=["Seleccionar plantilla..."] + list(self.plantillas.keys()))
+                self.combo_plantilla.set(nombre)
+                
+                modal.destroy()
+                root = self.winfo_toplevel()
+                if hasattr(root, "mostrar_toast"):
+                    root.mostrar_toast("✓ Plantilla guardada exitosamente", color="#10B981")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar la plantilla: {e}")
+                
+        btn_g = ctk.CTkButton(modal, text="Guardar Plantilla", fg_color="#10B981", hover_color="#059669", command=guardar)
+        btn_g.pack(pady=15)
 

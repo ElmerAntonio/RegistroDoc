@@ -654,6 +654,14 @@ class DataEngine:
         self._cargar_en_memoria()
         return True
 
+    def limpiar_acentos(self, texto):
+        if not texto:
+            return ""
+        texto = str(texto).upper()
+        for k, v in {"Á":"A", "É":"E", "Í":"I", "Ó":"O", "Ú":"U", "Ü":"U"}.items():
+            texto = texto.replace(k, v)
+        return texto
+
     def obtener_promedios_reales(self, grado, materia, trimestre, wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
@@ -699,10 +707,10 @@ class DataEngine:
                 # Buscar materia
                 fila_materias = None
                 col_inicio_materia = None
-                for r in range(4, 15):
+                for r in range(3, 15):
                     for c in range(2, 40):
                         val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                        if materia.upper() in val_cell:
+                        if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
                             fila_materias = r
                             col_inicio_materia = c
                             break
@@ -731,16 +739,38 @@ class DataEngine:
                 
                 if materias_limpias:
                     bulk_data = self.obtener_promedios_reales_bulk(grado, materias_limpias, trimestre, wb=wb)
-                    estudiantes_notas = {}
-                    for mat, nom_notas in bulk_data.items():
-                        for nom, nota in nom_notas.items():
-                            if nom not in estudiantes_notas:
-                                estudiantes_notas[nom] = []
-                            estudiantes_notas[nom].append(nota)
                     
-                    for nom, list_notas in estudiantes_notas.items():
-                        if list_notas:
-                            datos[nom] = round(sum(list_notas) / len(list_notas), 2)
+                    # Identificar materias de tecnología
+                    tech_mats = []
+                    norm_mats = []
+                    for m in materias_limpias:
+                        m_upper = self.limpiar_acentos(m)
+                        if "HOGAR" in m_upper or "DESARROLLO" in m_upper or "AGRO" in m_upper or "COMERCIO" in m_upper:
+                            tech_mats.append(m)
+                        else:
+                            norm_mats.append(m)
+                            
+                    estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
+                    for est in estudiantes:
+                        nom = est["nombre"]
+                        norm_notas = []
+                        for m in norm_mats:
+                            if m in bulk_data and nom in bulk_data[m] and bulk_data[m][nom] is not None:
+                                norm_notas.append(bulk_data[m][nom])
+                                
+                        tech_notas = []
+                        for m in tech_mats:
+                            if m in bulk_data and nom in bulk_data[m] and bulk_data[m][nom] is not None:
+                                tech_notas.append(bulk_data[m][nom])
+                                
+                        tec_prom = sum(tech_notas) / len(tech_notas) if tech_notas else None
+                        
+                        comb_notas = list(norm_notas)
+                        if tec_prom is not None:
+                            comb_notas.append(tec_prom)
+                            
+                        if comb_notas:
+                            datos[nom] = round(sum(comb_notas) / len(comb_notas), 2)
                 
                 # Fallback a la columna ANUAL/FINAL si no hay materias cargadas o falló
                 if not datos:
@@ -829,10 +859,10 @@ class DataEngine:
                 if materia and materia not in ["Sin materias", "No hay materias", "General"]:
                     fila_materias = None
                     col_inicio_materia = None
-                    for r in range(4, 15):
+                    for r in range(3, 15):
                         for c in range(2, 40):
                             val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                            if materia.upper() in val_cell:
+                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
                                 fila_materias = r
                                 col_inicio_materia = c
                                 break
@@ -898,10 +928,10 @@ class DataEngine:
             if fila_estudiante:
                 if materia and materia not in ["Sin materias", "No hay materias", "General"]:
                     col_inicio_materia = None
-                    for r in range(4, 15):
+                    for r in range(3, 15):
                         for c in range(2, 40):
                             val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                            if materia.upper() in val_cell:
+                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
                                 col_inicio_materia = c
                                 break
                         if col_inicio_materia: break
@@ -909,9 +939,9 @@ class DataEngine:
                     if col_inicio_materia:
                         # Buscar columnas de trimestre debajo de la materia
                         fila_materias = None
-                        for rmat in range(4, 15):
+                        for rmat in range(3, 15):
                             val_cell = str(ws_res.cell(row=rmat, column=col_inicio_materia).value or "").upper()
-                            if materia.upper() in val_cell:
+                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
                                 fila_materias = rmat
                                 break
                         cols_trimestres = []
@@ -986,24 +1016,126 @@ class DataEngine:
 
         return datos
 
+    def obtener_cuadro_honor_general(self, wb=None):
+        if wb is None:
+            self._verificar_y_recargar_cache()
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return []
+
+        should_close = not bool(self._wb_cache) if wb is None else False
+        if wb is None:
+            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+
+        resultados = []
+        try:
+            grados = self.obtener_grados_activos(wb=wb)
+            for g in grados:
+                estudiantes = self.obtener_estudiantes_completos(g, wb=wb)
+                if not estudiantes:
+                    continue
+                materias_grado = self.obtener_materias_por_grado(g, wb=wb)
+                
+                # Materias reales limpias
+                materias_limpias = [m for m in materias_grado if m and m not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]]
+                if not materias_limpias:
+                    continue
+                
+                # Identificar materias de tecnología y materias normales
+                tech_mats = []
+                norm_mats = []
+                for m in materias_limpias:
+                    m_upper = m.upper()
+                    if "HOGAR" in m_upper or "DESARROLLO" in m_upper or "AGRO" in m_upper or "COMERCIO" in m_upper:
+                        tech_mats.append(m)
+                    else:
+                        norm_mats.append(m)
+                
+                # Obtener notas para todas las materias en todos los trimestres
+                notas_por_materia_trimestre = {}
+                for trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                    for m in materias_limpias:
+                        proms = self.obtener_promedios_reales(g, m, trim, wb=wb)
+                        if proms:
+                            notas_por_materia_trimestre[(m, trim)] = proms
+                            
+                # Para cada estudiante, calcular promedio general anual
+                for est in estudiantes:
+                    nom = est["nombre"]
+                    
+                    # Para cada trimestre, calcular promedio general
+                    promedios_trimestrales = []
+                    for trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                        # Notas de materias normales
+                        norm_notas = []
+                        for m in norm_mats:
+                            proms_dict = notas_por_materia_trimestre.get((m, trim), {})
+                            if nom in proms_dict and proms_dict[nom] is not None:
+                                norm_notas.append(proms_dict[nom])
+                                
+                        # Notas de tecnología
+                        tech_notas = []
+                        for m in tech_mats:
+                            proms_dict = notas_por_materia_trimestre.get((m, trim), {})
+                            if nom in proms_dict and proms_dict[nom] is not None:
+                                tech_notas.append(proms_dict[nom])
+                        
+                        # Promedio de Tecnología
+                        tec_prom = sum(tech_notas) / len(tech_notas) if tech_notas else None
+                        
+                        # Combinar
+                        trim_notas = list(norm_notas)
+                        if tec_prom is not None:
+                            trim_notas.append(tec_prom)
+                            
+                        if trim_notas:
+                            trim_avg = sum(trim_notas) / len(trim_notas)
+                            promedios_trimestrales.append(trim_avg)
+                    
+                    # Promedio general acumulado del año (promedio de los promedios trimestrales con notas)
+                    if promedios_trimestrales:
+                        prom_general = sum(promedios_trimestrales) / len(promedios_trimestrales)
+                        # Redondear a 2 decimales
+                        prom_general = round(prom_general, 2)
+                        if 4.5 <= prom_general <= 5.0:
+                            resultados.append({
+                                "nombre": nom,
+                                "grado": g,
+                                "promedio": prom_general
+                            })
+        except Exception as e:
+            print(f"[!] Error calculating cuadro de honor: {e}")
+        finally:
+            if should_close: wb.close()
+
+        # Ordenar de mayor a menor promedio
+        resultados = sorted(resultados, key=lambda x: x["promedio"], reverse=True)
+        return resultados
+
     def get_dashboard_stats(self, wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
-            return {"total": 0, "riesgo": 0, "honor": "N/A", "asistencia": "—", "tareas_sin_nota": 0, "excusas": 0}
+            return {"total": 0, "riesgo": 0, "honor": "N/A", "honor_cant": 0, "asistencia": "—", "tareas_sin_nota": 0, "excusas": 0, "habitos": {"S": 0, "R": 0, "X": 0}}
 
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
         
+        from utils.date_helpers import obtener_trimestre_actual
+        trimestre_actual = obtener_trimestre_actual()
+        
         total = 0
         riesgo = 0
         excusas = 0
         tareas_sin_nota = 0
-        best_student = "N/A"
-        best_prom = 0.0
         total_asist_dias = 0
         total_asist_ausencias = 0
+
+        # Obtener Cuadro de Honor (General del año entero)
+        cuadro_honor = self.obtener_cuadro_honor_general(wb=wb)
+        honor_cant = len(cuadro_honor)
+        best_student = cuadro_honor[0]["nombre"] if honor_cant > 0 else "N/A"
+        best_prom = cuadro_honor[0]["promedio"] if honor_cant > 0 else 0.0
 
         try:
             grados = self.obtener_grados_activos(wb=wb)
@@ -1011,19 +1143,14 @@ class DataEngine:
                 estudiantes = self.obtener_estudiantes_completos(g, wb=wb)
                 total += len(estudiantes)
                 
-                # Promedios de riesgo e Honor
-                proms = self.obtener_promedios_reales(g, None, "Anual", wb=wb)
-                if not proms:
-                    proms = self.obtener_promedios_reales(g, None, "Trimestre 1", wb=wb)
+                # Promedios de riesgo para el trimestre actual solamente
+                proms = self.obtener_promedios_reales(g, None, trimestre_actual, wb=wb)
                 for nom, prom in proms.items():
                     if prom is not None:
                         if prom < 3.0:
                             riesgo += 1
-                        if prom > best_prom:
-                            best_prom = prom
-                            best_student = nom
 
-                # Conteo de excusas E y promedio de asistencia
+                # Conteo de excusas E y promedio de asistencia para el trimestre actual solamente
                 hoja_asist = None
                 g_clean = g.replace("°", "")
                 for s in wb.sheetnames:
@@ -1032,9 +1159,11 @@ class DataEngine:
                         break
                 if hoja_asist:
                     ws_as = wb[hoja_asist]
-                    for r in range(5, 5 + len(estudiantes)):
-                        for c in range(4, 100):
-                            val_fecha = ws_as.cell(row=4, column=c).value
+                    mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
+                    fila_fechas = mapa_trimestres.get(trimestre_actual, 2)
+                    for r in range(fila_fechas + 1, fila_fechas + 1 + len(estudiantes)):
+                        for c in range(3, 61):
+                            val_fecha = ws_as.cell(row=fila_fechas, column=c).value
                             if val_fecha:
                                 val = ws_as.cell(row=r, column=c).value
                                 if val is not None and str(val).strip():
@@ -1044,7 +1173,7 @@ class DataEngine:
                                     elif val == "-":
                                         total_asist_ausencias += 1
 
-                # Conteo de tareas sin nota (vacias)
+                # Conteo de tareas sin nota (vacías) para el trimestre actual solamente
                 materias = self.obtener_materias_por_grado(g, wb=wb)
                 for mat in materias:
                     if mat in ["Sin materias", "No hay materias", "General"]:
@@ -1053,7 +1182,7 @@ class DataEngine:
                     if not hoja_prom:
                         continue
                     ws_pm = wb[hoja_prom]
-                    for trimestre in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                    for trimestre in [trimestre_actual]:
                         for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
                             col_inicio, col_fin = self._obtener_rango_columnas(ws_pm, trimestre, tipo_nota)
                             if col_inicio is None or col_fin is None:
@@ -1108,6 +1237,7 @@ class DataEngine:
             "total": total,
             "riesgo": riesgo,
             "honor": honor,
+            "honor_cant": honor_cant,
             "asistencia": asistencia_pct,
             "tareas_sin_nota": tareas_sin_nota,
             "excusas": excusas,

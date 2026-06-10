@@ -130,6 +130,26 @@ GUIAS = [
             "O presione '🖨️ Enviar a Impresora' para imprimir directo",
         ]
     },
+    {
+        "icono": "📋", "titulo": "Ver Registro Completo Consolidado",
+        "color": C["cian"],
+        "pasos": [
+            "Presione 'Registro Completo' en el menú izquierdo",
+            "Seleccione el Grado, Trimestre y Materia a visualizar",
+            "Pestaña Calificaciones: Vea métricas y cuadrícula de notas de todo el salón",
+            "Pestaña Asistencia: Vea la matriz completa de asistencia por fechas del trimestre",
+        ]
+    },
+    {
+        "icono": "✍️", "titulo": "Usar Corrector y Guardar Plantillas",
+        "color": C["warning"],
+        "pasos": [
+            "En Observaciones, redacte la conducta o académico libremente",
+            "Las palabras mal escritas se subrayarán en rojo de forma automática",
+            "Haga clic derecho en una palabra subrayada para seleccionar sugerencias",
+            "Use el botón '💾 Guardar como nueva plantilla' para clasificar y guardarla",
+        ]
+    },
 ]
 
 FAQS = [
@@ -426,8 +446,9 @@ class HelpFrame(ctk.CTkFrame):
             ("12. Atajos Teclado", "12. ATAJOS DE TECLADO"),
             ("13. Respaldos", "13. COPIAS DE SEGURIDAD"),
             ("14. Reuniones ¡NUEVO!", "14. REUNIONES"),
-            ("15. Problemas", "15. SOLUCIÓN DE PROBLEMAS"),
-            ("16. Glosario", "16. GLOSARIO"),
+            ("15. Reg. Completo ¡NUEVO!", "15. REGISTRO COMPLETO"),
+            ("16. Problemas", "16. SOLUCIÓN DE PROBLEMAS"),
+            ("17. Glosario", "17. GLOSARIO"),
         ]
 
         # ─── Visor de texto ───

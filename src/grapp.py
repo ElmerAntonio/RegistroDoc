@@ -941,6 +941,9 @@ class GraficosFrame(ctk.CTkFrame):
         win.transient(self)
         win.grab_set()
         
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(win)
+        
         ctk.CTkLabel(
             win,
             text="📘 Guía de Interpretación de Gráficos",

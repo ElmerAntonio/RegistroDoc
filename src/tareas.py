@@ -56,6 +56,23 @@ def agregar_tarea(titulo, grado, materia, tipo, fecha_limite, descripcion=""):
     return nueva
 
 
+def actualizar_tarea(tarea_id, titulo, grado, materia, tipo, fecha_limite, descripcion=""):
+    """
+    Actualiza una tarea existente.
+    """
+    tareas = cargar_tareas()
+    for t in tareas:
+        if t["id"] == tarea_id:
+            t["titulo"] = titulo
+            t["grado"] = grado
+            t["materia"] = materia
+            t["tipo"] = tipo
+            t["fecha_limite"] = fecha_limite
+            t["descripcion"] = descripcion
+            break
+    guardar_tareas(tareas)
+
+
 def marcar_completada(tarea_id):
     """Marca una tarea como completada."""
     tareas = cargar_tareas()

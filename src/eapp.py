@@ -42,6 +42,44 @@ class NotasFrame(ctk.CTkFrame):
             top, values=opciones, command=self.al_cambiar_grado)
         self.combo_grado.pack(side="left", padx=10)
 
+        # Switch/Checkbox for points scale next to the grade selection
+        self.var_usar_puntos = ctk.BooleanVar(value=False)
+        self.switch_puntos = ctk.CTkSwitch(
+            top, text="Escala Puntos",
+            variable=self.var_usar_puntos,
+            command=self.al_cambiar_modo_puntos,
+            font=("Segoe UI", 11, "bold")
+        )
+        self.switch_puntos.pack(side="left", padx=(15, 8))
+
+        self.lbl_pts_max = ctk.CTkLabel(top, text="Máx:", font=("Segoe UI", 11, "bold"))
+        self.lbl_pts_max.pack(side="left", padx=(5, 2))
+        self.entry_pts_max = ctk.CTkEntry(top, width=45, height=24, justify="center", font=("Segoe UI", 11))
+        self.entry_pts_max.insert(0, "40")
+        self.entry_pts_max.pack(side="left", padx=2)
+        self.entry_pts_max.bind("<KeyRelease>", lambda e: self.recalcular_escala_visual())
+        self.entry_pts_max.configure(state="disabled")
+
+        self.lbl_exigencia = ctk.CTkLabel(top, text="Exig:", font=("Segoe UI", 11, "bold"))
+        self.lbl_exigencia.pack(side="left", padx=(5, 2))
+        self.combo_exigencia = ctk.CTkOptionMenu(
+            top, values=["50%", "60%", "70%"], width=75, height=24,
+            command=lambda _: self.recalcular_escala_visual(),
+            font=("Segoe UI", 11)
+        )
+        self.combo_exigencia.set("60%")
+        self.combo_exigencia.pack(side="left", padx=2)
+        self.combo_exigencia.configure(state="disabled")
+
+        self.btn_ver_tabla_puntos = ctk.CTkButton(
+            top, text="📋 Tabla", width=65, height=24,
+            fg_color="#8B5CF6", hover_color="#7C3AED",
+            font=("Segoe UI", 11, "bold"),
+            command=self.abrir_tabla_puntos_modal
+        )
+        self.btn_ver_tabla_puntos.pack(side="left", padx=(8, 2))
+        self.btn_ver_tabla_puntos.configure(state="disabled")
+
         self.scroll_estudiantes = ctk.CTkScrollableFrame(
             frame_izq, fg_color="transparent")
         self.scroll_estudiantes.pack(fill="both", expand=True,
@@ -66,7 +104,6 @@ class NotasFrame(ctk.CTkFrame):
 
         tab_nueva = self.tabs.add("Nueva Nota")
         tab_mod = self.tabs.add("Modificar")
-        tab_puntos = self.tabs.add("Escala Puntos")
         tab_tareas = self.tabs.add("Tareas")
 
         self.scroll_tareas_tab = ctk.CTkScrollableFrame(tab_tareas, fg_color="transparent")
@@ -86,6 +123,12 @@ class NotasFrame(ctk.CTkFrame):
         self.combo_trimestre = ctk.CTkOptionMenu(
             tab_nueva, values=["Trimestre 1", "Trimestre 2", "Trimestre 3"])
         self.combo_trimestre.pack(fill="x", padx=10, pady=10)
+        try:
+            from utils.date_helpers import obtener_trimestre_actual
+            self.combo_trimestre.set(obtener_trimestre_actual())
+            self.combo_trimestre.configure(state="disabled")
+        except Exception:
+            pass
 
         self.combo_tipo = ctk.CTkOptionMenu(
             tab_nueva, values=["Diaria / Parcial", "Apreciación", "Examen"],
@@ -107,6 +150,21 @@ class NotasFrame(ctk.CTkFrame):
         self.var_desc.trace_add("write", self.actualizar_contador_desc)
         self.entry_desc = ctk.CTkEntry(tab_nueva, textvariable=self.var_desc, font=("Calibri", 11), justify="center")
         self.entry_desc.pack(fill="x", padx=10, pady=5)
+
+        # Relleno Rápido de Notas
+        relleno_frame = ctk.CTkFrame(tab_nueva, fg_color="transparent")
+        relleno_frame.pack(fill="x", padx=10, pady=(5, 5))
+        ctk.CTkLabel(relleno_frame, text="Relleno rápido:", font=("Segoe UI", 11)).pack(side="left")
+        self.entry_relleno = ctk.CTkEntry(relleno_frame, width=50, placeholder_text="5.0", justify="center")
+        self.entry_relleno.insert(0, "5.0")
+        self.entry_relleno.pack(side="left", padx=5)
+        btn_rellenar = ctk.CTkButton(
+            relleno_frame, text="Rellenar", width=70, height=26,
+            fg_color="#3B82F6", hover_color="#2563EB",
+            font=("Segoe UI", 11, "bold"),
+            command=self.rellenar_notas_grupo
+        )
+        btn_rellenar.pack(side="left", padx=5)
 
         self.btn_guardar_nueva = ctk.CTkButton(
             tab_nueva,
@@ -176,35 +234,45 @@ class NotasFrame(ctk.CTkFrame):
             command=self.actualizar_notas)
         self.btn_actualizar.pack(pady=5, padx=10, fill="x")
 
-        # ====== TAB: ESCALA PUNTOS ======
-        self.var_usar_puntos = ctk.BooleanVar(value=False)
-        self.switch_puntos = ctk.CTkSwitch(
-            tab_puntos, text="Habilitar Conversor",
-            variable=self.var_usar_puntos, command=self.al_cambiar_modo_puntos
-        )
-        self.switch_puntos.pack(fill="x", padx=10, pady=15)
 
-        ctk.CTkLabel(tab_puntos, text="Puntaje Máximo:", font=("Segoe UI", 12)).pack(anchor="w", padx=10)
-        self.entry_pts_max = ctk.CTkEntry(tab_puntos, justify="center")
-        self.entry_pts_max.insert(0, "40")
-        self.entry_pts_max.pack(fill="x", padx=10, pady=5)
-        self.entry_pts_max.bind("<KeyRelease>", lambda e: self.recalcular_escala_visual())
 
-        ctk.CTkLabel(tab_puntos, text="Nivel de Exigencia:", font=("Segoe UI", 12)).pack(anchor="w", padx=10)
-        self.combo_exigencia = ctk.CTkOptionMenu(
-            tab_puntos, values=["50%", "60%", "70%"],
-            command=lambda _: self.recalcular_escala_visual()
-        )
-        self.combo_exigencia.set("60%")
-        self.combo_exigencia.pack(fill="x", padx=10, pady=5)
+    def rellenar_notas_grupo(self):
+        val = self.entry_relleno.get().strip()
+        if not val:
+            val = "40" if self.var_usar_puntos.get() else "5.0"
+        
+        try:
+            val_float = float(val.replace(",", "."))
+            if self.var_usar_puntos.get():
+                try:
+                    pts_max = float(self.entry_pts_max.get())
+                except Exception:
+                    pts_max = 40.0
+                if val_float < 0 or val_float > pts_max:
+                    messagebox.showwarning("Atención", f"Los puntos deben estar entre 0 y {pts_max}.")
+                    return
+                val = f"{val_float:.0f}" if val_float.is_integer() else f"{val_float:.1f}"
+            else:
+                if val_float < 1.0 or val_float > 5.0:
+                    messagebox.showwarning("Atención", "La nota debe estar entre 1.0 y 5.0.")
+                    return
+                val = f"{val_float:.1f}"
+        except ValueError:
+            msg = "Ingrese un valor numérico válido de puntos." if self.var_usar_puntos.get() else "Ingrese un valor numérico de nota válido (Ej: 5.0)."
+            messagebox.showwarning("Atención", msg)
+            return
 
-        self.btn_ver_tabla_puntos = ctk.CTkButton(
-            tab_puntos, text="📋 Ver Tabla de Escala",
-            fg_color="#8B5CF6", hover_color="#7C3AED",
-            font=("Segoe UI", 12, "bold"),
-            command=self.abrir_tabla_puntos_modal
-        )
-        self.btn_ver_tabla_puntos.pack(fill="x", padx=10, pady=20)
+        for eid, entries in self.entradas_notas.items():
+            if len(entries) > 1:
+                entry_pts = entries[1]
+                entry_pts.delete(0, 'end')
+                entry_pts.insert(0, val)
+                self.al_cambiar_puntos_estudiante(eid)
+            else:
+                entry = entries[0]
+                entry.delete(0, 'end')
+                entry.insert(0, val)
+                pass
 
     def actualizar_contador_desc(self, *args):
         texto = self.var_desc.get()
@@ -256,7 +324,10 @@ class NotasFrame(ctk.CTkFrame):
         header_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(header_row, text="N°", width=30, font=("Segoe UI", 12, "bold")).pack(side="left")
         ctk.CTkLabel(header_row, text="Nombre", anchor="w", font=("Segoe UI", 12, "bold")).pack(side="left", fill="x", expand=True, padx=(10, 10))
+        
         ctk.CTkLabel(header_row, text="Nota", width=80, anchor="center", font=("Segoe UI", 12, "bold")).pack(side="right", padx=10)
+        if self.var_usar_puntos.get():
+            ctk.CTkLabel(header_row, text="Puntos", width=60, anchor="center", font=("Segoe UI", 12, "bold")).pack(side="right", padx=10)
 
         ests = self.engine.obtener_estudiantes_completos(grado)
         for est in ests:
@@ -274,26 +345,31 @@ class NotasFrame(ctk.CTkFrame):
             )
             btn_inf.pack(side="right", padx=5)
 
-            # Pill/Badge de nota calculada por puntos en tiempo real (si está activo el conversor)
-            lbl_pill = ctk.CTkLabel(
-                row, text="", width=45, height=20, corner_radius=10,
-                font=("Segoe UI", 10, "bold"), text_color="white", fg_color="transparent"
-            )
-            lbl_pill.pack(side="right", padx=5)
-
             entry = ctk.CTkEntry(row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
             entry.pack(side="right", padx=10)
             
-            # Evento key release para calcular la nota por puntos en tiempo real
-            entry.bind("<KeyRelease>", lambda e, eid=est['id']: self.al_cambiar_puntos_estudiante(eid))
-            
-            # Keyboard navigation
-            entry.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
-            entry.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
-            entry.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
-            
-            self.entradas_notas[est['id']] = [entry]
-            self.pills_notas[est['id']] = lbl_pill
+            if self.var_usar_puntos.get():
+                entry_pts = ctk.CTkEntry(row, width=60, height=25, justify="center", placeholder_text="Pts", font=("Segoe UI", 11))
+                entry_pts.pack(side="right", padx=10)
+                
+                # Evento key release para calcular la nota por puntos en tiempo real
+                entry_pts.bind("<KeyRelease>", lambda e, eid=est['id']: self.al_cambiar_puntos_estudiante(eid))
+                
+                # Keyboard navigation
+                entry_pts.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+                entry_pts.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+                entry_pts.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+                
+                self.entradas_notas[est['id']] = [entry, entry_pts]
+            else:
+                # Keyboard navigation
+                entry.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+                entry.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+                entry.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+                
+                self.entradas_notas[est['id']] = [entry]
+                
+            self.pills_notas[est['id']] = None
             self.estudiantes_notas[est['id']] = est
 
     def cargar_descripciones(self, *args):
@@ -561,37 +637,13 @@ class NotasFrame(ctk.CTkFrame):
     def _recopilar_notas_validadas(self):
         notas_guardar = {}
         for id_est, entries_list in self.entradas_notas.items():
-            val = ""
-            for entry in entries_list:
-                if entry.get().strip():
-                    val = entry.get().strip()
-                    break
-
+            val = entries_list[0].get().strip()
             if val:
-                # Si el conversor de puntos está habilitado, convertir los puntos a nota
-                if self.var_usar_puntos.get():
-                    try:
-                        pts_max = float(self.entry_pts_max.get())
-                    except (ValueError, TypeError):
-                        pts_max = 40.0
-                    pct_str = self.combo_exigencia.get().replace("%", "")
-                    try:
-                        exigencia = float(pct_str) / 100.0
-                    except (ValueError, TypeError):
-                        exigencia = 0.60
-                    try:
-                        pts_obtenidos = float(val)
-                        nota = self.calcular_nota_meduca_puntos(pts_obtenidos, pts_max, exigencia)
-                        val = f"{nota:.1f}"
-                    except Exception:
-                        pass
-                
                 valido, nota, msg = validar_nota_meduca(val)
                 if not valido:
                     messagebox.showerror("Error", f"Error en la nota para {id_est}: {msg}")
                     return None
                 notas_guardar[id_est] = nota
-
         return notas_guardar
 
     # ==============================================================
@@ -725,6 +777,7 @@ class NotasFrame(ctk.CTkFrame):
         from rdsecurity import cargar_config_segura
         import tareas
         import datetime
+        import os
         
         grado = self.combo_grado.get()
         materia = self.combo_materia.get()
@@ -754,53 +807,101 @@ class NotasFrame(ctk.CTkFrame):
             fecha_limite = datetime.datetime.now().strftime(f"%d-%m-%Y")
             
         modal = ctk.CTkToplevel(self)
-        modal.title("📅 Programar Nueva Tarea")
-        modal.geometry("380x360")
+        modal.title("Programar Nueva Tarea")
+        modal.geometry("720x400")
         modal.resizable(False, False)
         modal.transient(self)
         modal.grab_set()
         
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(modal)
+        
         modal.update_idletasks()
-        w = modal.winfo_width()
-        h = modal.winfo_height()
+        w = 720
+        h = 400
         x = self.winfo_toplevel().winfo_x() + (self.winfo_toplevel().winfo_width() // 2) - (w // 2)
         y = self.winfo_toplevel().winfo_y() + (self.winfo_toplevel().winfo_height() // 2) - (h // 2)
-        modal.geometry(f"+{x}+{y}")
+        modal.geometry(f"{w}x{h}+{x}+{y}")
         
-        ctk.CTkLabel(modal, text="Grado:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(15, 0))
-        entry_g = ctk.CTkEntry(modal, width=340)
-        entry_g.insert(0, grado)
-        entry_g.configure(state="disabled")
-        entry_g.pack(padx=20, pady=2)
+        # Main containers
+        container = ctk.CTkFrame(modal, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        ctk.CTkLabel(modal, text="Materia:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
-        entry_m = ctk.CTkEntry(modal, width=340)
-        entry_m.insert(0, materia)
-        entry_m.configure(state="disabled")
-        entry_m.pack(padx=20, pady=2)
+        # Título
+        ctk.CTkLabel(container, text="Programar Nueva Tarea", font=("Segoe UI", 16, "bold"), text_color="#00DDEB").pack(pady=(0, 10))
         
-        ctk.CTkLabel(modal, text="Título/Tema de la Tarea:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
-        entry_t = ctk.CTkEntry(modal, width=340)
-        entry_t.insert(0, desc)
-        entry_t.pack(padx=20, pady=2)
+        left_col = ctk.CTkFrame(container, fg_color="transparent")
+        left_col.pack(side="left", fill="both", expand=True, padx=(0, 15))
         
-        ctk.CTkLabel(modal, text="Tipo:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
-        combo_t = ctk.CTkOptionMenu(modal, values=["Parcial", "Apreciación", "Examen", "Otro"], width=340)
-        combo_t.set(tipo_tarea)
-        combo_t.pack(padx=20, pady=2)
+        right_col = ctk.CTkFrame(container, fg_color="transparent")
+        right_col.pack(side="right", fill="both", expand=True, padx=(15, 0))
         
-        ctk.CTkLabel(modal, text="Fecha Límite (DD-MM-YYYY):", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=(5, 0))
-        entry_f = ctk.CTkEntry(modal, width=340)
-        entry_f.insert(0, fecha_limite)
-        entry_f.pack(padx=20, pady=2)
+        ctk.CTkLabel(left_col, text="Grados/Grupos:", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 5))
         
+        var_todos = ctk.BooleanVar(value=False)
+        def toggle_todos():
+            val = var_todos.get()
+            for chk in grado_checkboxes.values():
+                if val:
+                    chk.select()
+                else:
+                    chk.deselect()
+                    
+        chk_todos = ctk.CTkCheckBox(left_col, text="Seleccionar todos", variable=var_todos, font=("Segoe UI", 11))
+        chk_todos.configure(command=toggle_todos)
+        chk_todos.pack(anchor="w", pady=2)
+        
+        grados_activos = self.engine.obtener_grados_activos() or ["Sin datos"]
+        grados_frame = ctk.CTkScrollableFrame(left_col, height=220, fg_color="#1E2D42", border_color="#2A3B50", border_width=1)
+        grados_frame.pack(fill="both", expand=True, pady=5)
+        
+        grado_checkboxes = {}
+        for g in grados_activos:
+            chk = ctk.CTkCheckBox(grados_frame, text=g, font=("Segoe UI", 11))
+            chk.pack(anchor="w", padx=5, pady=4)
+            if g == grado:
+                chk.select()
+            grado_checkboxes[g] = chk
+            
         def guardar():
             tit = entry_t.get().strip()
             fl = entry_f.get().strip()
             if not tit:
                 messagebox.showwarning("Atención", "Escriba un título para la tarea.")
                 return
-            tareas.agregar_tarea(tit, grado, materia, combo_t.get(), fl, f"Programada desde Notas. Tipo: {tipo_nota}")
+            
+            try:
+                partes = fl.split("-")
+                if len(partes) != 3:
+                    raise ValueError("Formato de fecha inválido")
+                dt_limite = datetime.date(int(partes[2]), int(partes[1]), int(partes[0]))
+            except Exception:
+                messagebox.showwarning("Atención", "La fecha debe estar en formato DD-MM-YYYY (Ej: 15-06-2026).")
+                return
+                
+            from utils.date_helpers import obtener_rango_fechas_trimestre
+            try:
+                t1_start, _ = obtener_rango_fechas_trimestre("Trimestre 1")
+                _, t3_end = obtener_rango_fechas_trimestre("Trimestre 3")
+                if not (t1_start <= dt_limite <= t3_end):
+                    messagebox.showwarning(
+                        "Fecha fuera de rango", 
+                        f"La fecha límite ({fl}) está fuera del período escolar.\n\n"
+                        f"Rango escolar: {t1_start.strftime('%d-%m-%Y')} a {t3_end.strftime('%d-%m-%Y')}.\n"
+                        "Por favor ingrese una fecha dentro de este rango."
+                    )
+                    return
+            except Exception:
+                pass
+            
+            grados_seleccionados = [g for g, chk in grado_checkboxes.items() if chk.get()]
+            if not grados_seleccionados:
+                messagebox.showwarning("Atención", "Seleccione al menos un Grado/Grupo.")
+                return
+                
+            for g in grados_seleccionados:
+                tareas.agregar_tarea(tit, g, materia, combo_t.get(), fl, f"Programada desde Notas. Tipo: {tipo_nota}")
+                
             modal.destroy()
             
             if hasattr(self, 'scroll_tareas_tab'):
@@ -813,9 +914,30 @@ class NotasFrame(ctk.CTkFrame):
                 dashboard = root.main_app._frames.get("DashboardFrame")
                 if dashboard and hasattr(dashboard, "actualizar_vista"):
                     dashboard.actualizar_vista()
-                
-        btn_save = ctk.CTkButton(modal, text="Agendar Tarea", fg_color="#10B981", hover_color="#059669", command=guardar)
-        btn_save.pack(pady=20)
+
+        ctk.CTkLabel(right_col, text="Materia:", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 2))
+        entry_m = ctk.CTkEntry(right_col, height=30)
+        entry_m.insert(0, materia)
+        entry_m.configure(state="disabled")
+        entry_m.pack(fill="x", pady=(0, 8))
+        
+        ctk.CTkLabel(right_col, text="Título/Tema de la Tarea:", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 2))
+        entry_t = ctk.CTkEntry(right_col, height=30)
+        entry_t.insert(0, desc)
+        entry_t.pack(fill="x", pady=(0, 8))
+        
+        ctk.CTkLabel(right_col, text="Tipo:", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 2))
+        combo_t = ctk.CTkOptionMenu(right_col, values=["Parcial", "Apreciación", "Examen", "Otro"], height=30)
+        combo_t.set(tipo_tarea)
+        combo_t.pack(fill="x", pady=(0, 8))
+        
+        ctk.CTkLabel(right_col, text="Fecha Límite (DD-MM-YYYY):", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 2))
+        entry_f = ctk.CTkEntry(right_col, height=30)
+        entry_f.insert(0, fecha_limite)
+        entry_f.pack(fill="x", pady=(0, 15))
+        
+        btn_save = ctk.CTkButton(right_col, text="Agendar Tarea", fg_color="#10B981", hover_color="#059669", height=32, command=guardar)
+        btn_save.pack(fill="x", pady=(5, 0))
 
     def generar_informe_estudiante(self, est):
         from rdsecurity import cargar_config_segura
@@ -906,6 +1028,9 @@ class NotasFrame(ctk.CTkFrame):
         modal.resizable(False, False)
         modal.transient(self)
         
+        from config import establecer_icono_ventana
+        establecer_icono_ventana(modal)
+        
         modal.update_idletasks()
         w = modal.winfo_width()
         h = modal.winfo_height()
@@ -935,13 +1060,18 @@ class NotasFrame(ctk.CTkFrame):
 
     def al_cambiar_puntos_estudiante(self, id_est):
         if not self.var_usar_puntos.get():
-            self.pills_notas[id_est].configure(text="", fg_color="transparent")
             return
             
-        entry = self.entradas_notas[id_est][0]
-        val = entry.get().strip()
+        entries = self.entradas_notas[id_est]
+        if len(entries) < 2:
+            return
+            
+        entry_nota = entries[0]
+        entry_pts = entries[1]
+        
+        val = entry_pts.get().strip()
         if not val:
-            self.pills_notas[id_est].configure(text="", fg_color="transparent")
+            entry_nota.delete(0, 'end')
             return
             
         try:
@@ -956,12 +1086,12 @@ class NotasFrame(ctk.CTkFrame):
             exigencia = 0.60
             
         try:
-            pts_obtenidos = float(val)
+            pts_obtenidos = float(val.replace(",", "."))
             nota = self.calcular_nota_meduca_puntos(pts_obtenidos, pts_max, exigencia)
-            bg = "#10B981" if nota >= 3.0 else "#EF4444"
-            self.pills_notas[id_est].configure(text=f"{nota:.1f}", fg_color=bg)
+            entry_nota.delete(0, 'end')
+            entry_nota.insert(0, f"{nota:.1f}")
         except Exception:
-            self.pills_notas[id_est].configure(text="Err", fg_color="#F59E0B")
+            pass
 
     def calcular_nota_meduca_puntos(self, puntos, max_puntos, exigencia=0.6):
         if max_puntos <= 0:
@@ -1002,7 +1132,11 @@ class NotasFrame(ctk.CTkFrame):
             self.al_cambiar_puntos_estudiante(id_est)
 
     def al_cambiar_modo_puntos(self):
-        self.recalcular_escala_visual()
+        state = "normal" if self.var_usar_puntos.get() else "disabled"
+        self.entry_pts_max.configure(state=state)
+        self.combo_exigencia.configure(state=state)
+        self.btn_ver_tabla_puntos.configure(state=state)
+        self.cargar_estudiantes()
 
     def al_presionar_enter(self, id_est):
         self.al_presionar_abajo(id_est)

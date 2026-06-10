@@ -119,8 +119,9 @@ class DashboardFrame(ctk.CTkFrame):
         # Frase motivacional del día
         self._frase_motivacional(panel)
 
-        # 📋 Tareas pendientes programadas
-        self._widget_tareas_pendientes(panel)
+        # Omitido para evitar duplicidad de tareas programadas
+        # self._widget_tareas_pendientes(panel)
+
 
         # Panel de Hábitos
         self._panel_habitos(panel)
@@ -248,6 +249,7 @@ class DashboardFrame(ctk.CTkFrame):
                 ctk.CTkLabel(txt_f, text=f"{dia_nombre} — {hora_str}",
                              font=ctk.CTkFont("Segoe UI", 11),
                              text_color="#64748B", anchor="w").pack(anchor="w")
+
 
     # ── Tareas Pendientes ──────────────────────────────────────────────
     def _widget_tareas_pendientes(self, parent):
@@ -486,24 +488,78 @@ class DashboardFrame(ctk.CTkFrame):
             total = str(s.get("total", 0))
             riesgo = str(s.get("riesgo", 0))
             honor = str(s.get("honor", "N/A"))
+            honor_cant = str(s.get("honor_cant", 0))
             asistencia = str(s.get("asistencia", "0%"))
 
             if honor == "N/A" or not honor or honor.strip() == "":
-                honor_val = "—"
+                honor_val = "0"
                 honor_sub = "Sin registros"
             else:
-                honor_val = "1"
+                honor_val = honor_cant
                 honor_sub = honor
 
             datos = [
                 ("👥",  "Total Alumnos",       total,  "Matriculados",             self._acento),
-                ("⚠️",  "Alumnos en Riesgo",   riesgo, "Nota promedio < 3.0",      C["rojo"]),
-                ("🏆",  "Cuadro de Honor",     honor_val, honor_sub[:18],          C["amarillo"]),
-                ("📊",  "Asistencia",          asistencia, "Promedio general",     C["verde"]),
+                ("⚠️",  "Alumnos en Riesgo",   riesgo, "Trimestre actual",         C["rojo"]),
+                ("🏆",  "Cuadro de Honor",     honor_val, honor_sub,               C["amarillo"]),
+                ("📊",  "Asistencia",          asistencia, "Trimestre actual",       C["verde"]),
             ]
 
         for col, (ico, titulo, valor, sub, color) in enumerate(datos):
-            self._tarjeta(self._cards_frame, col, ico, titulo, valor, sub, color)
+            if col == 2 and not self._current_student:
+                self._render_tarjeta_honor_top4(self._cards_frame, col, color)
+            else:
+                self._tarjeta(self._cards_frame, col, ico, titulo, valor, sub, color)
+
+    def _render_tarjeta_honor_top4(self, parent, col, color):
+        card = ctk.CTkFrame(parent, fg_color=C["card"],
+                            border_width=1, border_color=color,
+                            corner_radius=12)
+        card.grid(row=0, column=col, padx=6, pady=4, sticky="nsew")
+
+        # Header Frame
+        header_f = ctk.CTkFrame(card, fg_color="transparent")
+        header_f.pack(fill="x", padx=14, pady=(12, 4))
+        
+        ctk.CTkLabel(header_f, text="🏆", font=ctk.CTkFont(size=16),
+                     text_color=color).pack(side="left")
+        ctk.CTkLabel(header_f, text="Cuadro de Honor (Top 4)",
+                     font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                     text_color=C["texto"]).pack(side="left", padx=6)
+
+        list_f = ctk.CTkFrame(card, fg_color="transparent")
+        list_f.pack(fill="both", expand=True, padx=14, pady=(2, 12))
+
+        try:
+            cuadro = self.engine.obtener_cuadro_honor_general()
+            top4 = cuadro[:4]
+            if top4:
+                for idx, est in enumerate(top4):
+                    row_f = ctk.CTkFrame(list_f, fg_color="transparent")
+                    row_f.pack(fill="x", pady=2)
+                    
+                    nom_corto = est['nombre'].split(',')[0].strip()
+                    if len(nom_corto) > 16:
+                        nom_corto = nom_corto[:15] + ".."
+                    
+                    lbl_txt = f"{idx+1}. {nom_corto} ({est['grado']})"
+                    ctk.CTkLabel(row_f, text=lbl_txt,
+                                 font=ctk.CTkFont("Segoe UI", 9, "bold"),
+                                 text_color=C["texto_sec"],
+                                 anchor="w").pack(side="left")
+                                 
+                    ctk.CTkLabel(row_f, text=f"{est['promedio']:.2f}",
+                                 font=ctk.CTkFont("Segoe UI", 9, "bold"),
+                                 text_color=color,
+                                 anchor="e").pack(side="right")
+            else:
+                ctk.CTkLabel(list_f, text="Sin registros (4.5 - 5.0)",
+                             font=ctk.CTkFont("Segoe UI", 10, slant="italic"),
+                             text_color=C["texto_sec"]).pack(expand=True, pady=10)
+        except Exception as e:
+            ctk.CTkLabel(list_f, text="Error al cargar",
+                         font=ctk.CTkFont("Segoe UI", 10),
+                         text_color=C["rojo"]).pack(expand=True, pady=10)
 
     def _tarjeta(self, parent, col, ico, titulo, valor, sub, color):
         card = ctk.CTkFrame(parent, fg_color=C["card"],
@@ -617,42 +673,44 @@ class DashboardFrame(ctk.CTkFrame):
         x_labels = ["T1", "T2", "T3"]
         x = [1, 2, 3]
         
-        y = []
-        for t_name in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+        x_points = []
+        y_points = []
+        for idx, t_name in enumerate(["Trimestre 1", "Trimestre 2", "Trimestre 3"], 1):
             notas_t = []
             for g in grados:
                 proms = self.engine.obtener_promedios_reales(g, None, t_name)
                 if proms:
                     notas_t.extend([v for v in proms.values() if v is not None])
             if notas_t:
-                y.append(round(sum(notas_t)/len(notas_t), 2))
-            else:
-                y.append(1.0)
+                x_points.append(idx)
+                y_points.append(round(sum(notas_t)/len(notas_t), 2))
 
-        ax.plot(x, y, color=self._acento, linewidth=2.2, label="Promedio Grupal",
-                zorder=3, solid_capstyle="round")
-        ax.fill_between(x, y, alpha=0.12, color=self._acento)
-        ax.scatter(x, y, color=self._acento, s=55, zorder=5,
-                   edgecolors=C["fondo"], linewidths=1.5)
+        if x_points:
+            ax.plot(x_points, y_points, color=self._acento, linewidth=2.2, label="Promedio Grupal",
+                    zorder=3, solid_capstyle="round")
+            ax.fill_between(x_points, y_points, alpha=0.12, color=self._acento)
+            ax.scatter(x_points, y_points, color=self._acento, s=55, zorder=5,
+                       edgecolors=C["fondo"], linewidths=1.5)
 
         if getattr(self, "_current_student", None):
             student_name = self._current_student["nombre"]
+            x_indiv = []
             y_indiv = []
-            for t_name in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+            for idx, t_name in enumerate(["Trimestre 1", "Trimestre 2", "Trimestre 3"], 1):
                 student_notes = []
                 for g in grados:
                     proms = self.engine.obtener_promedios_reales(g, None, t_name)
-                    if student_name in proms:
+                    if proms and student_name in proms and proms[student_name] is not None:
                         student_notes.append(proms[student_name])
                 if student_notes:
+                    x_indiv.append(idx)
                     y_indiv.append(round(sum(student_notes)/len(student_notes), 2))
-                else:
-                    y_indiv.append(1.0)
-            ax.plot(x, y_indiv, color=C["amarillo"], linewidth=2.2, label=student_name[:12],
-                    zorder=4, linestyle="--")
-            ax.scatter(x, y_indiv, color=C["amarillo"], s=60, zorder=6,
-                       edgecolors=C["fondo"], linewidths=1.5)
-            ax.legend(loc="upper left", facecolor=C["fondo"], edgecolor=C["borde"], labelcolor=C["texto"], fontsize=8)
+            if x_indiv:
+                ax.plot(x_indiv, y_indiv, color=C["amarillo"], linewidth=2.2, label=student_name[:12],
+                        zorder=4, linestyle="--")
+                ax.scatter(x_indiv, y_indiv, color=C["amarillo"], s=60, zorder=6,
+                           edgecolors=C["fondo"], linewidths=1.5)
+                ax.legend(loc="upper left", facecolor=C["fondo"], edgecolor=C["borde"], labelcolor=C["texto"], fontsize=8)
 
         # Ejes
         ax.set_xlim(0.7, 3.3)
@@ -722,22 +780,22 @@ class DashboardFrame(ctk.CTkFrame):
         canvas2.draw()
         canvas2.get_tk_widget().pack(fill="x", padx=10, pady=(4, 12))
 
-    # ── Footer: grados activos + accesos rápidos ─────────────────────────
+    # ── Footer: grados activos + exportaciones ─────────────────────────
     def _footer_panel(self, parent):
         self._footer_frame = ctk.CTkFrame(parent, fg_color="transparent")
         ff = self._footer_frame
         ff.pack(fill="x", padx=20, pady=(4, 20))
-        ff.columnconfigure((0, 1, 2), weight=1, uniform="bot")
+        ff.columnconfigure((0, 1), weight=1, uniform="bot")
 
         # Grados activos
         gc = ctk.CTkFrame(ff, fg_color=C["card"],
                           border_width=1, border_color=C["borde"],
-                          corner_radius=12)
-        gc.grid(row=0, column=0, padx=(0, 8), sticky="nsew", pady=4)
+                          corner_radius=10)
+        gc.grid(row=0, column=0, padx=(0, 6), sticky="nsew", pady=4)
 
         ctk.CTkLabel(gc, text="Grados Activos",
-                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
-                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
+                     font=ctk.CTkFont("Segoe UI", 12, "bold"),
+                     text_color=C["texto"]).pack(anchor="w", padx=14, pady=(12, 6))
 
         try:
             grados = self.engine.obtener_grados_activos()
@@ -745,94 +803,36 @@ class DashboardFrame(ctk.CTkFrame):
             grados = ["Sin datos"]
 
         gf = ctk.CTkFrame(gc, fg_color="transparent")
-        gf.pack(padx=16, pady=(0, 14))
+        gf.pack(anchor="w", padx=14, pady=(0, 12))
         for g in grados:
             pill = ctk.CTkLabel(
                 gf, text=f"  {g}  ",
                 fg_color=C["input"],
-                corner_radius=16,
-                font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                corner_radius=12,
+                font=ctk.CTkFont("Segoe UI", 11, "bold"),
                 text_color=self._acento,
-                padx=12, pady=6)
-            pill.pack(side="left", padx=4)
-
-        # Tareas Próximas (reemplaza el horario duplicado)
-        hc = ctk.CTkFrame(ff, fg_color=C["card"],
-                          border_width=1, border_color=C["borde"],
-                          corner_radius=12)
-        hc.grid(row=0, column=1, padx=(0, 8), sticky="nsew", pady=4)
-
-        ctk.CTkLabel(hc, text="📌 Tareas Próximas",
-                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
-                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
-
-        hf = ctk.CTkFrame(hc, fg_color="transparent")
-        hf.pack(fill="x", padx=16, pady=(0, 14))
-
-        # Mostrar próximas tareas si el módulo está disponible
-        try:
-            from tareas import obtener_pendientes as _pend
-            pendientes = _pend()
-            if pendientes:
-                for t in pendientes[:3]:
-                    urgencia = t.get("_urgencia", "normal")
-                    colores_u = {"vencida": "#EF4444", "hoy": "#F59E0B",
-                                 "urgente": "#FB923C", "normal": "#3B82F6"}
-                    color = colores_u.get(urgencia, "#3B82F6")
-
-                    # Botón clickable que lleva a Notas
-                    def _ir_notas_tarea(g=t.get("grado"), m=t.get("materia"), app=self.app):
-                        if app:
-                            try:
-                                app.mostrar_notas()
-                                notas_frame = app._frames.get("NotasFrame")
-                                if notas_frame:
-                                    if g:
-                                        notas_frame.combo_grado.set(g)
-                                        notas_frame.al_cambiar_grado(g)
-                                    if m and m != "General":
-                                        opts = notas_frame.combo_materia.cget("values")
-                                        if m in opts:
-                                            notas_frame.combo_materia.set(m)
-                                        notas_frame.cargar_descripciones()
-                                    notas_frame.tabs.set("Tareas")
-                            except Exception:
-                                pass
-
-                    btn = ctk.CTkButton(hf, text=f"📝 {t['titulo'][:25]}",
-                                        font=ctk.CTkFont("Segoe UI", 11),
-                                        fg_color=C["card_alt"], hover_color=C["hover"],
-                                        text_color=color, anchor="w", height=28,
-                                        command=_ir_notas_tarea)
-                    btn.pack(fill="x", pady=2)
-            else:
-                ctk.CTkLabel(hf, text="✅ Sin tareas pendientes",
-                             font=ctk.CTkFont("Segoe UI", 12),
-                             text_color=C["verde"]).pack(anchor="w")
-        except Exception:
-            ctk.CTkLabel(hf, text="📌 Use Tareas para programar",
-                         font=ctk.CTkFont("Segoe UI", 12),
-                         text_color=C["texto_sec"]).pack(anchor="w")
+                padx=8, pady=4)
+            pill.pack(side="left", padx=3)
 
         # Exportaciones
         ex = ctk.CTkFrame(ff, fg_color=C["card"],
                           border_width=1, border_color=C["borde"],
-                          corner_radius=12)
-        ex.grid(row=0, column=2, padx=(8, 0), sticky="nsew", pady=4)
+                          corner_radius=10)
+        ex.grid(row=0, column=1, padx=(6, 0), sticky="nsew", pady=4)
 
         ctk.CTkLabel(ex, text="Exportar Calificaciones",
-                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
-                     text_color=C["texto"]).pack(anchor="w", padx=16, pady=(14, 8))
+                     font=ctk.CTkFont("Segoe UI", 12, "bold"),
+                     text_color=C["texto"]).pack(anchor="w", padx=14, pady=(12, 6))
 
         exf = ctk.CTkFrame(ex, fg_color="transparent")
-        exf.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        exf.pack(fill="both", expand=True, padx=14, pady=(0, 12))
 
         self.cb_trim_export = ctk.CTkOptionMenu(exf, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los trimestres"])
-        self.cb_trim_export.pack(fill="x", pady=5)
+        self.cb_trim_export.pack(fill="x", pady=4)
         self.cb_trim_export.set("Todos los trimestres")
 
         btn_f_ex = ctk.CTkFrame(exf, fg_color="transparent")
-        btn_f_ex.pack(fill="x", pady=5)
+        btn_f_ex.pack(fill="x", pady=4)
 
         ctk.CTkButton(btn_f_ex, text="📄 PDF", width=40, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
         ctk.CTkButton(btn_f_ex, text="📝 Word", width=40, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)

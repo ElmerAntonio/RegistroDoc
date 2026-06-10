@@ -31,8 +31,9 @@ Esta guía le explicará TODO paso a paso, con palabras sencillas.
   12. Atajos de Teclado (Rápidos)
   13. Copias de Seguridad (Respaldos)
   14. Reuniones (Actas y Formatos)        ← ¡NUEVO!
-  15. Solución de Problemas Comunes
-  16. Glosario de Términos MEDUCA
+  15. Registro Completo (Matriz Consolidada) ← ¡NUEVO!
+  16. Solución de Problemas Comunes
+  17. Glosario de Términos MEDUCA
 
 
 ═══════════════════════════════════════════════════════════════
@@ -349,7 +350,34 @@ Esta guía le explicará TODO paso a paso, con palabras sencillas.
 
 
 ═══════════════════════════════════════════════════════════════
-  15. SOLUCIÓN DE PROBLEMAS COMUNES
+  15. REGISTRO COMPLETO (MATRIZ CONSOLIDADA)
+═══════════════════════════════════════════════════════════════
+
+  El módulo de Registro Completo consolida en un solo lugar todas las
+  calificaciones y registros de asistencia acumulados del trimestre actual.
+
+  ► VISTA DE CALIFICACIONES:
+    1. Presione "Registro Completo" en el menú izquierdo (o use la navegación).
+    2. Seleccione el Grado/Grupo, Trimestre y Materia a consultar.
+    3. Verá tarjetas con el resumen de actividades del salón, el promedio
+       grupal del trimestre, el porcentaje de aprobación y la nota máxima.
+    4. La cuadrícula muestra el listado completo de alumnos y una columna
+       por cada actividad calificada, con colores adaptativos (verde para
+       notas altas >= 4.5, rojo para notas reprobatorias < 3.0), y el
+       promedio final ponderado.
+
+  ► VISTA DE ASISTENCIA:
+    1. Cambie a la pestaña "Asistencia" en la parte superior.
+    2. Verá tarjetas con el total de días evaluados, porcentaje de asistencia
+       promedio, alumnos con asistencia perfecta (100%) y alertas de alumnos
+       con asistencia crítica (< 90%).
+    3. La matriz muestra el historial completo por fecha mostrando P (Presente),
+       A (Ausente), T (Tardanza) y E (Excusa) en celdas de colores
+       indicativos y el porcentaje de asistencia acumulado por alumno.
+
+
+═══════════════════════════════════════════════════════════════
+  16. SOLUCIÓN DE PROBLEMAS COMUNES
 ═══════════════════════════════════════════════════════════════
 
   PROBLEMA: "Error al guardar / Acceso denegado"
@@ -378,7 +406,7 @@ Esta guía le explicará TODO paso a paso, con palabras sencillas.
 
 
 ═══════════════════════════════════════════════════════════════
-  16. GLOSARIO DE TÉRMINOS MEDUCA
+  17. GLOSARIO DE TÉRMINOS MEDUCA
 ═══════════════════════════════════════════════════════════════
 
   S  = Satisfactorio (cumple bien el criterio)

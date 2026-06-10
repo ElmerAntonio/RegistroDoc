@@ -6,6 +6,9 @@ import json
 import tkinter as tk
 import customtkinter as ctk
 
+from utils.dialogs import patch_messagebox
+patch_messagebox()
+
 # Matplotlib
 import matplotlib
 matplotlib.use("TkAgg")
@@ -37,6 +40,7 @@ from habapp import HabitosFrame
 from helpapp import HelpFrame
 from tareasapp import TareasFrame
 from reunionesapp import ReunionesFrame
+from registrocompletoapp import RegistroCompletoFrame
 
 # Cargar el tema visual desde la configuración cifrada
 _tema = "dark"
@@ -159,6 +163,7 @@ class MainApplication(ctk.CTkFrame):
             ("👤", "Estudiantes",   self._ir_estudiantes),
             ("📝", "Notas",         self._ir_notas),
             ("📅", "Asistencia",    self._ir_asistencia),
+            ("📋", "Registro Completo", self._ir_registro_completo),
             ("🔍", "Observaciones", self._ir_observaciones),
             ("🧠", "Hábitos",       self._ir_habitos),
             ("📊", "Reportes y Gráficos", self._ir_reportes),
@@ -282,6 +287,11 @@ class MainApplication(ctk.CTkFrame):
     def _ir_ayuda(self):
         if self.app:
             try: self.app.mostrar_ayuda()
+            except Exception: pass
+
+    def _ir_registro_completo(self):
+        if self.app:
+            try: self.app.mostrar_registro_completo()
             except Exception: pass
 
 
@@ -414,6 +424,7 @@ class RegistroDocApp(ctk.CTk):
             "HelpFrame": "📍 Inicio › Ayuda",
             "TareasFrame": "📍 Inicio › Tareas",
             "ReunionesFrame": "📍 Inicio › Reuniones",
+            "RegistroCompletoFrame": "📍 Inicio › Registro Completo",
         }
         txt = nombres.get(seccion, "📍 Inicio")
         try:
@@ -427,6 +438,12 @@ class RegistroDocApp(ctk.CTk):
         self.main_app._sb_renderizar()
         self._mostrar_frame(DashboardFrame, app_principal=self)
         self._actualizar_breadcrumb("DashboardFrame")
+
+    def mostrar_registro_completo(self):
+        self.main_app.menu_activo = "Registro Completo"
+        self.main_app._sb_renderizar()
+        self._mostrar_frame(RegistroCompletoFrame)
+        self._actualizar_breadcrumb("RegistroCompletoFrame")
 
     def mostrar_estudiantes(self):
         self.main_app.menu_activo = "Estudiantes"

@@ -107,3 +107,27 @@ def test_cache_invalidation_mtime(tmp_path):
     # El motor debería invalidar y recargar al comprobar
     engine._verificar_y_recargar_cache()
     assert engine._wb_cache.active.cell(row=1, column=1).value == "EDITADO_EXTERNO"
+
+def test_obtener_cuadro_honor_general_real_file():
+    """Integration test validating obtener_cuadro_honor_general with the real workbook."""
+    real_path = "Registro_2026.xlsx"
+    if not os.path.exists(real_path):
+        pytest.skip("Registro_2026.xlsx not present in workspace, skipping integration test")
+        
+    engine = DataEngine(real_path)
+    cuadro = engine.obtener_cuadro_honor_general()
+    
+    # Assert type
+    assert isinstance(cuadro, list)
+    
+    # If any students are in the honor roll, verify their scores and sorting
+    if len(cuadro) > 0:
+        prev_prom = 5.01
+        for est in cuadro:
+            assert "nombre" in est
+            assert "grado" in est
+            assert "promedio" in est
+            assert 4.5 <= est["promedio"] <= 5.0, f"Promedio {est['promedio']} must be between 4.5 and 5.0"
+            assert est["promedio"] <= prev_prom, "Students must be sorted in descending order of average"
+            prev_prom = est["promedio"]
+
