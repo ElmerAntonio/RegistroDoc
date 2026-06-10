@@ -42,7 +42,7 @@ class SetupWizard(ctk.CTk):
         ctk.CTkLabel(self.main_frame, text="Estos datos aparecerán en las portadas oficiales del MEDUCA.", text_color="#94A3B8").pack(pady=(0, 20))
 
         ctk.CTkLabel(self.main_frame, text="Nombre Completo:", font=("Segoe UI", 14)).pack(anchor="w")
-        self.entry_nombre = ctk.CTkEntry(self.main_frame, width=400, placeholder_text="Ej: Elmer Tugri")
+        self.entry_nombre = ctk.CTkEntry(self.main_frame, width=400, placeholder_text="Ej: Juan Pérez")
         self.entry_nombre.pack(pady=(5, 15))
 
         ctk.CTkLabel(self.main_frame, text="Cédula:", font=("Segoe UI", 14)).pack(anchor="w")

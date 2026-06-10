@@ -4,7 +4,7 @@ RegistroDoc Pro — Módulo de Impresión
 Abre el Excel con su diseño original y lo envía a la impresora.
 Compatible con Microsoft Excel y LibreOffice Calc.
 
-© 2026 RegistroDoc Pro — Elmer Tugri — Panamá
+© 2026 RegistroDoc Pro — MEDUCA — Panamá
 """
 
 import os

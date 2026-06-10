@@ -492,8 +492,8 @@ class ObservacionesFrame(ctk.CTkFrame):
 
             from rdsecurity import cargar_config_segura
             cfg = cargar_config_segura({})
-            docente = cfg.get("docente_nombre", "Elmer Tugri")
-            escuela = cfg.get("escuela_nombre", "ESCUELA CERRO CACICÓN")
+            docente = cfg.get("docente_nombre", "Docente de Ejemplo")
+            escuela = cfg.get("escuela_nombre", "ESCUELA DE EJEMPLO")
             ano = cfg.get("ano_lectivo", "2026")
 
             p_head = doc.add_paragraph()

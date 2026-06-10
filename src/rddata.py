@@ -498,8 +498,12 @@ class DataEngine:
                             if "Ano lectivo" in texto or "Año lectivo" in texto:
                                 ws.cell(row=r, column=c+1).value = ano
                                 
-                            if "CERRO CACICON" in texto.upper(): texto = re.sub(r'CERRO CACICON|CERRO CACICÓN', escuela, texto, flags=re.IGNORECASE); modificado = True
-                            if "ELMER TUGRI" in texto.upper(): texto = re.sub(r'ELMER TUGRI', docente_titulo, texto, flags=re.IGNORECASE); modificado = True
+                            if "CERRO CACICON" in texto.upper() or "ESCUELA DE EJEMPLO" in texto.upper():
+                                texto = re.sub(r'CERRO CACICON|CERRO CACICÓN|ESCUELA DE EJEMPLO', escuela, texto, flags=re.IGNORECASE)
+                                modificado = True
+                            if "ELMER TUGRI" in texto.upper() or "JUAN PÉREZ" in texto.upper() or "JUAN PEREZ" in texto.upper():
+                                texto = re.sub(r'ELMER TUGRI|JUAN PÉREZ|JUAN PEREZ', docente_titulo, texto, flags=re.IGNORECASE)
+                                modificado = True
                             
                             if modificado: ws.cell(row=r, column=c).value = texto
                         except Exception as e:

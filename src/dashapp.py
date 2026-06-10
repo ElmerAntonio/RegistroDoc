@@ -1121,8 +1121,8 @@ if __name__ == "__main__":
             names = ["Maria Gonzalez", "Pedro Pinto", "Ana Santos"]
             return [{"id": i+1, "nombre": n, "cedula": ""} for i, n in enumerate(names)]
         def obtener_datos_generales(self):
-            return {"docente_nombre": "Prof. Elmer Tugri",
-                    "correo": "elmer.tugri7@meduca.edu.pa"}
+            return {"docente_nombre": "Prof. Juan Pérez",
+                    "correo": "juan.perez@meduca.edu.pa"}
         def obtener_horario(self):
             return [
                 {"horas": "7:00-7:45", "lunes": "Matemáticas", "martes": "Español", "miercoles": "Ciencias", "jueves": "Historia", "viernes": "Inglés"},
