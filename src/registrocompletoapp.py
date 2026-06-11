@@ -66,6 +66,7 @@ class RegistroCompletoFrame(ctk.CTkFrame):
 
         self.tab_notas = self.tabs.add("📝 Calificaciones del Grupo")
         self.tab_asis = self.tabs.add("📅 Asistencia del Grupo")
+        self.tab_habitos = self.tabs.add("🧠 Hábitos del Grupo")
 
         # Configurar pestañas
         self.tab_notas.grid_columnconfigure(0, weight=1)
@@ -73,6 +74,9 @@ class RegistroCompletoFrame(ctk.CTkFrame):
 
         self.tab_asis.grid_columnconfigure(0, weight=1)
         self.tab_asis.grid_rowconfigure(1, weight=1)
+
+        self.tab_habitos.grid_columnconfigure(0, weight=1)
+        self.tab_habitos.grid_rowconfigure(1, weight=1)
 
         # Sub-frames para Notas
         self.stats_notas_frame = ctk.CTkFrame(self.tab_notas, fg_color="transparent")
@@ -88,6 +92,13 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         self.scroll_asis = ctk.CTkScrollableFrame(self.tab_asis, fg_color="#0D1F35")
         self.scroll_asis.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
+        # Sub-frames para Hábitos
+        self.stats_habitos_frame = ctk.CTkFrame(self.tab_habitos, fg_color="transparent")
+        self.stats_habitos_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+
+        self.scroll_habitos = ctk.CTkScrollableFrame(self.tab_habitos, fg_color="#0D1F35")
+        self.scroll_habitos.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+
     def actualizar_vista(self):
         self.cargar_datos_asincrono()
 
@@ -99,6 +110,7 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         # Limpiar e insertar cargadores
         self._limpiar_scroll(self.scroll_notas)
         self._limpiar_scroll(self.scroll_asis)
+        self._limpiar_scroll(self.scroll_habitos)
 
         lbl_cargando_n = ctk.CTkLabel(self.scroll_notas, text="🔄 Cargando registros de notas desde Excel...", 
                                       font=(FONT_BODY, 13, "bold"), text_color=C["cian"])
@@ -107,6 +119,10 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         lbl_cargando_a = ctk.CTkLabel(self.scroll_asis, text="🔄 Cargando asistencia desde Excel...", 
                                       font=(FONT_BODY, 13, "bold"), text_color=C["cian"])
         lbl_cargando_a.pack(pady=40)
+
+        lbl_cargando_h = ctk.CTkLabel(self.scroll_habitos, text="🔄 Cargando hábitos desde JSON...", 
+                                      font=(FONT_BODY, 13, "bold"), text_color=C["cian"])
+        lbl_cargando_h.pack(pady=40)
 
         # Parámetros activos
         grado = self.combo_grado.get()
@@ -245,23 +261,137 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                 if total_asis_pcts:
                     stats_asis["asistencia_promedio"] = round(sum(total_asis_pcts) / len(total_asis_pcts), 1)
 
+        # 3. HÁBITOS Y APTITUDES
+        from config import BASE_DIR
+        import json
+        from habapp import CRITERIOS_PRIMARIA, CRITERIOS_PREMEDIA_MEDIA
+        
+        es_primaria = any(g in grado for g in ["1°", "2°", "3°", "4°", "5°", "6°"])
+        criterios = CRITERIOS_PRIMARIA if es_primaria else CRITERIOS_PREMEDIA_MEDIA
+        
+        rows_habitos = []
+        stats_habitos = {"total_evaluaciones": 0, "s_count": 0, "r_count": 0, "x_count": 0}
+        
+        ruta_json = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "habitos_evaluaciones.json")
+        json_data = {}
+        if os.path.exists(ruta_json):
+            try:
+                with open(ruta_json, "r", encoding="utf-8") as f:
+                    json_data = json.load(f)
+            except Exception as e:
+                print(f"Error cargando JSON de hábitos en consolidado: {e}")
+                
+        # Trimestres a procesar
+        mapa_trim = {"Trimestre 1": 1, "Trimestre 2": 2, "Trimestre 3": 3}
+        num_trim_actual = mapa_trim.get(trimestre, 1)
+        
+        evals_actual = [] # lista de dicts de estudiantes
+        evals_anteriores = {} # t_name -> lista de dicts de estudiantes
+        
+        for clave, val in json_data.items():
+            partes = clave.split("::")
+            if len(partes) >= 2 and partes[0].strip() == grado.strip():
+                t_name = partes[1].strip()
+                t_num = mapa_trim.get(t_name, 0)
+                if t_name == trimestre:
+                    evals_actual.append(val.get("estudiantes", {}))
+                elif t_num > 0 and t_num < num_trim_actual:
+                    if t_name not in evals_anteriores:
+                        evals_anteriores[t_name] = []
+                    evals_anteriores[t_name].append(val.get("estudiantes", {}))
+                    
+        for est in estudiantes:
+            id_est_str = str(est["id"])
+            
+            # Criterios del trimestre actual
+            crit_ratings_actual = {crit[0]: [] for crit in criterios}
+            for ev in evals_actual:
+                if id_est_str in ev:
+                    for crit_name, rating in ev[id_est_str].items():
+                        if crit_name in crit_ratings_actual:
+                            crit_ratings_actual[crit_name].append(rating)
+                            
+            # Consolidar trimestre actual
+            consolidado_actual = {}
+            for crit_name, ratings in crit_ratings_actual.items():
+                s_c = ratings.count("S")
+                r_c = ratings.count("R")
+                x_c = ratings.count("X")
+                
+                stats_habitos["s_count"] += s_c
+                stats_habitos["r_count"] += r_c
+                stats_habitos["x_count"] += x_c
+                stats_habitos["total_evaluaciones"] += len(ratings)
+                
+                if ratings:
+                    counts = {"S": s_c, "R": r_c, "X": x_c}
+                    res = "-"
+                    for r in ["X", "R", "S"]:
+                        if counts[r] > 0 and counts[r] >= max(counts.values()):
+                            res = r
+                            break
+                    consolidado_actual[crit_name] = {
+                        "final": res,
+                        "detalle": f"S:{s_c} R:{r_c} X:{x_c}" if len(ratings) > 1 else ""
+                    }
+                else:
+                    consolidado_actual[crit_name] = {"final": "-", "detalle": ""}
+                    
+            # Trimestres anteriores
+            consolidado_anteriores = {} # t_name -> {crit_name -> final}
+            for t_name, evs in evals_anteriores.items():
+                consolidado_anteriores[t_name] = {}
+                crit_ratings_ant = {crit[0]: [] for crit in criterios}
+                for ev in evs:
+                    if id_est_str in ev:
+                        for crit_name, rating in ev[id_est_str].items():
+                            if crit_name in crit_ratings_ant:
+                                crit_ratings_ant[crit_name].append(rating)
+                                
+                for crit_name, ratings in crit_ratings_ant.items():
+                    if ratings:
+                        counts = {"S": ratings.count("S"), "R": ratings.count("R"), "X": ratings.count("X")}
+                        res = "-"
+                        for r in ["X", "R", "S"]:
+                            if counts[r] > 0 and counts[r] >= max(counts.values()):
+                                res = r
+                                break
+                        consolidado_anteriores[t_name][crit_name] = res
+                    else:
+                        consolidado_anteriores[t_name][crit_name] = "-"
+                        
+            rows_habitos.append({
+                "id": est["id"],
+                "nombre": est["nombre"],
+                "evals_actual": consolidado_actual,
+                "evals_anteriores": consolidado_anteriores
+            })
+
         return {
             "headers_notas": headers_notas,
             "rows_notas": rows_notas,
             "stats_notas": stats_notas,
             "headers_asis": headers_asis,
             "rows_asis": rows_asis,
-            "stats_asis": stats_asis
+            "stats_asis": stats_asis,
+            "habitos_criterios": [crit[0] for crit in criterios],
+            "rows_habitos": rows_habitos,
+            "stats_habitos": stats_habitos
         }
 
     def _renderizar_datos(self, data):
         self.loading = False
         self._limpiar_scroll(self.scroll_notas)
         self._limpiar_scroll(self.scroll_asis)
+        self._limpiar_scroll(self.scroll_habitos)
 
         if not data:
             self._renderizar_error()
             return
+
+        # ─── 3. HÁBITOS ───
+        self._renderizar_stats_habitos(data["stats_habitos"])
+        self._renderizar_habitos(data["rows_habitos"], data["habitos_criterios"])
 
         # ─── 1. NOTAS ───
         self._renderizar_stats_notas(data["stats_notas"])
@@ -413,12 +543,102 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         self.loading = False
         self._limpiar_scroll(self.scroll_notas)
         self._limpiar_scroll(self.scroll_asis)
+        self._limpiar_scroll(self.scroll_habitos)
         
         ctk.CTkLabel(self.scroll_notas, text="⚠️ Ocurrió un error o no hay hoja de notas válida en el Excel para este grupo.",
                      font=(FONT_BODY, 13), text_color=C["rojo"]).pack(pady=40)
         ctk.CTkLabel(self.scroll_asis, text="⚠️ Ocurrió un error o no hay hoja de asistencia válida en el Excel para este grupo.",
                      font=(FONT_BODY, 13), text_color=C["rojo"]).pack(pady=40)
+        ctk.CTkLabel(self.scroll_habitos, text="⚠️ Ocurrió un error o no hay evaluaciones de hábitos registradas.",
+                     font=(FONT_BODY, 13), text_color=C["rojo"]).pack(pady=40)
 
     def _limpiar_scroll(self, scroll):
         for w in scroll.winfo_children():
             w.destroy()
+
+    def _renderizar_stats_habitos(self, stats):
+        for w in self.stats_habitos_frame.winfo_children():
+            w.destroy()
+            
+        self.stats_habitos_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        
+        cards = [
+            ("🧠 Total Evals", f"{stats['total_evaluaciones']}", "Evaluaciones Realizadas", C["cian"]),
+            ("🟢 Satisfactorios (S)", f"{stats['s_count']}", "Desempeño Satisfactorio", C["verde"]),
+            ("🟡 Regulares (R)", f"{stats['r_count']}", "Desempeño Regular", C["amarillo"]),
+            ("🔴 No Satisface (X)", f"{stats['x_count']}", "No Satisface", C["rojo"])
+        ]
+        
+        for idx, (title, val, desc, color) in enumerate(cards):
+            card = ctk.CTkFrame(self.stats_habitos_frame, fg_color=C["card"], corner_radius=8, border_color=color, border_width=1)
+            card.grid(row=0, column=idx, padx=5, pady=5, sticky="nsew")
+            
+            ctk.CTkLabel(card, text=title, font=(FONT_BODY, 12, "bold"), text_color=color).pack(anchor="w", padx=15, pady=(10, 2))
+            ctk.CTkLabel(card, text=val, font=(FONT_TITLE, 22, "bold"), text_color=C["texto"]).pack(anchor="w", padx=15, pady=2)
+            ctk.CTkLabel(card, text=desc, font=(FONT_BODY, 10), text_color=C["texto_sec"]).pack(anchor="w", padx=15, pady=(2, 10))
+
+    def _renderizar_habitos(self, rows_habitos, habitos_criterios):
+        if not rows_habitos:
+            ctk.CTkLabel(self.scroll_habitos, text="No hay registros de hábitos para este grado y trimestre.",
+                         font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
+            return
+
+        for i, row_data in enumerate(rows_habitos):
+            bg = C["card"] if i % 2 == 0 else C["card_alt"]
+            f_row = ctk.CTkFrame(self.scroll_habitos, fg_color=bg, corner_radius=8)
+            f_row.pack(fill="x", padx=5, pady=4)
+
+            # Estudiante cabecera
+            header = ctk.CTkFrame(f_row, fg_color="transparent")
+            header.pack(fill="x", padx=15, pady=(8, 4))
+            
+            ctk.CTkLabel(header, text=f"{i+1}.", font=(FONT_BODY, 12, "bold"), text_color=C["texto"]).pack(side="left")
+            ctk.CTkLabel(header, text=row_data['nombre'], font=(FONT_BODY, 12, "bold"), text_color=C["texto"]).pack(side="left", padx=10)
+
+            # Criterios del trimestre actual
+            grid_frame = ctk.CTkFrame(f_row, fg_color="transparent")
+            grid_frame.pack(fill="x", padx=15, pady=(2, 6))
+            grid_frame.columnconfigure((0, 1, 2), weight=1)
+
+            for idx, crit_name in enumerate(habitos_criterios):
+                c_row = idx // 3
+                c_col = idx % 3
+                item_frame = ctk.CTkFrame(grid_frame, fg_color="transparent")
+                item_frame.grid(row=c_row, column=c_col, sticky="w", padx=10, pady=4)
+                
+                crit_data = row_data["evals_actual"].get(crit_name, {"final": "-", "detalle": ""})
+                final_val = crit_data["final"]
+                detalle_val = crit_data["detalle"]
+                
+                color = C["texto_sec"]
+                if final_val == "S": color = C["verde"]
+                elif final_val == "R": color = C["amarillo"]
+                elif final_val == "X": color = C["rojo"]
+                
+                badge = ctk.CTkLabel(item_frame, text=f" {final_val} ", font=(FONT_BODY, 10, "bold"), text_color="white", fg_color=color, corner_radius=4)
+                badge.pack(side="left", padx=(0, 6))
+                
+                lbl_name = ctk.CTkLabel(item_frame, text=crit_name, font=(FONT_BODY, 11), text_color=C["texto"])
+                lbl_name.pack(side="left")
+                
+                if detalle_val:
+                    lbl_det = ctk.CTkLabel(item_frame, text=f" ({detalle_val})", font=(FONT_BODY, 9), text_color=C["texto_dim"])
+                    lbl_det.pack(side="left", padx=2)
+
+            # Trimestres anteriores
+            anteriores_texts = []
+            for prev_t, prev_crit_vals in row_data["evals_anteriores"].items():
+                active_crits = []
+                for c_name, val in prev_crit_vals.items():
+                    if val != "-":
+                        active_crits.append(f"{c_name}: {val}")
+                if active_crits:
+                    anteriores_texts.append(f"⏱️ {prev_t}: " + " | ".join(active_crits))
+                    
+            if anteriores_texts:
+                ant_frame = ctk.CTkFrame(f_row, fg_color=C["fondo"], corner_radius=6)
+                ant_frame.pack(fill="x", padx=15, pady=(4, 10))
+                
+                ctk.CTkLabel(ant_frame, text="⏮️ Trimestres Anteriores:", font=(FONT_BODY, 10, "bold"), text_color=C["cian"]).pack(anchor="w", padx=10, pady=(4, 2))
+                for txt in anteriores_texts:
+                    ctk.CTkLabel(ant_frame, text=txt, font=(FONT_BODY, 10), text_color=C["texto_sec"], justify="left", wraplength=850).pack(anchor="w", padx=20, pady=2)

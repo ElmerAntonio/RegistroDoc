@@ -32,6 +32,10 @@ class ReportesFrame(ctk.CTkFrame):
         self.combo_grado = ctk.CTkOptionMenu(self.frame_controles, values=opciones_grado, command=self.cargar_reportes)
         self.combo_grado.pack(side="left", padx=10)
 
+        ctk.CTkLabel(self.frame_controles, text="Seleccione Trimestre:", font=("Segoe UI", 14)).pack(side="left", padx=(20, 10))
+        self.combo_trimestre = ctk.CTkOptionMenu(self.frame_controles, values=["Todos", "Trimestre 1", "Trimestre 2", "Trimestre 3"], command=lambda _: self.cargar_reportes(self.combo_grado.get()))
+        self.combo_trimestre.pack(side="left", padx=10)
+
         # Tabs for different reports
         self.tabs = ctk.CTkTabview(self)
         self.tabs.pack(fill="both", expand=True, pady=10)
@@ -59,13 +63,17 @@ class ReportesFrame(ctk.CTkFrame):
 
         self.cargar_reportes(self.combo_grado.get())
 
-    def cargar_reportes(self, grado):
+    def cargar_reportes(self, grado=None):
+        if not grado:
+            grado = self.combo_grado.get()
+        trimestre = self.combo_trimestre.get() if hasattr(self, "combo_trimestre") else "Todos"
+
         self._limpiar(self.scroll_docente)
         self._limpiar(self.scroll_aprobados)
         self._limpiar(self.scroll_direccion)
         self._limpiar(self.scroll_habitos)
 
-        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
+        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimestre)
 
         if not reportes["docente"]:
             ctk.CTkLabel(self.scroll_docente, text="No hay datos de resumen para mostrar.", font=("Segoe UI", 16)).pack(pady=20)
@@ -142,16 +150,20 @@ class ReportesFrame(ctk.CTkFrame):
                     habitos_data = json.load(f)
                 
                 for key, val_entry in habitos_data.items():
-                    k_grado = key.split("::")[0]
-                    if grado.replace("°","") in k_grado.replace("°",""):
-                        est_evals = val_entry.get("estudiantes", {})
-                        for est_id, crit_vals in est_evals.items():
-                            e_idx = int(est_id) - 1
-                            if e_idx not in stats_por_est:
-                                stats_por_est[e_idx] = {"S": 0, "R": 0, "X": 0}
-                            for score in crit_vals.values():
-                                if score in ["S", "R", "X"]:
-                                    stats_por_est[e_idx][score] += 1
+                    parts = key.split("::")
+                    if len(parts) >= 2:
+                        k_grado = parts[0]
+                        k_trimestre = parts[1]
+                        if grado.replace("°","") in k_grado.replace("°",""):
+                            if trimestre == "Todos" or trimestre == k_trimestre:
+                                est_evals = val_entry.get("estudiantes", {})
+                                for est_id, crit_vals in est_evals.items():
+                                    e_idx = int(est_id) - 1
+                                    if e_idx not in stats_por_est:
+                                        stats_por_est[e_idx] = {"S": 0, "R": 0, "X": 0}
+                                    for score in crit_vals.values():
+                                        if score in ["S", "R", "X"]:
+                                            stats_por_est[e_idx][score] += 1
             except Exception as e:
                 print(f"Error loading habits report stats: {e}")
 
@@ -363,7 +375,8 @@ class ReportesFrame(ctk.CTkFrame):
             return
 
         grado = self.combo_grado.get()
-        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
+        trimestre = self.combo_trimestre.get() if hasattr(self, "combo_trimestre") else "Todos"
+        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimester)
         doc = Document()
         try:
             from utils.footer_utils import add_header_with_logo, get_school_logo_path
@@ -372,7 +385,7 @@ class ReportesFrame(ctk.CTkFrame):
                 add_header_with_logo(doc, logo_esc)
         except Exception: pass
 
-        doc.add_heading(f"Reporte Académico — Grado {grado}", 0)
+        doc.add_heading(f"Reporte Académico — Grado {grado} ({trimestre})", 0)
         # Encabezado escuela
         datos = self.engine.obtener_datos_generales() if hasattr(self.engine, 'obtener_datos_generales') else {}
         escuela = datos.get("escuela_nombre", "")
@@ -774,7 +787,8 @@ class ReportesFrame(ctk.CTkFrame):
             return
 
         grado = self.combo_grado.get()
-        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda x: {"docente": [], "aprobados": [], "direccion": []})(grado)
+        trimestre = self.combo_trimestre.get() if hasattr(self, "combo_trimestre") else "Todos"
+        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimester)
         doc = Document()
         try:
             from utils.footer_utils import add_header_with_logo, get_school_logo_path
@@ -783,7 +797,7 @@ class ReportesFrame(ctk.CTkFrame):
                 add_header_with_logo(doc, logo_esc)
         except Exception: pass
 
-        doc.add_heading(f"Reportes y Estadísticas — Grado {grado}", 0)
+        doc.add_heading(f"Reportes y Estadísticas — Grado {grado} ({trimestre})", 0)
 
         # Docente
         doc.add_heading("Reporte Docente", level=1)

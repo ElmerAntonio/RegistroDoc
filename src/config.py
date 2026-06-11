@@ -12,8 +12,8 @@ def establecer_icono_ventana(window):
     import sys
     from PIL import Image, ImageTk
     
-    icon_path = os.path.join(BASE_DIR, "..", "img", "icon.ico")
-    png_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
+    icon_path = os.path.join(BASE_DIR, "..", "assets", "icon.ico")
+    png_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
     
     # En Windows, usar iconbitmap directamente con retardos para asegurar que no se sobrescriba
     if sys.platform == "win32" and os.path.exists(icon_path):

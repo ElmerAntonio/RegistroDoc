@@ -46,7 +46,7 @@ class SetupWizard(ctk.CTk):
         self.entry_nombre.pack(pady=(5, 15))
 
         ctk.CTkLabel(self.main_frame, text="Cédula:", font=("Segoe UI", 14)).pack(anchor="w")
-        self.entry_cedula = ctk.CTkEntry(self.main_frame, width=400, placeholder_text="Ej: 4-785-823")
+        self.entry_cedula = ctk.CTkEntry(self.main_frame, width=400, placeholder_text="Ej: 8-000-0000")
         self.entry_cedula.pack(pady=(5, 15))
 
         ctk.CTkButton(self.main_frame, text="Siguiente ➡️", font=("Segoe UI", 14, "bold"), height=40, command=self.guardar_paso_1).pack(pady=30)

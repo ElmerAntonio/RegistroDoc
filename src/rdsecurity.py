@@ -56,11 +56,14 @@ DELAY_NIVEL_2   = 3600             # 1 hora
 
 # Rutas absolutas resueltas desde la raíz del proyecto
 ROOT_DIR        = os.path.dirname(BASE_DIR)
-AUDIT_FILE      = os.path.join(ROOT_DIR, "rd_audit.bin")
-BRUTE_FILE      = os.path.join(ROOT_DIR, "rd_brute.bin")
-LICENSE_FILE    = os.path.join(ROOT_DIR, "licencia.dat")
-CONFIG_FILE     = os.path.join(ROOT_DIR, "config.enc")
-TOKEN_FILE      = os.path.join(ROOT_DIR, "rd_token.bin")
+DATA_DIR        = os.path.join(ROOT_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+AUDIT_FILE      = os.path.join(DATA_DIR, "rd_audit.bin")
+BRUTE_FILE      = os.path.join(DATA_DIR, "rd_brute.bin")
+LICENSE_FILE    = os.path.join(DATA_DIR, "licencia.dat")
+CONFIG_FILE     = os.path.join(DATA_DIR, "config.enc")
+TOKEN_FILE      = os.path.join(DATA_DIR, "rd_token.bin")
 
 # Clave maestra derivada del hardware — nunca viaja por red ni se guarda
 _HW_SEED = None

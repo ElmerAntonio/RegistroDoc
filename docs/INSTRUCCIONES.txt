@@ -1,0 +1,55 @@
+========================================================================
+             INSTRUCCIONES DE INSTALACION Y EJECUCION
+========================================================================
+
+Este es un entorno limpio de RegistroDoc Pro. Para comenzar a utilizarlo
+o realizar pruebas de desarrollo, siga los siguientes pasos:
+
+1. REQUISITOS PREVIOS
+------------------------------------------------------------------------
+* Instale Python version 3.10 o superior (disponible en python.org).
+  IMPORTANTE (En Windows): Durante la instalacion de Python, asegurese
+  de marcar la casilla que dice "Add Python to PATH" (Agregar Python al PATH).
+* Se recomienda utilizar un editor de codigo como Visual Studio Code (VS Code).
+
+2. METODO DE ARRANQUE FACIL Y AUTOMATICO (Recomendado para no-programadores)
+------------------------------------------------------------------------
+1. Descomprima este archivo comprimido en una carpeta de su eleccion.
+2. Haga DOBLE CLIC sobre el archivo "Iniciar_RegistroDoc.bat" en esta carpeta.
+3. El asistente verificara que tenga Python instalado, instalara todos los 
+   componentes necesarios de forma automatica y abrira el programa.
+
+3. METODO MANUAL (Para desarrolladores / terminal)
+------------------------------------------------------------------------
+1. Descomprima este archivo comprimido.
+2. Abra la terminal (Linea de comandos o PowerShell en Windows) en la 
+   carpeta descomprimida.
+3. Instale las dependencias ejecutando:
+   python -m pip install -r requirements.txt
+4. Inicie la aplicacion ejecutando:
+   python src/app.py
+
+3. ASISTENTE DE CONFIGURACION INICIAL
+------------------------------------------------------------------------
+Dado que este paquete esta limpio de configuraciones personales anteriores,
+al iniciar el sistema por primera vez se abrira automaticamente un Asistente
+de Configuracion. En el podra configurar:
+* Nombre del Docente y Cedula
+* Nombre de la Escuela, Region Escolar y Ano Lectivo
+* Tipo de Registro (Modalidad Primaria o Premedia)
+
+La aplicacion cargara de forma automatica y creara el entorno de trabajo.
+
+4. EXTENSIONES RECOMENDADAS PARA DESARROLLO (Si utiliza VS Code)
+------------------------------------------------------------------------
+Si desea revisar el codigo o ejecutar pruebas, abra la carpeta en VS Code
+e instale las siguientes extensiones recomendadas (el editor se las sugerira
+automaticamente gracias al archivo .vscode/extensions.json):
+* Python (ms-python.python): Habilita soporte de lenguaje, linting y debug.
+* Pylance (ms-python.vscode-pylance): Proporciona analisis estatico de tipos.
+* Python Test Explorer: Para visualizar y ejecutar las pruebas unitarias
+  de forma grafica desde la barra lateral.
+
+Para ejecutar los tests desde la terminal, simplemente ejecute:
+   pytest
+========================================================================

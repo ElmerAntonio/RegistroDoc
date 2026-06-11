@@ -1,4 +1,44 @@
+# Cache de Python y compilados
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+.pytest_cache/
+.cache/
+
+# Entornos virtuales
 .venv/
+venv/
+env/
+ENV/
+
+# Configuración de entorno local
+.env
+
+# Configuraciones de editores e IDEs
+.vscode/
+.idea/
+
+# Datos cifrados de usuario (seguridad offline)
+data/config.enc
+data/rd_audit.bin
+data/rd_brute.bin
+data/rd_token.bin
+data/licencia.dat
+data/tareas_pendientes.json
+data/observaciones_plantillas.json
+
+# Carpetas generadas por el maestro y respaldos
+Expedientes_Estudiantes/
+Reuniones/
+Documentos/
+Respaldos_Auto/
+Respaldos_Locales/
+backups/
+
+# Archivos de empaquetado y logs
+*.zip
+*.log
+
+# Dependencias offline binarias (incluidas en el zip de distribución pero ignoradas en git)
+dependencies/

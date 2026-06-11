@@ -1,43 +1,59 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-import os
-
-# Mock all possible dependencies of src/setup.py
-mock_ctk = MagicMock()
-sys.modules['customtkinter'] = mock_ctk
-sys.modules['tkinter'] = MagicMock()
-sys.modules['tkinter.messagebox'] = MagicMock()
-sys.modules.pop('openpyxl', None)
-sys.modules['pandas'] = MagicMock()
-sys.modules['matplotlib'] = MagicMock()
-sys.modules['rddata'] = MagicMock()
-sys.modules['config'] = MagicMock()
-sys.modules['config'].CONFIG_FILE = "test_config.json"
-sys.modules['config'].BASE_DIR = "."
-
-# We need to make sure SetupWizard inherits from something that has the methods
-class MockCTk:
-    def __init__(self, *args, **kwargs): pass
-    def title(self, *args, **kwargs): pass
-    def geometry(self, *args, **kwargs): pass
-    def winfo_screenwidth(self): return 1920
-    def winfo_screenheight(self): return 1080
-    def crear_interfaz(self): pass
-
-mock_ctk.CTk = MockCTk
-
-# Add src to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
-
-from setup import SetupWizard
 
 class TestSetupCentering(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Save original sys.modules
+        cls._orig_modules = sys.modules.copy()
+        
+        # Mock all possible dependencies of setup.py
+        cls.mock_ctk = MagicMock()
+        sys.modules['customtkinter'] = cls.mock_ctk
+        sys.modules['tkinter'] = MagicMock()
+        sys.modules['tkinter.messagebox'] = MagicMock()
+        sys.modules['pandas'] = MagicMock()
+        sys.modules['matplotlib'] = MagicMock()
+        sys.modules['rddata'] = MagicMock()
+        sys.modules['config'] = MagicMock()
+        sys.modules['config'].CONFIG_FILE = "test_config.json"
+        sys.modules['config'].BASE_DIR = "."
+
+        class MockCTk:
+            def __init__(self, *args, **kwargs): pass
+            def title(self, *args, **kwargs): pass
+            def geometry(self, *args, **kwargs): pass
+            def winfo_screenwidth(self): return 1920
+            def winfo_screenheight(self): return 1080
+            def crear_interfaz(self): pass
+
+        cls.mock_ctk.CTk = MockCTk
+        
+        # Add src to path
+        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'))
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+    @classmethod
+    def tearDownClass(cls):
+        # Restore sys.modules entirely
+        added_keys = set(sys.modules.keys()) - set(cls._orig_modules.keys())
+        for k in added_keys:
+            del sys.modules[k]
+        for k, v in cls._orig_modules.items():
+            sys.modules[k] = v
+
     def test_setup_wizard_centering(self):
+        from setup import SetupWizard
         # Patch crear_interfaz so it doesn't do anything
         with patch.object(SetupWizard, 'crear_interfaz'):
             # Re-mock geometry on the class to capture the call in __init__
-            with patch.object(MockCTk, 'geometry') as mock_geo:
+            mock_ctk_class = sys.modules['customtkinter'].CTk
+            with patch.object(mock_ctk_class, 'geometry') as mock_geo:
                 wizard = SetupWizard()
                 # Verify geometry was called to center the window
                 # width=700, height=500, screen_w=1920, screen_h=1080
@@ -58,3 +74,4 @@ class TestSetupCentering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

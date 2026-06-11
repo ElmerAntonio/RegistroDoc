@@ -178,12 +178,12 @@ class DataEngine:
                 nombre_respaldo = f"{nombre_base}_respaldo_{ahora}.xlsx"
                 shutil.copy2(self.ruta, os.path.join(dir_respaldos, nombre_respaldo))
                 
-                # Auto-limpieza: mantener solo los últimos 15 respaldos
+                # Auto-limpieza: mantener solo los últimos 3 respaldos
                 respaldos = sorted(
                     [os.path.join(dir_respaldos, f) for f in os.listdir(dir_respaldos) if f.endswith(".xlsx")],
                     key=os.path.getmtime
                 )
-                while len(respaldos) > 15:
+                while len(respaldos) > 3:
                     viejo = respaldos.pop(0)
                     try: os.remove(viejo)
                     except: pass
@@ -604,7 +604,7 @@ class DataEngine:
         if should_close: wb.close()
         return estudiantes
 
-    def agregar_estudiante(self, grado, nombre, cedula=""):
+    def agregar_estudiante(self, grado, nombre, cedula="", sexo=""):
         if not os.path.exists(self.ruta): return False
 
         # Validar limites
@@ -981,7 +981,7 @@ class DataEngine:
         if should_close: wb.close()
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
 
-    def obtener_datos_reportes(self, grado, wb=None):
+    def obtener_datos_reportes(self, grado, trimestre="Todos", wb=None):
         if wb is None:
             self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
@@ -993,14 +993,15 @@ class DataEngine:
         datos = {"docente": [], "aprobados": [], "direccion": []}
         try:
             estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
-            proms = self.obtener_promedios_reales(grado, None, "Anual", wb=wb)
-            if not proms:
+            periodo = "Anual" if trimestre == "Todos" else trimestre
+            proms = self.obtener_promedios_reales(grado, None, periodo, wb=wb)
+            if not proms and periodo == "Anual":
                 proms = self.obtener_promedios_reales(grado, None, "Trimestre 1", wb=wb)
 
             for est in estudiantes:
                 nom = est["nombre"]
                 ced = est.get("cedula", "")
-                prom_val = proms.get(nom, None)
+                prom_val = proms.get(nom, None) if proms else None
                 
                 # Format average
                 if prom_val is not None:
@@ -1312,8 +1313,8 @@ class DataEngine:
         try:
             cell_desc = ws.cell(row=self.fila_desc, column=col_vacia)
             cell_desc.value = desc
-            cell_desc.alignment = Alignment(wrapText=True, horizontal='center', vertical='center')
-            cell_desc.font = Font(name='Calibri', size=11, bold=False)
+            cell_desc.alignment = Alignment(wrapText=True, horizontal='center', vertical='center', textRotation=90)
+            cell_desc.font = Font(name='Calibri', size=11, bold=True)
         except AttributeError: pass
         for id_estudiante, nota in dic_notas.items():
             fila_excel = 4 + int(id_estudiante)

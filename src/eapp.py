@@ -520,7 +520,6 @@ class NotasFrame(ctk.CTkFrame):
                 
                 def calificar_tarea(tit=t["titulo"], ttype=t["tipo"], date=t["fecha_limite"]):
                     self.tabs.set("Nueva Nota")
-                    self.var_desc.set(tit[:20])
                     
                     mapped_type = "Diaria / Parcial"
                     if ttype in ["Apreciación", "Asistencia", "Hábitos"]:
@@ -530,6 +529,11 @@ class NotasFrame(ctk.CTkFrame):
                     
                     self.combo_tipo.set(mapped_type)
                     self.al_cambiar_tipo_nota(mapped_type)
+                    
+                    if mapped_type != "Examen":
+                        self.entry_desc.configure(state="normal")
+                        self.entry_desc.delete(0, "end")
+                        self.entry_desc.insert(0, tit[:20])
                     
                     try:
                         partes = date.split("-")

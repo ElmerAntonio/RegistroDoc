@@ -114,23 +114,25 @@ class DashboardFrame(ctk.CTkFrame):
         self._widget_clase_actual(panel)
 
         # Tarjetas métricas
-        self._tarjetas_metricas(panel)
+        self._cards_container = ctk.CTkFrame(panel, fg_color="transparent")
+        self._cards_container.pack(fill="x")
+        self._tarjetas_metricas(self._cards_container)
 
         # Frase motivacional del día
         self._frase_motivacional(panel)
 
-        # Omitido para evitar duplicidad de tareas programadas
-        # self._widget_tareas_pendientes(panel)
-
-
         # Panel de Hábitos
-        self._panel_habitos(panel)
+        self._habitos_container = ctk.CTkFrame(panel, fg_color="transparent")
+        self._habitos_container.pack(fill="x")
+        self._panel_habitos(self._habitos_container)
 
         # Asistente y Alertas del Docente
         self._asistente_docente(panel)
 
         # Gráficas
-        self._graficas(panel)
+        self._graficas_container = ctk.CTkFrame(panel, fg_color="transparent")
+        self._graficas_container.pack(fill="x")
+        self._graficas(self._graficas_container)
 
         # Grados activos y accesos rápidos
         self._footer_panel(panel)
@@ -386,33 +388,24 @@ class DashboardFrame(ctk.CTkFrame):
 
     def _actualizar_dashboard_contextual(self):
         # Refresh the cards and graph based on _current_student state
-        if hasattr(self, "_cards_frame") and self._cards_frame.winfo_exists():
-            self._cards_frame.destroy()
-            self._tarjetas_metricas(self._panel_container)
+        if hasattr(self, "_cards_container") and self._cards_container.winfo_exists():
+            for widget in self._cards_container.winfo_children():
+                widget.destroy()
+            self._tarjetas_metricas(self._cards_container)
 
-        if hasattr(self, "_habitos_panel") and self._habitos_panel.winfo_exists():
-            self._habitos_panel.destroy()
-        self._panel_habitos(self._panel_container)
+        if hasattr(self, "_habitos_container") and self._habitos_container.winfo_exists():
+            for widget in self._habitos_container.winfo_children():
+                widget.destroy()
+            self._panel_habitos(self._habitos_container)
 
-        if hasattr(self, "_graph_frame") and self._graph_frame.winfo_exists():
-            self._graph_frame.destroy()
-            self._graficas(self._panel_container)
+        if hasattr(self, "_graficas_container") and self._graficas_container.winfo_exists():
+            for widget in self._graficas_container.winfo_children():
+                widget.destroy()
+            self._graficas(self._graficas_container)
 
     # ── Tarjetas métricas ────────────────────────────────────────────────
     def _tarjetas_metricas(self, parent):
         self._cards_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        # Ensure it always stays above footer, below title. Since pack is used, we have to insert it at correct index if recreating
-        # We will pack it directly, but since we are recreating it during dynamic search,
-        # a better approach would be to have dedicated container frames.
-        # But we'll just reconstruct the entire view or place it carefully.
-        # Actually it's easier to just destroy and pack everything below the title again.
-
-        # Let's clean the container elements below the title before rendering
-        for widget in parent.winfo_children():
-            if widget not in (self._cards_frame, parent.winfo_children()[0], parent.winfo_children()[1]):
-                if hasattr(self, "_cards_frame") and widget == self._cards_frame: continue
-                # Do not destroy water mark or title section
-
         self._cards_frame.pack(fill="x", padx=20, pady=(6, 10))
         self._cards_frame.columnconfigure((0, 1, 2, 3), weight=1, uniform="card")
 
@@ -595,6 +588,80 @@ class DashboardFrame(ctk.CTkFrame):
 
     def _panel_habitos(self, parent):
         if self._current_student:
+            nombre_est = self._current_student["nombre"]
+            grado_est = self._current_student["grado"]
+            
+            # Find student index/ID
+            id_est = None
+            try:
+                estudiantes = self.engine.obtener_estudiantes_completos(grado_est)
+                for idx, est in enumerate(estudiantes):
+                    if est["nombre"] == nombre_est:
+                        id_est = str(idx + 1)
+                        break
+            except Exception:
+                pass
+                
+            s_val = 0
+            r_val = 0
+            x_val = 0
+            
+            if id_est:
+                try:
+                    import json
+                    import os
+                    ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
+                    if os.path.exists(ruta_json):
+                        with open(ruta_json, "r", encoding="utf-8") as f:
+                            habitos_data = json.load(f)
+                        for key, val_entry in habitos_data.items():
+                            grade_part = key.split("::")[0]
+                            if grado_est.replace("°","") in grade_part.replace("°",""):
+                                est_evals = val_entry.get("estudiantes", {})
+                                if id_est in est_evals:
+                                    for score in est_evals[id_est].values():
+                                        if score == "S":
+                                            s_val += 1
+                                        elif score == "R":
+                                            r_val += 1
+                                        elif score == "X":
+                                            x_val += 1
+                except Exception as e:
+                    print(f"Error calculating individual habit stats: {e}")
+                    
+            total_vals = s_val + r_val + x_val
+            
+            self._habitos_panel = ctk.CTkFrame(parent, fg_color=C["card"], border_width=1, border_color=C["borde"], corner_radius=12)
+            self._habitos_panel.pack(fill="x", padx=20, pady=(6, 10))
+
+            # Title
+            ctk.CTkLabel(self._habitos_panel, text=f"🧠 Hábitos y Actitudes Registrados — {nombre_est} ({grado_est})",
+                         font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                         text_color=C["cian"]).pack(anchor="w", padx=20, pady=(15, 10))
+
+            # Container columns
+            cols_frame = ctk.CTkFrame(self._habitos_panel, fg_color="transparent")
+            cols_frame.pack(fill="x", padx=20, pady=(0, 20))
+            cols_frame.columnconfigure((0, 1, 2), weight=1, uniform="habito_col")
+
+            metrics = [
+                ("Satisfactorio (S)", s_val, C["verde"]),
+                ("Regular (R)", r_val, C["amarillo"]),
+                ("No Satisface (X)", x_val, C["rojo"])
+            ]
+
+            for idx, (label, count, color) in enumerate(metrics):
+                col_frame = ctk.CTkFrame(cols_frame, fg_color="transparent")
+                col_frame.grid(row=0, column=idx, padx=10, pady=5, sticky="nsew")
+
+                pct = (count / total_vals) * 100 if total_vals > 0 else 0
+                
+                ctk.CTkLabel(col_frame, text=label, font=ctk.CTkFont("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+                ctk.CTkLabel(col_frame, text=f"{count} evaluaciones ({pct:.1f}%)", font=ctk.CTkFont("Segoe UI", 11), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 6))
+
+                pb = ctk.CTkProgressBar(col_frame, progress_color=color, fg_color=C["borde"], height=8)
+                pb.pack(fill="x")
+                pb.set(pct / 100.0)
             return
 
         hab_stats = self._stats.get("habitos", {"S": 0, "R": 0, "X": 0})
@@ -712,12 +779,12 @@ class DashboardFrame(ctk.CTkFrame):
                            edgecolors=C["fondo"], linewidths=1.5)
                 ax.legend(loc="upper left", facecolor=C["fondo"], edgecolor=C["borde"], labelcolor=C["texto"], fontsize=8)
 
-        # Ejes
+        font_mult = 1.0
         ax.set_xlim(0.7, 3.3)
         ax.set_ylim(1, 5.2)
-        ax.set_xlabel("Trimestres", color=C["texto_sec"], fontsize=9)
-        ax.set_ylabel("Notas 1–5", color=C["texto_sec"], fontsize=9)
-        ax.tick_params(colors=C["texto_sec"], labelsize=8)
+        ax.set_xlabel("Trimestres", color=C["texto_sec"], fontsize=int(9 * font_mult))
+        ax.set_ylabel("Notas 1–5", color=C["texto_sec"], fontsize=int(9 * font_mult))
+        ax.tick_params(colors=C["texto_sec"], labelsize=int(8 * font_mult))
         for spine in ax.spines.values():
             spine.set_edgecolor(C["borde"])
         ax.grid(True, color=C["borde"], linewidth=0.5, alpha=0.6)
@@ -768,13 +835,14 @@ class DashboardFrame(ctk.CTkFrame):
         ax2.bar(grados, valores, color=colores, width=0.6,
                 edgecolor=C["fondo"], linewidth=0.8)
 
+        font_mult = 1.0
         ax2.set_ylim(1, 5.3)
-        ax2.tick_params(colors=C["texto_sec"], labelsize=8)
+        ax2.tick_params(colors=C["texto_sec"], labelsize=int(8 * font_mult))
         for spine in ax2.spines.values():
             spine.set_edgecolor(C["borde"])
         ax2.grid(True, axis="y", color=C["borde"],
                  linewidth=0.5, alpha=0.5)
-        ax2.set_ylabel("Promedio", color=C["texto_sec"], fontsize=8)
+        ax2.set_ylabel("Promedio", color=C["texto_sec"], fontsize=int(8 * font_mult))
 
         canvas2 = FigureCanvasTkAgg(fig2, master=card)
         canvas2.draw()
@@ -1090,7 +1158,7 @@ class DashboardFrame(ctk.CTkFrame):
                 [os.path.join(dir_respaldos, f) for f in os.listdir(dir_respaldos) if f.endswith(".xlsx")],
                 key=os.path.getmtime
             )
-            while len(respaldos) > 15:
+            while len(respaldos) > 3:
                 viejo = respaldos.pop(0)
                 try: os.remove(viejo)
                 except: pass

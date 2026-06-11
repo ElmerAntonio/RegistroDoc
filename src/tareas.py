@@ -8,8 +8,11 @@ import os
 import json
 import datetime
 from config import BASE_DIR
+from utils.date_helpers import obtener_ahora_panama, obtener_hoy_panama
 
-TAREAS_FILE = os.path.join(BASE_DIR, "..", "tareas_pendientes.json")
+DATA_DIR = os.path.join(BASE_DIR, "..", "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+TAREAS_FILE = os.path.join(DATA_DIR, "tareas_pendientes.json")
 
 
 def cargar_tareas():
@@ -49,7 +52,7 @@ def agregar_tarea(titulo, grado, materia, tipo, fecha_limite, descripcion=""):
         "fecha_limite": fecha_limite,
         "descripcion": descripcion,
         "completada": False,
-        "creada": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        "creada": obtener_ahora_panama().strftime("%Y-%m-%d %H:%M")
     }
     tareas.append(nueva)
     guardar_tareas(tareas)
@@ -94,7 +97,7 @@ def obtener_pendientes():
     """Retorna tareas pendientes ordenadas por fecha límite."""
     tareas = cargar_tareas()
     pendientes = [t for t in tareas if not t.get("completada", False)]
-    hoy = datetime.date.today()
+    hoy = obtener_hoy_panama()
 
     for t in pendientes:
         try:
@@ -122,7 +125,7 @@ def obtener_clase_actual(horario):
     Dado el horario del docente, retorna la clase actual según la hora.
     Retorna (materia, hora_rango) o (None, None) si no hay clase.
     """
-    ahora = datetime.datetime.now()
+    ahora = obtener_ahora_panama()
     dia_semana = ahora.weekday()  # 0=lunes, 4=viernes
 
     dias_map = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes"}
@@ -155,7 +158,7 @@ def obtener_clase_actual(horario):
 
 def obtener_proxima_clase(horario):
     """Retorna la próxima clase del día."""
-    ahora = datetime.datetime.now()
+    ahora = obtener_ahora_panama()
     dia_semana = ahora.weekday()
 
     dias_map = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes"}

@@ -62,7 +62,7 @@ def get_school_logo_path():
     except Exception:
         base_path = os.path.abspath(".")
 
-    internal_path = os.path.join(base_path, "img", "logo.png")
+    internal_path = os.path.join(base_path, "assets", "logo.png")
     if os.path.exists(internal_path):
         return internal_path
 

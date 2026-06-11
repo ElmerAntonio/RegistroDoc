@@ -64,7 +64,7 @@ PASO 4 — PROBAR EN VS CODE (SIN GENERAR .EXE)
        python app.py
 
   La primera vez pedirá activación. Para pruebas usa:
-    Cédula:   4-785-823
+    Cédula:   8-000-0000
     Código:   (genera uno con generador_codigos.py primero)
 
   Para probar el GENERADOR DE CÓDIGOS:

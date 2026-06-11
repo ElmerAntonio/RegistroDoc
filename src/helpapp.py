@@ -458,7 +458,7 @@ class HelpFrame(ctk.CTkFrame):
                                                border_width=1, border_color=C["borde"])
         self._manual_textbox.grid(row=0, column=1, sticky="nsew")
 
-        ruta = os.path.join(BASE_DIR, "..", "Manual_Usuario_RegistroDoc.md")
+        ruta = os.path.join(BASE_DIR, "..", "docs", "Manual_Usuario_RegistroDoc.md")
         contenido = ""
         if os.path.exists(ruta):
             try:
@@ -502,7 +502,7 @@ class HelpFrame(ctk.CTkFrame):
 
     # ─── FUNCIONES AUXILIARES ──────────────────────────────────────
     def _abrir_manual(self):
-        ruta = os.path.join(BASE_DIR, "..", "Manual_Usuario_RegistroDoc.md")
+        ruta = os.path.join(BASE_DIR, "..", "docs", "Manual_Usuario_RegistroDoc.md")
         if os.path.exists(ruta):
             try:
                 os.startfile(ruta)

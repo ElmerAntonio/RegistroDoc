@@ -26,7 +26,7 @@ class SplashScreen(ctk.CTkToplevel):
 
         self.configure(fg_color="#0A1628")
 
-        img_path = os.path.join(os.path.dirname(__file__), "..", "img", "inicio.png")
+        img_path = os.path.join(os.path.dirname(__file__), "..", "assets", "inicio.png")
         if os.path.exists(img_path):
             try:
                 pil_img = Image.open(img_path).convert("RGB")

@@ -9,21 +9,34 @@ import datetime
 # Pre-import setup
 os.environ["REGISTRODOC_MASTER_SALT"] = "TEST_SALT_INTEGRITY"
 
-# Add src to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
-
-# Mock dependencies before importing rdsecurity
-sys.modules['dotenv'] = MagicMock()
-
-import rdsecurity
-from rdsecurity import (
-    calcular_hash_excel,
-    guardar_hash_excel,
-    verificar_integridad_excel,
-    actualizar_hash_excel
-)
-
 class TestRdSecurityIntegrity(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Save original sys.modules
+        cls._orig_modules = sys.modules.copy()
+        
+        # Mock dependencies before importing rdsecurity
+        sys.modules['dotenv'] = MagicMock()
+
+        # Add src to sys.path
+        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'))
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+        import rdsecurity
+        global calcular_hash_excel, guardar_hash_excel, verificar_integridad_excel
+        calcular_hash_excel = rdsecurity.calcular_hash_excel
+        guardar_hash_excel = rdsecurity.guardar_hash_excel
+        verificar_integridad_excel = rdsecurity.verificar_integridad_excel
+
+    @classmethod
+    def tearDownClass(cls):
+        # Restore sys.modules entirely
+        added_keys = set(sys.modules.keys()) - set(cls._orig_modules.keys())
+        for k in added_keys:
+            del sys.modules[k]
+        for k, v in cls._orig_modules.items():
+            sys.modules[k] = v
 
     def setUp(self):
         # Create a temporary Excel-like file

@@ -7,34 +7,23 @@
 ¡Bienvenido a RegistroDoc Pro! Este programa fue diseñado especialmente
 para docentes panameños que trabajan en áreas donde no hay internet.
 Funciona 100% sin conexión y le ayudará a llevar sus notas, asistencia,
-conducta y hábitos de forma rápida, segura y profesional.
-
-No se preocupe si tiene poca experiencia con computadoras.
-Esta guía le explicará TODO paso a paso, con palabras sencillas.
-
-
-═══════════════════════════════════════════════════════════════
-  ÍNDICE DE CONTENIDOS
-═══════════════════════════════════════════════════════════════
-
-  1. Cómo Iniciar el Programa
-  2. Pantalla de Inicio (Dashboard)
+conducta y hábitos de forma rápida, segura y profesional.  1. Cómo Iniciar el Programa
+  2. Pantalla de Inicio (Dashboard) y Horario
   3. Módulo de Estudiantes
-  4. Módulo de Calificaciones (Notas)
-  5. Módulo de Asistencia
-  6. Módulo de Observaciones (Expediente)
-  7. Módulo de Hábitos y Aptitudes
-  8. Módulo de Tareas Programadas        ← ¡NUEVO!
-  9. Módulo de Reportes y Gráficos
-  10. Módulo de Impresión
-  11. Configuración del Sistema
-  12. Atajos de Teclado (Rápidos)
-  13. Copias de Seguridad (Respaldos)
-  14. Reuniones (Actas y Formatos)        ← ¡NUEVO!
-  15. Registro Completo (Matriz Consolidada) ← ¡NUEVO!
-  16. Solución de Problemas Comunes
-  17. Glosario de Términos MEDUCA
-
+  4. Módulo de Notas y Asistencia (Unificado)
+  5. Módulo de Observaciones (Expediente)
+  6. Módulo de Hábitos y Aptitudes
+  7. Módulo de Tareas Programadas        ← ¡NUEVO!
+  8. Módulo de Reportes y Gráficos
+  9. Módulo de Impresión
+  10. Configuración del Sistema
+  11. Atajos de Teclado (Rápidos)
+  12. Copias de Seguridad (Respaldos)
+  13. Reuniones (Actas y Formatos)        ← ¡NUEVO!
+  14. Registro Completo (Matriz Consolidada) ← ¡NUEVO!
+  15. Solución de Problemas Comunes
+  16. Glosario de Términos MEDUCA
+  
 
 ═══════════════════════════════════════════════════════════════
   1. CÓMO INICIAR EL PROGRAMA
@@ -50,20 +39,22 @@ Esta guía le explicará TODO paso a paso, con palabras sencillas.
 
 
 ═══════════════════════════════════════════════════════════════
-  2. PANTALLA DE INICIO (DASHBOARD)
+  2. PANTALLA DE INICIO (DASHBOARD) Y HORARIO
 ═══════════════════════════════════════════════════════════════
 
-  Es lo primero que verá al abrir el programa.
+  Es lo primero que verá al abrir el programa. Además, en la barra
+  lateral izquierda tendrá siempre visible un widget con la clase actual
+  o la próxima clase según su horario configurado.
 
-  ¿Qué muestra?
+  ¿Qué muestra el Dashboard?
   • Tarjetas con el total de alumnos, alumnos en riesgo y
-    el alumno con mejor promedio
-  • La clase que tiene AHORA según su horario y la hora
-  • Frase motivacional del día (versículos y educación)
-  • Tareas pendientes programadas con fechas de vencimiento
-  • Gráficos de rendimiento académico
-  • Alertas de alumnos que necesitan atención
-  • Acciones rápidas: Notas, Asistencia, Respaldo
+    el alumno con mejor promedio del salón.
+  • Al buscar un alumno (escribiendo su nombre), las tarjetas, gráficas
+    y la sección de Hábitos y Aptitudes mostrarán información individual.
+  • Frase motivacional del día (versículos y educación).
+  • Tareas pendientes programadas con fechas de vencimiento.
+  • Gráficos de rendimiento académico.
+  • Acciones rápidas: Notas, Asistencia, Respaldo.
 
   CONSEJO: Presione Escape en cualquier pantalla para
   volver aquí rápidamente.
@@ -76,77 +67,54 @@ Esta guía le explicará TODO paso a paso, con palabras sencillas.
   Atajo de teclado: Ctrl+2
 
   ► AGREGAR un estudiante nuevo:
-    1. Presione "Estudiantes" en el menú izquierdo
-    2. Escriba: APELLIDO, Nombre (con mayúsculas en apellido)
-    3. Escriba la cédula (opcional)
-    4. Presione "Guardar Nuevo"
+    1. Presione "Estudiantes" en el menú izquierdo.
+    2. Escriba: APELLIDO, Nombre (con mayúsculas en apellido).
+    3. Escriba la cédula (opcional).
+    4. Seleccione el sexo y presione "Guardar Nuevo".
 
   ► CORREGIR un nombre:
-    1. Haga clic en la casilla del nombre
-    2. Borre y escriba el correcto
-    3. Presione "GUARDAR CAMBIOS"
+    1. Haga clic en la casilla del nombre.
+    2. Borre y escriba el correcto.
+    3. Presione "GUARDAR CAMBIOS".
 
   ► RETIRAR un estudiante:
-    1. Presione el botón rojo (papelera) junto al nombre
-    2. Confirme presionando "Sí"
+    1. Presione el botón rojo (papelera) junto al nombre.
+    2. Confirme presionando "Sí".
 
   NOTA: El máximo es 36 alumnos por grado (premedia) o
   34 alumnos (primaria).
 
 
 ═══════════════════════════════════════════════════════════════
-  4. MÓDULO DE CALIFICACIONES (NOTAS)
+  4. MÓDULO DE NOTAS Y ASISTENCIA (UNIFICADO)
 ═══════════════════════════════════════════════════════════════
 
-  Atajo de teclado: Ctrl+3
+  Atajo de teclado: Ctrl+3 (Notas) / Ctrl+4 (Asistencia)
 
-  ► REGISTRAR una nota nueva:
-    1. Seleccione Grado, Materia y Trimestre
-    2. Elija el Tipo de nota:
-       • Parcial/Diaria = tareas, talleres, actividades
-       • Apreciación    = cuadernos, participación, proyectos
-       • Examen         = prueba trimestral oficial
-    3. Escriba la Fecha (DD-MM) y Descripción del trabajo
-    4. Coloque la nota de cada alumno (1.0 a 5.0)
-    5. Presione el botón verde "GUARDAR NUEVA"
+  Este módulo unifica el registro de calificaciones y el control de asistencia
+  en una sola pantalla con pestañas para simplificar el flujo de trabajo del maestro.
+
+  ► REGISTRAR una nota nueva (Pestaña "Notas"):
+    1. Seleccione Grado, Materia y Trimestre en la pestaña Notas.
+    2. Elija el Tipo de nota (Parcial/Diaria, Apreciación, Examen).
+    3. Escriba la Fecha (DD-MM) y Descripción del trabajo.
+    4. Coloque la nota de cada alumno (1.0 a 5.0) en su casilla.
+    5. Presione el botón verde "GUARDAR NUEVA".
 
   ► CORREGIR una nota ya guardada:
-    1. Cambie a la pestaña "Modificar"
-    2. Seleccione la descripción del trabajo
-    3. Modifique las notas necesarias
-    4. Presione "ACTUALIZAR EXCEL"
+    1. Cambie a la pestaña secundaria "Modificar" dentro de Notas.
+    2. Seleccione la descripción del trabajo, modifique y presione "ACTUALIZAR EXCEL".
 
-  IMPORTANTE: Los valores válidos son de 1.0 a 5.0.
-  Si escribe un número fuera de este rango, el programa
-  le mostrará un aviso.
-
-
-═══════════════════════════════════════════════════════════════
-  5. MÓDULO DE ASISTENCIA
-═══════════════════════════════════════════════════════════════
-
-  Atajo de teclado: Ctrl+4
-
-  ► PASAR LISTA (forma rápida):
-    1. Seleccione Grado y Trimestre
-    2. Escriba la fecha de hoy (DD-MM)
-    3. Presione "Todos Presentes" (¡un solo clic!)
+  ► PASAR LISTA (Pestaña "Asistencia"):
+    1. Seleccione Grado y Trimestre en la pestaña Asistencia.
+    2. Escriba la fecha de hoy (DD-MM).
+    3. Presione "Todos Presentes" (¡un solo clic!).
     4. Corrija SOLO las excepciones:
-       • A = Ausente (faltó sin justificación)
-       • T = Tardanza (llegó tarde)
-       • E = Excusa (faltó con justificación)
-    5. Escriba el motivo de cada ausencia/tardanza
-    6. Presione "GUARDAR ASISTENCIA"
-
-  ► CAMBIAR una Ausencia a Excusa:
-    1. Vaya a pestaña "Modificar"
-    2. Seleccione la fecha de la falta
-    3. Cambie A por E
-    4. Escriba la justificación
-    5. Presione "ACTUALIZAR EXCEL"
-
-  RECUERDE: La "E" (Excusa) NO resta puntos de asistencia.
-  La "A" (Ausente) SÍ resta.
+       • P = Presente (se guarda como '.' en Excel)
+       • A = Ausente (faltó sin justificación, se guarda como '-')
+       • T = Tardanza (llegó tarde, se guarda como 'T')
+       • E = Excusa (Falta justificada, NO resta puntos, se guarda como 'E')
+    5. Escriba el motivo de cada ausencia/tardanza y presione "GUARDAR ASISTENCIA".
 
 
 ═══════════════════════════════════════════════════════════════

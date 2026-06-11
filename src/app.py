@@ -32,6 +32,7 @@ except ImportError:
 from dapp   import EstudiantesFrame
 from eapp   import NotasFrame
 from fapp   import AsistenciaFrame
+from notasasistenciaapp import NotasAsistenciaFrame
 from obsapp import ObservacionesFrame
 from sapp   import ConfigFrame
 from happ   import ReportesYGraficosFrame
@@ -64,24 +65,70 @@ class MainApplication(ctk.CTkFrame):
     # ══════════════════════════════════════════════════════════════════════
     #  CUERPO: TOP HEADER (LOGO, TITLE, GROUPS) + SUB-MENU BAR
     # ══════════════════════════════════════════════════════════════════════
-    def _cuerpo(self):
-        # Header (Fila 0)
-        self._header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=48)
-        self._header.grid(row=0, column=0, sticky="ew")
-        self._header.grid_propagate(False)
+    def _obtener_nombre_menu_breadcrumb(self):
+        nombres = {
+            "Inicio": "Inicio",
+            "Estudiantes": "Inicio › Estudiantes",
+            "Notas y Asistencia": "Inicio › Notas y Asistencia",
+            "Observaciones": "Inicio › Observaciones",
+            "Reportes y Gráficos": "Inicio › Reportes y Gráficos",
+            "Impresión": "Inicio › Impresión",
+            "Hábitos y Actitudes": "Inicio › Hábitos y Actitudes",
+            "Ayuda": "Inicio › Ayuda",
+            "Tareas Programadas": "Inicio › Tareas Programadas",
+            "Minutas y Citaciones": "Inicio › Minutas y Citaciones",
+            "Registro Completo": "Inicio › Registro Completo"
+        }
+        return nombres.get(self.menu_activo, "Inicio")
+
+    def _renderizar_header(self):
+        if hasattr(self, "_header") and self._header.winfo_exists():
+            try:
+                for w in self._header.winfo_children():
+                    w.destroy()
+            except Exception:
+                pass
+        else:
+            self._header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=48)
+            self._header.grid(row=0, column=0, sticky="ew")
+            self._header.grid_propagate(False)
         
         # Info versión
         ctk.CTkLabel(self._header, text="v.Prov.22:6", font=ctk.CTkFont(family=FONT_BODY, size=10), text_color=C["texto_dim"]).pack(side="right", padx=15, pady=13)
         
         # Breadcrumb de ubicación
-        self._breadcrumb = ctk.CTkLabel(self._header, text="📍 Inicio",
+        self._breadcrumb = ctk.CTkLabel(self._header, text="📍 " + self._obtener_nombre_menu_breadcrumb(),
             font=ctk.CTkFont(family=FONT_BODY, size=11),
             text_color=C["texto_sec"], fg_color=C["badge_bg"],
             corner_radius=8, padx=10, pady=3)
         self._breadcrumb.pack(side="right", padx=8, pady=12)
         
+        # Insignia de Sincronización Horaria (Panamá)
+        from utils.date_helpers import es_hora_sincronizada
+        sync_ok = es_hora_sincronizada()
+        sync_text = "🕒 Panamá OK" if sync_ok else "🕒 Hora Local"
+        sync_color = "#00FF88" if sync_ok else "#94A3B8"
+        self._time_sync_badge = ctk.CTkLabel(self._header, text=sync_text,
+            font=ctk.CTkFont(family=FONT_BODY, size=11, weight="bold"),
+            text_color=sync_color, fg_color=C["badge_bg"],
+            corner_radius=8, padx=10, pady=3)
+        self._time_sync_badge.pack(side="right", padx=8, pady=12)
+        
+        # Badge de Horario Escolar / Clase Actual
+        self._clase_badge = ctk.CTkLabel(self._header, text="🕐 Cargando...",
+            font=ctk.CTkFont(family=FONT_BODY, size=11, weight="bold"),
+            text_color="#94A3B8", fg_color=C["badge_bg"],
+            corner_radius=8, padx=10, pady=3)
+        self._clase_badge.pack(side="right", padx=8, pady=12)
         # Título del header
         ctk.CTkLabel(self._header, text="RegistroDoc Pro — Control Académico", font=ctk.CTkFont(family=FONT_TITLE, size=14, weight="bold"), text_color=C["cian"]).pack(side="left", padx=20, pady=13)
+
+    def _cuerpo(self):
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=0)   # Header
+        self.rowconfigure(1, weight=1)   # Cuerpo
+        
+        self._renderizar_header()
 
         # Contenedor Cuerpo (Fila 1) - Ocupa todo el resto del alto
         cuerpo = ctk.CTkFrame(self, fg_color=C["fondo"], corner_radius=0)
@@ -124,6 +171,8 @@ class MainApplication(ctk.CTkFrame):
         self.rowconfigure(1, weight=1)   # Cuerpo
 
         self._cuerpo()
+        self._timer_horario_running = True
+        self._actualizar_horario_header()
 
     def _sb_renderizar(self):
         # Prevenir operaciones si la aplicación ya fue destruida
@@ -138,7 +187,7 @@ class MainApplication(ctk.CTkFrame):
             w.destroy()
 
         # Renderizar logo
-        logo_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
+        logo_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
         if PIL_OK and os.path.exists(logo_path):
             try:
                 size = (80, 80)
@@ -154,6 +203,8 @@ class MainApplication(ctk.CTkFrame):
         ctk.CTkLabel(self._sb, text="RegistroDoc Pro", font=ctk.CTkFont(family=FONT_TITLE, size=15, weight="bold"), text_color=C["cian"]).pack(pady=(0, 2))
         ctk.CTkLabel(self._sb, text="Grupo Consejero 8° B", font=ctk.CTkFont(family=FONT_BODY, size=10), text_color=C["texto_dim"]).pack(pady=(0, 10))
 
+
+
         # Separador
         ctk.CTkFrame(self._sb, fg_color=C["borde"], height=1).pack(fill="x", padx=15, pady=(5, 15))
 
@@ -161,8 +212,7 @@ class MainApplication(ctk.CTkFrame):
         items = [
             ("🏠", "Inicio",        self._ir_inicio),
             ("👤", "Estudiantes",   self._ir_estudiantes),
-            ("📝", "Notas",         self._ir_notas),
-            ("📅", "Asistencia",    self._ir_asistencia),
+            ("📝", "Notas y Asistencia", self._ir_notas_asistencia),
             ("📋", "Registro Completo", self._ir_registro_completo),
             ("🔍", "Observaciones", self._ir_observaciones),
             ("🧠", "Hábitos",       self._ir_habitos),
@@ -192,7 +242,7 @@ class MainApplication(ctk.CTkFrame):
                         return
                     self.menu_activo = t
                     try:
-                        self._sb_renderizar()
+                        self._highlight_menu_button(t)
                         c()
                     except (tk.TclError, RuntimeError):
                         return
@@ -223,6 +273,80 @@ class MainApplication(ctk.CTkFrame):
         self._destroyed = True
         super().destroy()
 
+    def _actualizar_horario_header(self):
+        if self._destroyed or not self.winfo_exists():
+            return
+        if getattr(self.app, "_destroyed", False):
+            return
+        if tk._default_root is None:
+            return
+            
+        try:
+            from tareas import obtener_clase_actual, obtener_proxima_clase
+            from utils.date_helpers import es_hora_sincronizada, obtener_ahora_panama
+            
+            # 1. Actualizar el estado de sincronización horaria
+            sync_ok = es_hora_sincronizada()
+            if hasattr(self, "_time_sync_badge") and self._time_sync_badge.winfo_exists():
+                sync_text = "🕒 Panamá OK" if sync_ok else "🕒 Hora Local"
+                sync_color = "#00FF88" if sync_ok else "#94A3B8"
+                self._time_sync_badge.configure(text=sync_text, text_color=sync_color)
+            
+            # 2. Actualizar el estado de la clase actual
+            horario = self.engine.obtener_horario()
+            materia, rango, dia = obtener_clase_actual(horario)
+            
+            ahora = obtener_ahora_panama()
+            
+            if hasattr(self, "_clase_badge") and self._clase_badge.winfo_exists():
+                if materia:
+                    self._clase_badge.configure(
+                        text=f"🟢 Clase: {materia} ({rango})",
+                        text_color="#00FF88"
+                    )
+                else:
+                    prox_mat, prox_rango = obtener_proxima_clase(horario)
+                    if prox_mat:
+                        self._clase_badge.configure(
+                            text=f"🕐 Próx: {prox_mat} ({prox_rango})",
+                            text_color="#38BDF8"
+                        )
+                    else:
+                        msg = "No hay más clases hoy" if ahora.weekday() < 5 else "Fin de semana"
+                        self._clase_badge.configure(
+                            text=f"🕐 {msg}",
+                            text_color="#94A3B8"
+                        )
+        except Exception as e:
+            print(f"Error updating header schedule: {e}")
+            
+        # Run again in 10 seconds to update quickly
+        self.after(10000, self._actualizar_horario_header)
+
+    def _highlight_menu_button(self, active_text):
+        if self._destroyed or not self.winfo_exists():
+            return
+        if not hasattr(self, "nav_buttons") or not self.nav_buttons:
+            return
+        for t, btn in self.nav_buttons.items():
+            try:
+                if btn.winfo_exists():
+                    if t == active_text:
+                        btn.configure(
+                            fg_color=C["activo"],
+                            text_color=self._acento,
+                            border_width=1.5,
+                            border_color=self._acento
+                        )
+                    else:
+                        btn.configure(
+                            fg_color="transparent",
+                            text_color=C["texto_sec"],
+                            border_width=0
+                        )
+            except Exception:
+                pass
+
     # Rutas de navegación
     def _ir_inicio(self):
         if self.app:
@@ -232,6 +356,11 @@ class MainApplication(ctk.CTkFrame):
     def _ir_estudiantes(self):
         if self.app:
             try: self.app.mostrar_estudiantes()
+            except Exception: pass
+
+    def _ir_notas_asistencia(self):
+        if self.app:
+            try: self.app.mostrar_notas()
             except Exception: pass
 
     def _ir_notas(self):
@@ -311,8 +440,8 @@ class RegistroDocApp(ctk.CTk):
 
 
         # Iconos de la ventana (resolución para Windows / Barra de tareas)
-        icon_path = os.path.join(BASE_DIR, "..", "img", "icon.ico")
-        png_path = os.path.join(BASE_DIR, "..", "img", "icono.png")
+        icon_path = os.path.join(BASE_DIR, "..", "assets", "icon.ico")
+        png_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
 
         if os.path.exists(icon_path):
             try:
@@ -350,6 +479,10 @@ class RegistroDocApp(ctk.CTk):
 
         # ─── AUTO-BACKUP CADA 30 MIN ───
         self._iniciar_auto_backup()
+
+        # Sincronización horaria con Panamá
+        from utils.date_helpers import iniciar_sincronizacion_hora_panama
+        iniciar_sincronizacion_hora_panama()
 
         self.mostrar_dashboard()
 
@@ -411,67 +544,54 @@ class RegistroDocApp(ctk.CTk):
 
     def _actualizar_breadcrumb(self, seccion):
         """Actualiza el indicador de ubicación en el header."""
-        nombres = {
-            "DashboardFrame": "📍 Inicio",
-            "EstudiantesFrame": "📍 Inicio › Estudiantes",
-            "NotasFrame": "📍 Inicio › Notas",
-            "AsistenciaFrame": "📍 Inicio › Asistencia",
-            "ObservacionesFrame": "📍 Inicio › Observaciones",
-            "HabitosFrame": "📍 Inicio › Hábitos",
-            "ReportesYGraficosFrame": "📍 Inicio › Reportes y Gráficos",
-            "ImpresionFrame": "📍 Inicio › Impresión",
-            "ConfigFrame": "📍 Inicio › Configuración",
-            "HelpFrame": "📍 Inicio › Ayuda",
-            "TareasFrame": "📍 Inicio › Tareas",
-            "ReunionesFrame": "📍 Inicio › Reuniones",
-            "RegistroCompletoFrame": "📍 Inicio › Registro Completo",
-        }
-        txt = nombres.get(seccion, "📍 Inicio")
         try:
-            if hasattr(self.main_app, '_breadcrumb'):
-                self.main_app._breadcrumb.configure(text=txt)
+            if hasattr(self, "main_app") and hasattr(self.main_app, "_breadcrumb") and self.main_app._breadcrumb.winfo_exists():
+                txt = self.main_app._obtener_nombre_menu_breadcrumb()
+                self.main_app._breadcrumb.configure(text="📍 " + txt)
         except Exception:
             pass
 
     def mostrar_dashboard(self):
         self.main_app.menu_activo = "Inicio"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Inicio")
         self._mostrar_frame(DashboardFrame, app_principal=self)
         self._actualizar_breadcrumb("DashboardFrame")
 
     def mostrar_registro_completo(self):
         self.main_app.menu_activo = "Registro Completo"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Registro Completo")
         self._mostrar_frame(RegistroCompletoFrame)
         self._actualizar_breadcrumb("RegistroCompletoFrame")
 
     def mostrar_estudiantes(self):
         self.main_app.menu_activo = "Estudiantes"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Estudiantes")
         self._mostrar_frame(EstudiantesFrame)
         self._actualizar_breadcrumb("EstudiantesFrame")
 
     def mostrar_notas(self):
-        self.main_app.menu_activo = "Notas"
-        self.main_app._sb_renderizar()
-        self._mostrar_frame(NotasFrame)
-        self._actualizar_breadcrumb("NotasFrame")
+        self.main_app.menu_activo = "Notas y Asistencia"
+        self.main_app._highlight_menu_button("Notas y Asistencia")
+        frame = self._mostrar_frame(NotasAsistenciaFrame)
+        frame.tabview.set("Notas")
+        self._actualizar_breadcrumb("NotasAsistenciaFrame")
 
     def mostrar_asistencia(self):
-        self.main_app.menu_activo = "Asistencia"
-        self.main_app._sb_renderizar()
-        self._mostrar_frame(AsistenciaFrame)
-        self._actualizar_breadcrumb("AsistenciaFrame")
+        self.main_app.menu_activo = "Notas y Asistencia"
+        self.main_app._highlight_menu_button("Notas y Asistencia")
+        frame = self._mostrar_frame(NotasAsistenciaFrame)
+        frame.tabview.set("Asistencia")
+        self._actualizar_breadcrumb("NotasAsistenciaFrame")
 
     def mostrar_observaciones(self):
         self.main_app.menu_activo = "Observaciones"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Observaciones")
         self._mostrar_frame(ObservacionesFrame)
         self._actualizar_breadcrumb("ObservacionesFrame")
 
     def mostrar_reportes(self, tab_inicial="📋 Reportes y Descargas"):
         self.main_app.menu_activo = "Reportes y Gráficos"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Reportes y Gráficos")
         frame = self._mostrar_frame(ReportesYGraficosFrame)
         self._actualizar_breadcrumb("ReportesYGraficosFrame")
         if tab_inicial and hasattr(frame, "tabs"):
@@ -485,37 +605,37 @@ class RegistroDocApp(ctk.CTk):
 
     def mostrar_impresion(self):
         self.main_app.menu_activo = "Impresión"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Impresión")
         self._mostrar_frame(ImpresionFrame)
         self._actualizar_breadcrumb("ImpresionFrame")
 
     def mostrar_configuracion(self):
         self.main_app.menu_activo = "Configuración"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Configuración")
         self._mostrar_frame(ConfigFrame, self)
         self._actualizar_breadcrumb("ConfigFrame")
 
     def mostrar_habitos(self):
         self.main_app.menu_activo = "Hábitos"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Hábitos")
         self._mostrar_frame(HabitosFrame)
         self._actualizar_breadcrumb("HabitosFrame")
 
     def mostrar_ayuda(self):
         self.main_app.menu_activo = "Ayuda y Guía"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Ayuda y Guía")
         self._mostrar_frame(HelpFrame)
         self._actualizar_breadcrumb("HelpFrame")
 
     def mostrar_tareas(self):
         self.main_app.menu_activo = "Tareas"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Tareas")
         self._mostrar_frame(TareasFrame)
         self._actualizar_breadcrumb("TareasFrame")
 
     def mostrar_reuniones(self):
         self.main_app.menu_activo = "Reuniones"
-        self.main_app._sb_renderizar()
+        self.main_app._highlight_menu_button("Reuniones")
         self._mostrar_frame(ReunionesFrame)
         self._actualizar_breadcrumb("ReunionesFrame")
 
@@ -593,12 +713,12 @@ class RegistroDocApp(ctk.CTk):
             nombre_base = os.path.basename(ruta_original).replace(".xlsx", "")
             nombre = f"{nombre_base}_auto_{ahora}.xlsx"
             shutil.copy2(ruta_original, os.path.join(dir_respaldos, nombre))
-            # Limpiar: máximo 10 auto-backups
+            # Limpiar: máximo 3 auto-backups
             respaldos = sorted(
                 [os.path.join(dir_respaldos, f) for f in os.listdir(dir_respaldos) if f.endswith(".xlsx")],
                 key=os.path.getmtime
             )
-            while len(respaldos) > 10:
+            while len(respaldos) > 3:
                 try: os.remove(respaldos.pop(0))
                 except: pass
         except Exception:
@@ -679,15 +799,17 @@ if __name__ == "__main__":
     cargar_config_segura({})
 
     if not os.path.exists(CONFIG_FILE):
-        if SetupWizard:
-            wizard = SetupWizard()
-            wizard.mainloop()
-            if os.path.exists(CONFIG_FILE):
-                iniciar_programa_principal()
-        else:
-            cfg = {"modalidad": "premedia",
-                   "docente_nombre": "", "ano_lectivo": "2026"}
-            guardar_config_segura(cfg)
-            iniciar_programa_principal()
+        # Inicializar automáticamente con un perfil de prueba/demostración
+        # para evitar pedir credenciales al iniciar por primera vez.
+        cfg = {
+            "modalidad": "premedia",
+            "docente_nombre": "Docente de Prueba",
+            "docente_cedula": "8-000-0000",
+            "escuela_nombre": "Escuela de Prueba",
+            "escuela_region": "Comarca Ngäbe Buglé",
+            "ano_lectivo": "2026"
+        }
+        guardar_config_segura(cfg)
+        iniciar_programa_principal()
     else:
         iniciar_programa_principal()

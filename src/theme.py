@@ -61,3 +61,4 @@ FONT_SIZES = {
     "3xl": 24,
     "hero": 32,
 }
+

@@ -75,7 +75,8 @@ class ImpresionFrame(ctk.CTkFrame):
             ("📊 Planilla de Calificaciones", "Planilla"),
             ("📅 Asistencia de Estudiantes", "Asistencia"),
             ("📝 Resumen de Calificaciones", "Resumen"),
-            ("📚 Libro de Registro Completo", "Libro Completo")
+            ("📚 Libro de Registro Completo", "Libro Completo"),
+            ("📝 Plantilla en Blanco (Calificar a Mano)", "Plantilla Blanco")
         ]
 
         self.report_menu = ctk.CTkOptionMenu(
@@ -201,6 +202,13 @@ class ImpresionFrame(ctk.CTkFrame):
             self.periodo_label.pack_forget()
             self.periodo_menu.pack_forget()
             self._on_grado_change()
+        elif tipo == "Plantilla Blanco":
+            self.grado_label.pack(anchor="w", padx=25, pady=(5, 5))
+            self.grado_menu.pack(fill="x", padx=25, pady=(0, 15))
+            self.materia_label.pack_forget()
+            self.materia_menu.pack_forget()
+            self.periodo_label.pack_forget()
+            self.periodo_menu.pack_forget()
 
         self._actualizar_info()
 
@@ -222,6 +230,9 @@ class ImpresionFrame(ctk.CTkFrame):
             msg = "Se abrirá o imprimirá el libro de calificaciones completo con todas sus hojas."
         elif tipo in ["Portada", "Caratula", "Horarios"]:
             msg = f"Se procesará la hoja general de '{tipo}' del registro."
+        elif tipo == "Plantilla Blanco":
+            grado = self.grado_menu.get()
+            msg = f"Se generará una plantilla en blanco con los nombres del grado {grado} para calificar a mano."
         else:
             grado = self.grado_menu.get()
             periodo = self.periodo_menu.get() if tipo != "Planilla" else "N/A"
@@ -253,6 +264,11 @@ class ImpresionFrame(ctk.CTkFrame):
         return nombre_hoja
 
     def _abrir_excel(self):
+        tipo = self.report_type_var.get()
+        if tipo == "Plantilla Blanco":
+            self._generar_y_abrir_plantilla_blanco()
+            return
+
         hoja = self._resolver_nombre_hoja()
         ok, msg = abrir_para_imprimir(hoja)
         if ok:
@@ -261,6 +277,11 @@ class ImpresionFrame(ctk.CTkFrame):
             messagebox.showerror("Error", msg)
 
     def _imprimir_directo(self):
+        tipo = self.report_type_var.get()
+        if tipo == "Plantilla Blanco":
+            self._generar_y_abrir_plantilla_blanco()
+            return
+
         hoja = self._resolver_nombre_hoja()
         if not hoja:
             if self.report_type_var.get() == "Libro Completo":
@@ -278,3 +299,115 @@ class ImpresionFrame(ctk.CTkFrame):
             messagebox.showinfo("✓ Enviado a Impresora", msg)
         else:
             messagebox.showerror("Error", msg)
+
+    def _generar_y_abrir_plantilla_blanco(self):
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        import tempfile
+        
+        grado = self.grado_menu.get()
+        estudiantes = self.engine.obtener_estudiantes_completos(grado)
+        if not estudiantes:
+            messagebox.showwarning("Atención", "No se encontraron estudiantes para el grado seleccionado.")
+            return
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Plantilla Auxiliar"
+        
+        # Grid lines visible
+        ws.views.sheetView[0].showGridLines = True
+        
+        # Styles
+        font_title = Font(name="Calibri", size=16, bold=True, color="1B365D")
+        font_subtitle = Font(name="Calibri", size=11, bold=True, color="475569")
+        font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        font_body = Font(name="Calibri", size=11)
+        font_bold = Font(name="Calibri", size=11, bold=True)
+        
+        fill_header = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid") # Dark blue
+        fill_zebra = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid") # Sutil grey
+        
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        
+        # Headers
+        ws.merge_cells("A1:N1")
+        ws["A1"] = "MINISTERIO DE EDUCACIÓN — REGISTRO AUXILIAR"
+        ws["A1"].font = font_title
+        ws["A1"].alignment = Alignment(horizontal="center")
+        
+        ws.merge_cells("A2:N2")
+        ws["A2"] = f"Grado: {grado}  |  Trimestre: _______  |  Asignatura: ___________________________"
+        ws["A2"].font = font_subtitle
+        ws["A2"].alignment = Alignment(horizontal="center")
+        
+        headers = ["N°", "Estudiante (Apellido, Nombre)", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "Promedio", "Observaciones"]
+        ws.row_dimensions[4].height = 28
+        
+        for col_idx, text in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col_idx)
+            cell.value = text
+            cell.font = font_header
+            cell.fill = fill_header
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = thin_border
+            
+        # Add students
+        current_row = 5
+        for idx, est in enumerate(estudiantes, 1):
+            ws.row_dimensions[current_row].height = 20
+            
+            # Row number
+            cell_num = ws.cell(row=current_row, column=1, value=idx)
+            cell_num.font = font_bold
+            cell_num.alignment = Alignment(horizontal="center")
+            cell_num.border = thin_border
+            
+            # Name
+            cell_name = ws.cell(row=current_row, column=2, value=est["nombre"])
+            cell_name.font = font_body
+            cell_name.alignment = Alignment(horizontal="left", vertical="center")
+            cell_name.border = thin_border
+            
+            # Zebra striping
+            if idx % 2 == 0:
+                cell_num.fill = fill_zebra
+                cell_name.fill = fill_zebra
+                
+            # Grade columns (3 to 14)
+            for col_idx in range(3, 15):
+                cell_g = ws.cell(row=current_row, column=col_idx)
+                cell_g.border = thin_border
+                if idx % 2 == 0:
+                    cell_g.fill = fill_zebra
+                    
+            current_row += 1
+            
+        # Auto-adjust column widths
+        ws.column_dimensions["A"].width = 6
+        ws.column_dimensions["B"].width = 35
+        for col_idx in range(3, 13):
+            col_letter = openpyxl.utils.get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = 6
+        ws.column_dimensions["M"].width = 10
+        ws.column_dimensions["N"].width = 25
+        
+        # Save temp file
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, f"Plantilla_Limpia_{grado.replace('°','')}.xlsx")
+        try:
+            wb.save(file_path)
+            # Open file
+            if os.name == 'nt':
+                os.startfile(file_path)
+            else:
+                import subprocess
+                subprocess.call(['open', file_path])
+            messagebox.showinfo("✓ Éxito", f"Se generó la plantilla en blanco con éxito para el grado {grado}.\n\nSe abrirá en Excel para que la pueda imprimir.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar o abrir el archivo: {e}")

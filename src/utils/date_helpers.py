@@ -130,11 +130,11 @@ def obtener_rango_fechas_trimestre(trimestre_str, ano_lectivo=None):
     """
     if ano_lectivo is None:
         cfg = cargar_config_segura({})
-        ano_lectivo = cfg.get("ano_lectivo", str(datetime.date.today().year))
+        ano_lectivo = cfg.get("ano_lectivo", str(obtener_hoy_panama().year))
     try:
         ano = int(ano_lectivo)
     except Exception:
-        ano = datetime.date.today().year
+        ano = obtener_hoy_panama().year
         
     t1_start = datetime.date(ano, 3, 1)
     t1_end = datetime.date(ano, 6, 2)
@@ -157,3 +157,74 @@ def obtener_rango_fechas_trimestre(trimestre_str, ano_lectivo=None):
         return t2_start, t2_end
     else:
         return t3_start, t3_end
+
+# Variables globales para el desfase del reloj de Panamá
+_PANAMA_TIME_OFFSET_SECONDS = 0.0
+_TIME_SYNCHRONIZED = False
+
+def iniciar_sincronizacion_hora_panama():
+    """Inicia un hilo en segundo plano para sincronizar la hora de Panamá con internet."""
+    import threading
+    def sync_thread():
+        global _PANAMA_TIME_OFFSET_SECONDS, _TIME_SYNCHRONIZED
+        import urllib.request
+        import json
+        import email.utils
+        
+        # 1. Intentar con WorldTimeAPI (Panamá es GMT-5)
+        try:
+            req = urllib.request.Request(
+                "http://worldtimeapi.org/api/timezone/America/Panama",
+                headers={"User-Agent": "RegistroDoc/3.0"}
+            )
+            with urllib.request.urlopen(req, timeout=2.0) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                datetime_str = data.get("datetime")
+                if datetime_str:
+                    dt_internet = datetime.datetime.fromisoformat(datetime_str.split(".")[0])
+                    dt_sys = datetime.datetime.now()
+                    _PANAMA_TIME_OFFSET_SECONDS = (dt_internet - dt_sys).total_seconds()
+                    _TIME_SYNCHRONIZED = True
+                    print(f"[Hora] Sincronizado vía WorldTimeAPI. Desfase: {_PANAMA_TIME_OFFSET_SECONDS} s")
+                    return
+        except Exception as e:
+            print(f"[Hora] Falló WorldTimeAPI: {e}")
+
+        # 2. Intentar con Google HTTP Date Header (Fallback)
+        try:
+            req = urllib.request.Request(
+                "https://www.google.com",
+                method="HEAD",
+                headers={"User-Agent": "RegistroDoc/3.0"}
+            )
+            with urllib.request.urlopen(req, timeout=2.0) as response:
+                date_header = response.headers.get("Date")
+                if date_header:
+                    parsed_time = email.utils.parsedate_to_datetime(date_header)
+                    # Panamá está a GMT-5
+                    panama_time = parsed_time + datetime.timedelta(hours=-5)
+                    dt_internet = panama_time.replace(tzinfo=None)
+                    dt_sys = datetime.datetime.now()
+                    _PANAMA_TIME_OFFSET_SECONDS = (dt_internet - dt_sys).total_seconds()
+                    _TIME_SYNCHRONIZED = True
+                    print(f"[Hora] Sincronizado vía Google. Desfase: {_PANAMA_TIME_OFFSET_SECONDS} s")
+                    return
+        except Exception as e:
+            print(f"[Hora] Falló Google Time Sync: {e}")
+
+    threading.Thread(target=sync_thread, daemon=True).start()
+
+def obtener_ahora_panama():
+    """Retorna la fecha y hora actual ajustada a Panamá usando el desfase calculado."""
+    ahora_sistema = datetime.datetime.now()
+    if _TIME_SYNCHRONIZED:
+        return ahora_sistema + datetime.timedelta(seconds=_PANAMA_TIME_OFFSET_SECONDS)
+    return ahora_sistema
+
+def obtener_hoy_panama():
+    """Retorna la fecha actual ajustada a Panamá."""
+    return obtener_ahora_panama().date()
+
+def es_hora_sincronizada():
+    """Retorna True si la hora fue sincronizada por internet."""
+    return _TIME_SYNCHRONIZED

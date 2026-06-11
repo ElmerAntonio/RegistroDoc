@@ -81,7 +81,7 @@ PASO 2 — Primera apertura
 
 PASO 3 — Activación
   • El programa mostrará la pantalla de activación
-  • Ingrese su N° de CÉDULA exactamente (ej: 4-785-823)
+  • Ingrese su N° de CÉDULA exactamente (ej: 8-000-0000)
   • Ingrese el CÓDIGO DE ACTIVACIÓN que le proporcionó el proveedor
     Formato: RD-XXXXX-XXXXX-XXXXX-XXXXX
   • Haga clic en "Activar programa"
@@ -270,7 +270,7 @@ SOLUCIÓN: Haga clic derecho en el .exe → Propiedades →
 
 PROBLEMA: "Código de activación inválido"
 SOLUCIÓN: Verifique que ingresó correctamente su número de cédula
-          (con guiones, ej: 4-785-823) y el código exactamente como
+          (con guiones, ej: 8-000-0000) y el código exactamente como
           se lo proporcionaron. Contacte al proveedor si persiste.
 
 PROBLEMA: "Acceso bloqueado temporalmente"

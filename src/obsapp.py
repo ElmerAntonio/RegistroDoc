@@ -586,7 +586,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.al_cambiar_grado(self.combo_grado.get())
 
     def cargar_plantillas(self):
-        ruta = os.path.join(BASE_DIR, "..", "observaciones_plantillas.json")
+        ruta = os.path.join(BASE_DIR, "..", "data", "observaciones_plantillas.json")
         if os.path.exists(ruta):
             try:
                 with open(ruta, "r", encoding="utf-8") as f:
@@ -719,12 +719,13 @@ class ObservacionesFrame(ctk.CTkFrame):
                 messagebox.showwarning("Atención", "Escriba un nombre para la plantilla.")
                 return
             
-            ruta = os.path.join(BASE_DIR, "..", "observaciones_plantillas.json")
+            ruta = os.path.join(BASE_DIR, "..", "data", "observaciones_plantillas.json")
             self.plantillas[nombre] = {
                 "categoria": cat,
                 "texto": observacion
             }
             try:
+                os.makedirs(os.path.dirname(ruta), exist_ok=True)
                 with open(ruta, "w", encoding="utf-8") as f:
                     json.dump(self.plantillas, f, ensure_ascii=False, indent=2)
                 
