@@ -49,7 +49,7 @@ class CTkCustomMessagebox(ctk.CTkToplevel):
             font=("Segoe UI", 12), 
             text_color=C.get("texto", "#FFFFFF"),
             justify="left",
-            wraplength=320,
+            wraplength=380,
             anchor="w"
         )
         lbl_text.pack(side="left", fill="both", expand=True)
@@ -102,8 +102,17 @@ class CTkCustomMessagebox(ctk.CTkToplevel):
             
         # Centrado sobre el padre o la pantalla
         self.update_idletasks()
-        w = 440
-        h = 160
+        
+        # Calcular altura dinámica en función del texto y saltos de línea para evitar truncamiento
+        lineas = message.split("\n")
+        cant_lineas = 0
+        for l in lineas:
+            # Con wraplength=380, caben aprox. 55 caracteres en Segoe UI 12 por línea de texto
+            cant_lineas += max(1, len(l) // 55)
+            
+        w = 500
+        # 130px base para iconos/botones, más el alto de cada línea (18px)
+        h = max(180, 130 + cant_lineas * 18)
         
         if parent:
             px = parent.winfo_toplevel().winfo_x() + (parent.winfo_toplevel().winfo_width() // 2) - (w // 2)

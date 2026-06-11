@@ -20,13 +20,8 @@ ENV/
 .idea/
 
 # Datos cifrados de usuario (seguridad offline)
-data/config.enc
-data/rd_audit.bin
-data/rd_brute.bin
-data/rd_token.bin
-data/licencia.dat
-data/tareas_pendientes.json
-data/observaciones_plantillas.json
+data/
+rd_excel_hash.bin
 
 # Carpetas generadas por el maestro y respaldos
 Expedientes_Estudiantes/
@@ -35,6 +30,9 @@ Documentos/
 Respaldos_Auto/
 Respaldos_Locales/
 backups/
+*_bak.xlsx
+*.bak
+*.tmp
 
 # Archivos de empaquetado y logs
 *.zip

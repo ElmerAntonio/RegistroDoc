@@ -99,7 +99,7 @@ class NotasFrame(ctk.CTkFrame):
             command=self.cargar_descripciones)
         self.combo_materia.pack(fill="x", padx=20, pady=5)
 
-        self.tabs = ctk.CTkTabview(frame_der)
+        self.tabs = ctk.CTkTabview(frame_der, command=self.al_cambiar_pestana)
         self.tabs.pack(fill="both", expand=True, padx=10, pady=10)
 
         tab_nueva = self.tabs.add("Nueva Nota")
@@ -234,7 +234,22 @@ class NotasFrame(ctk.CTkFrame):
             command=self.actualizar_notas)
         self.btn_actualizar.pack(pady=5, padx=10, fill="x")
 
+    def al_cambiar_pestana(self):
+        self.limpiar_campos_notas()
 
+    def limpiar_campos_notas(self):
+        for entries_list in self.entradas_notas.values():
+            for entry in entries_list:
+                if entry.winfo_exists():
+                    entry.delete(0, 'end')
+        if hasattr(self, 'entry_desc') and self.entry_desc.winfo_exists():
+            try:
+                old_state = self.entry_desc.cget("state")
+                self.entry_desc.configure(state="normal")
+                self.entry_desc.delete(0, 'end')
+                self.entry_desc.configure(state=old_state)
+            except Exception:
+                pass
 
     def rellenar_notas_grupo(self):
         val = self.entry_relleno.get().strip()
@@ -1146,15 +1161,42 @@ class NotasFrame(ctk.CTkFrame):
         self.al_presionar_abajo(id_est)
         return "break"
 
+    def asegurar_visible(self, row_widget):
+        try:
+            self.scroll_estudiantes.update_idletasks()
+            y = row_widget.winfo_y()
+            h = row_widget.winfo_height()
+            
+            canvas = self.scroll_estudiantes._parent_canvas
+            bbox = canvas.bbox("all")
+            inner_height = bbox[3] if bbox else canvas.winfo_reqheight()
+            canvas_height = canvas.winfo_height()
+            
+            current_top, current_bottom = canvas.yview()
+            
+            target_top_frac = y / (inner_height or 1)
+            target_bottom_frac = (y + h) / (inner_height or 1)
+            
+            if target_top_frac < current_top:
+                canvas.yview_moveto(target_top_frac)
+            elif target_bottom_frac > current_bottom:
+                view_size = current_bottom - current_top
+                new_top = max(0.0, target_bottom_frac - view_size)
+                canvas.yview_moveto(new_top)
+        except Exception as e:
+            print(f"Error en asegurar_visible: {e}")
+
     def al_presionar_abajo(self, id_est):
         ids = sorted(list(self.entradas_notas.keys()))
         try:
             curr_idx = ids.index(id_est)
             if curr_idx + 1 < len(ids):
                 next_id = ids[curr_idx + 1]
-                next_entry = self.entradas_notas[next_id][0]
+                entries = self.entradas_notas[next_id]
+                next_entry = entries[1] if (len(entries) > 1 and self.var_usar_puntos.get()) else entries[0]
                 next_entry.focus_set()
                 next_entry.select_range(0, 'end')
+                self.asegurar_visible(next_entry.master)
         except ValueError:
             pass
 
@@ -1164,9 +1206,11 @@ class NotasFrame(ctk.CTkFrame):
             curr_idx = ids.index(id_est)
             if curr_idx - 1 >= 0:
                 prev_id = ids[curr_idx - 1]
-                prev_entry = self.entradas_notas[prev_id][0]
+                entries = self.entradas_notas[prev_id]
+                prev_entry = entries[1] if (len(entries) > 1 and self.var_usar_puntos.get()) else entries[0]
                 prev_entry.focus_set()
                 prev_entry.select_range(0, 'end')
+                self.asegurar_visible(prev_entry.master)
         except ValueError:
             pass
 

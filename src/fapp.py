@@ -732,6 +732,31 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.al_presionar_abajo(id_est)
         return "break"
 
+    def asegurar_visible(self, row_widget):
+        try:
+            self.scroll_estudiantes.update_idletasks()
+            y = row_widget.winfo_y()
+            h = row_widget.winfo_height()
+            
+            canvas = self.scroll_estudiantes._parent_canvas
+            bbox = canvas.bbox("all")
+            inner_height = bbox[3] if bbox else canvas.winfo_reqheight()
+            canvas_height = canvas.winfo_height()
+            
+            current_top, current_bottom = canvas.yview()
+            
+            target_top_frac = y / (inner_height or 1)
+            target_bottom_frac = (y + h) / (inner_height or 1)
+            
+            if target_top_frac < current_top:
+                canvas.yview_moveto(target_top_frac)
+            elif target_bottom_frac > current_bottom:
+                view_size = current_bottom - current_top
+                new_top = max(0.0, target_bottom_frac - view_size)
+                canvas.yview_moveto(new_top)
+        except Exception as e:
+            print(f"Error en asegurar_visible: {e}")
+
     def al_presionar_abajo(self, id_est):
         ids = sorted(list(self.entradas_asistencia.keys()))
         try:
@@ -743,6 +768,7 @@ class AsistenciaFrame(ctk.CTkFrame):
                 if entry.cget("state") != "disabled":
                     entry.focus_set()
                     entry.select_range(0, 'end')
+                    self.asegurar_visible(entry.master)
                     break
         except ValueError:
             pass
@@ -758,6 +784,7 @@ class AsistenciaFrame(ctk.CTkFrame):
                 if entry.cget("state") != "disabled":
                     entry.focus_set()
                     entry.select_range(0, 'end')
+                    self.asegurar_visible(entry.master)
                     break
         except ValueError:
             pass

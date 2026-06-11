@@ -311,6 +311,28 @@ class GraficosFrame(ctk.CTkFrame):
                 elif promedio >= 2.5: en_riesgo += 1
                 else: reprobados += 1
 
+            # Para la gráfica de tendencia (promedio de cada actividad cronológica)
+            tendencia_actividades = []
+            if grado != "Todos los Grados" and materia not in ["Todas las Materias", "No hay materias", "Sin materias", "No hay materias registradas"]:
+                trimestres_a_buscar = ["Trimestre 1", "Trimestre 2", "Trimestre 3"] if trimestre == "Todos los Trimestres" else [trimestre]
+                tipos_a_buscar = ["Diaria / Parcial", "Apreciación", "Examen"]
+                for t_name in trimestres_a_buscar:
+                    for tipo_n in tipos_a_buscar:
+                        try:
+                            descs = self.engine.obtener_descripciones_notas(grado, materia, t_name, tipo_n)
+                            for d in descs:
+                                if not d or "Sin notas" in d or "Seleccione" in d:
+                                    continue
+                                res = self.engine.buscar_notas_por_descripcion_exacta(grado, materia, t_name, tipo_n, d)
+                                if res and res["notas"]:
+                                    notas_validas = [float(str(v).replace(',','.')) for v in res["notas"].values() if v is not None and str(v).strip() != ""]
+                                    if notas_validas:
+                                        prom = sum(notas_validas) / len(notas_validas)
+                                        desc_corta = d if len(d) <= 12 else d[:10] + ".."
+                                        prefix = "D" if "Diaria" in tipo_n else ("A" if "Apreciación" in tipo_n else "E")
+                                        tendencia_actividades.append((f"{prefix}: {desc_corta}", prom))
+                        except Exception: pass
+
             historial = []
             if estudiante_sel != "Todos los Estudiantes":
                 historial = getattr(self.engine, 'obtener_historial_real', lambda g,m,e: [3.0, 3.0])(grado, materia, estudiante_sel)
@@ -326,6 +348,7 @@ class GraficosFrame(ctk.CTkFrame):
                 "en_riesgo": en_riesgo,
                 "promedios_por_est": promedios_por_est,
                 "historial": historial,
+                "tendencia_actividades": tendencia_actividades,
                 "chk_states": chk_states
             }
             
@@ -375,11 +398,12 @@ class GraficosFrame(ctk.CTkFrame):
                     col = 0
                     row += 1
             if chk["tendencia"]:
-                self.dibujar_tendencia(list(promedios_por_est.values()), row, col, colspan=1)
-                col += 1
-                if col > 1:
+                if col == 1:
                     col = 0
                     row += 1
+                self.dibujar_tendencia(datos.get("tendencia_actividades", []), row, col, colspan=2)
+                col = 0
+                row += 1
             if chk["hist"]:
                 self.dibujar_histograma(list(promedios_por_est.values()), row, col)
                 col += 1
@@ -548,7 +572,7 @@ class GraficosFrame(ctk.CTkFrame):
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
         ctk.CTkButton(f_grafico, text="⬇️ a Word", width=80, height=24, fg_color="#334155", hover_color="#475569", command=lambda f=fig, t=ax.get_title(): self.exportar_grafico_individual(f, t)).place(relx=0.98, rely=0.02, anchor="ne")
 
-    def dibujar_tendencia(self, notas, row, col, colspan=1):
+    def dibujar_tendencia(self, tendencia_actividades, row, col, colspan=1):
         f_grafico = ctk.CTkFrame(self.scroll_canvas, fg_color=self.C["card"], corner_radius=10)
         f_grafico.grid(row=row, column=col, columnspan=colspan, sticky="nsew", padx=10, pady=10)
 
@@ -558,29 +582,30 @@ class GraficosFrame(ctk.CTkFrame):
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
 
-        if not notas:
-            ax.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='white')
+        if not tendencia_actividades:
+            ax.text(0.5, 0.5, "Seleccione un Grado y Materia para ver Tendencia Temporal", ha='center', va='center', color='white', fontsize=12)
         else:
-            # Histograma de curva / frecuencia
-            counts, bins, patches = ax.hist(notas, bins=10, range=(1.0, 5.0), color=self.C["cian"], alpha=0.6, edgecolor='white')
-
-            # Promedio general del salón
-            promedio_gen = sum(notas) / len(notas)
-            ax.axvline(x=promedio_gen, color=self.C["amarillo"], linestyle='-', linewidth=2, label=f'Promedio General ({promedio_gen:.1f})')
-            ax.legend(facecolor=self.C["fondo"], edgecolor=self.C["card"], labelcolor="white")
+            labels = [x[0] for x in tendencia_actividades]
+            valores = [x[1] for x in tendencia_actividades]
+            x_ind = list(range(len(labels)))
+            
+            ax.plot(x_ind, valores, marker='o', color=self.C["cian"], linewidth=2, markersize=6, label='Promedio Actividad')
+            ax.axhline(y=3.0, color=self.C["rojo"], linestyle=':', alpha=0.7, label='Límite de Aprobación (3.0)')
+            
+            ax.set_xticks(x_ind)
+            ax.set_xticklabels(labels, rotation=15, ha='right', fontsize=8)
+            ax.set_ylim(1.0, 5.2)
+            ax.legend(facecolor=self.C["fondo"], edgecolor=self.C["card"], labelcolor="white", fontsize=8)
+            ax.grid(color=self.C["borde"] if "borde" in self.C else "#334155", linestyle='--', alpha=0.3)
 
         ax.tick_params(axis='x', colors=self.C["texto"])
         ax.tick_params(axis='y', colors=self.C["texto"])
-        ax.set_xticks([1.0, 2.0, 3.0, 4.0, 5.0])
-        ax.set_xlabel("Calificación", color=self.C["texto_dim"] if "texto_dim" in self.C else "#64748B")
-        ax.set_ylabel("Cant. Estudiantes", color=self.C["texto_dim"] if "texto_dim" in self.C else "#64748B")
-
         ax.spines['bottom'].set_color(self.C["texto"])
         ax.spines['left'].set_color(self.C["texto"])
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-        ax.set_title("Distribución y Campana de Calificaciones", color=self.C["cian"], pad=15, fontweight="bold")
+        ax.set_title("Evolución y Tendencia Temporal del Grupo por Actividad", color=self.C["cian"], pad=15, fontweight="bold")
         fig.tight_layout()
 
         canvas = FigureCanvasTkAgg(fig, master=f_grafico)
