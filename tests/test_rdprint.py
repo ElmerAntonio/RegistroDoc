@@ -1,5 +1,10 @@
-import pytest
+import sys
 import os
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+import pytest
 from unittest.mock import patch, MagicMock
 
 # Note: We import functions directly to mock internal dependencies effectively.
