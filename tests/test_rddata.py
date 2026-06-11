@@ -110,9 +110,9 @@ def test_cache_invalidation_mtime(tmp_path):
 
 def test_obtener_cuadro_honor_general_real_file():
     """Integration test validating obtener_cuadro_honor_general with the real workbook."""
-    real_path = "Registro_2026.xlsx"
+    real_path = "Registro_Premedia.xlsx"
     if not os.path.exists(real_path):
-        pytest.skip("Registro_2026.xlsx not present in workspace, skipping integration test")
+        pytest.skip("Registro_Premedia.xlsx not present in workspace, skipping integration test")
         
     engine = DataEngine(real_path)
     cuadro = engine.obtener_cuadro_honor_general()

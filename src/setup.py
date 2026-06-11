@@ -139,7 +139,7 @@ class SetupWizard(ctk.CTk):
         guardar_config_segura(self.datos)
 
         # 2. Inyectar datos y limpiar el Excel
-        archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_2026.xlsx"
+        archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_Premedia.xlsx"
         ruta_excel = os.path.join(BASE_DIR, "..", archivo)
         
         if os.path.exists(ruta_excel):

@@ -462,7 +462,7 @@ class RegistroDocApp(ctk.CTk):
         # Motor de datos
         archivo = ("Registro_Primaria.xlsx"
                    if modalidad_inicial == "primaria"
-                   else "Registro_2026.xlsx")
+                   else "Registro_Premedia.xlsx")
         ruta    = os.path.join(BASE_DIR, "..", archivo)
         self.engine = DataEngine(ruta_excel=ruta, modalidad=modalidad_inicial)
 

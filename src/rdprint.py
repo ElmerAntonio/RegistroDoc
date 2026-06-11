@@ -35,15 +35,15 @@ def _ruta_excel():
         ])
     else:
         candidatos.extend([
-            os.path.join(raiz, "Registro_2026.xlsx"),
-            os.path.join(base, "Registro_2026.xlsx"),
+            os.path.join(raiz, "Registro_Premedia.xlsx"),
+            os.path.join(base, "Registro_Premedia.xlsx"),
         ])
 
     # Fallback por si la modalidad del perfil no coincide.
     candidatos.extend([
-        os.path.join(raiz, "Registro_2026.xlsx"),
+        os.path.join(raiz, "Registro_Premedia.xlsx"),
         os.path.join(raiz, "Registro_Primaria.xlsx"),
-        os.path.join(base, "Registro_2026.xlsx"),
+        os.path.join(base, "Registro_Premedia.xlsx"),
         os.path.join(base, "Registro_Primaria.xlsx"),
     ])
 
@@ -52,7 +52,7 @@ def _ruta_excel():
             return ruta
 
     # Devuelve la ruta principal esperada aunque no exista para mantener mensajes consistentes.
-    return candidatos[0] if candidatos else os.path.join(raiz, "Registro_2026.xlsx")
+    return candidatos[0] if candidatos else os.path.join(raiz, "Registro_Premedia.xlsx")
 
 
 def _excel_disponible() -> bool:
@@ -118,7 +118,7 @@ def abrir_para_imprimir(hoja: str = None) -> tuple[bool, str]:
     """
     ruta = _ruta_excel()
     if not os.path.exists(ruta):
-        return False, "No se encontró Registro_2026.xlsx"
+        return False, "No se encontró Registro_Premedia.xlsx"
 
     sistema = platform.system()
 

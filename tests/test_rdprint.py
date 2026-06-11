@@ -16,7 +16,7 @@ def mock_platform_windows():
 @pytest.fixture
 def mock_ruta_excel(tmp_path):
     # Create a dummy file to bypass the os.path.isfile check
-    dummy_file = tmp_path / "Registro_2026.xlsx"
+    dummy_file = tmp_path / "Registro_Premedia.xlsx"
     dummy_file.touch()
     with patch('rdprint._ruta_excel', return_value=str(dummy_file)):
         yield str(dummy_file)

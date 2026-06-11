@@ -421,7 +421,7 @@ class ConfigFrame(ctk.CTkFrame):
             self.var_modalidad.set(self.engine.modalidad.capitalize())
             return
 
-        archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_2026.xlsx"
+        archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_Premedia.xlsx"
         ruta_nueva = os.path.join(BASE_DIR, "..", archivo_nuevo)
         if not os.path.exists(ruta_nueva):
             self.var_modalidad.set(self.engine.modalidad.capitalize())
