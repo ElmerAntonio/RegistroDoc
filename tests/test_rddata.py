@@ -115,9 +115,9 @@ def test_cache_invalidation_mtime(tmp_path):
 
 def test_obtener_cuadro_honor_general_real_file():
     """Integration test validating obtener_cuadro_honor_general with the real workbook."""
-    real_path = "Registro_Premedia.xlsx"
+    real_path = os.path.join("assets", "templates", "Registro_Premedia.xlsx")
     if not os.path.exists(real_path):
-        pytest.skip("Registro_Premedia.xlsx not present in workspace, skipping integration test")
+        pytest.skip("Registro_Premedia.xlsx not present in assets/templates, skipping integration test")
         
     engine = DataEngine(real_path)
     cuadro = engine.obtener_cuadro_honor_general()
@@ -135,4 +135,60 @@ def test_obtener_cuadro_honor_general_real_file():
             assert 4.5 <= est["promedio"] <= 5.0, f"Promedio {est['promedio']} must be between 4.5 and 5.0"
             assert est["promedio"] <= prev_prom, "Students must be sorted in descending order of average"
             prev_prom = est["promedio"]
+
+
+def test_cierre_ano_lectivo(tmp_path):
+    """Test that realizar_cierre_ano_lectivo correctly processes backups, resets data, and increments the year."""
+    import openpyxl
+    file_path = str(tmp_path / "Registro_Premedia.xlsx")
+    
+    # Create dummy workbook with at least one sheet
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "ASISTENCIA (7° A)"
+    # Add a date cell DD-MM to verify cleaner
+    ws.cell(row=2, column=3, value="12-05")
+    ws.cell(row=3, column=3, value="P")
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    # Set config year to 2026
+    from rdsecurity import cargar_config_segura, guardar_config_segura
+    cfg = cargar_config_segura({})
+    cfg["ano_lectivo"] = "2026"
+    guardar_config_segura(cfg)
+    
+    # Run rollover without student promotion (since we have no students in DB yet)
+    exito, msg = engine.realizar_cierre_ano_lectivo(promover_estudiantes=False)
+    
+    assert exito is True
+    assert "2026" in msg
+    
+    # Verify year was incremented
+    cfg_new = cargar_config_segura({})
+    assert cfg_new.get("ano_lectivo") == "2027"
+
+def test_parsear_archivo_estudiantes_txt(tmp_path):
+    """Test that parsear_archivo_estudiantes correctly extracts names and Panamanian cedulas from text files."""
+    from impp import parsear_archivo_estudiantes
+    
+    txt_path = str(tmp_path / "roster.txt")
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write("1. ELMER ANTONIO RAMOS  8-765-4321\n")
+        f.write("2. JUAN PEREZ PE-99-8888\n")
+        f.write("NOMBRE CEDULA (CABECERA A IGNORAR)\n")
+        f.write("3. MARIA DE LEON (SIN CEDULA)\n")
+        
+    estudiantes = parsear_archivo_estudiantes(txt_path)
+    
+    assert len(estudiantes) == 3
+    assert estudiantes[0]["nombre"] == "ELMER ANTONIO RAMOS"
+    assert estudiantes[0]["cedula"] == "8-765-4321"
+    assert estudiantes[1]["nombre"] == "JUAN PEREZ"
+    assert estudiantes[1]["cedula"] == "PE-99-8888"
+    assert estudiantes[2]["nombre"] == "MARIA DE LEON (SIN CEDULA)"
+    assert estudiantes[2]["cedula"] == ""
 

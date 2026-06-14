@@ -74,11 +74,9 @@ _HW_SEED = None
 
 def _hw_fingerprint() -> bytes:
     """
-    Genera una huella única del hardware combinando:
-      - UUID de la placa madre (Windows: BIOS UUID via WMIC)
-      - Nombre del equipo
-      - Nombre del usuario del SO
-    Cumple ISO/IEC 27001 A.8.1 — Inventario de activos
+    Genera una huella única del hardware de forma segura y sigilosa (sin llamar a subprocess
+    ni generar falsos positivos de antivirus) usando APIs nativas de Windows (winreg, ctypes).
+    Cumple con ISO/IEC 27001 A.8.1.
     """
     global _HW_SEED
     if _HW_SEED is not None:
@@ -86,39 +84,48 @@ def _hw_fingerprint() -> bytes:
 
     componentes = []
 
-    # 1. UUID del sistema (BIOS/Motherboard)
-    try:
-        if platform.system() == "Windows":
-            import subprocess
-            r = subprocess.check_output(
-                ["wmic", "csproduct", "get", "UUID"],
-                stderr=subprocess.DEVNULL, timeout=5
-            ).decode().strip().split("\n")
-            uid = r[-1].strip() if len(r) > 1 else ""
-            if uid and uid != "UUID":
-                componentes.append(uid)
-    except Exception as e:
-        logger.debug(f"Error obteniendo UUID BIOS: {e}")
+    if platform.system() == "Windows":
+        # 1. Obtener MachineGuid de criptografía de Windows (ID estable de la instalación del SO)
+        import winreg
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
+            guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+            winreg.CloseKey(key)
+            if guid:
+                componentes.append(str(guid).strip())
+        except Exception as e:
+            logger.debug(f"Error obteniendo MachineGuid de registro: {e}")
 
-    # 2. Identificador de volumen del disco del sistema
-    try:
-        if platform.system() == "Windows":
-            import subprocess
-            r = subprocess.check_output(
-                ["cmd.exe", "/c", "vol", "C:"],
-                stderr=subprocess.DEVNULL, timeout=5
-            ).decode()
-            serial = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
-            if serial:
-                componentes.append(serial.group())
-    except Exception as e:
-        logger.debug(f"Error obteniendo serial de volumen C: {e}")
+        # 2. Obtener número de serie del BIOS de forma nativa desde el registro
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS")
+            bios_sn, _ = winreg.QueryValueEx(key, "SystemSerialNumber")
+            winreg.CloseKey(key)
+            if bios_sn and bios_sn.strip() not in ["None", "00000000000000000", "Default string"]:
+                componentes.append(str(bios_sn).strip())
+        except Exception as e:
+            logger.debug(f"Error obteniendo SystemSerialNumber de registro: {e}")
 
-    # 3. Nombre del equipo + usuario (siempre disponible)
+        # 3. Identificador de volumen del disco C: usando la API nativa de Windows GetVolumeInformationA
+        try:
+            serial_number = ctypes.c_ulong(0)
+            rc = ctypes.windll.kernel32.GetVolumeInformationA(
+                b"C:\\", None, 0, ctypes.byref(serial_number), None, None, None, 0
+            )
+            if rc:
+                componentes.append(f"{serial_number.value:08X}")
+        except Exception as e:
+            logger.debug(f"Error obteniendo serial de volumen C: {e}")
+    else:
+        # Fallback para sistemas no-Windows
+        componentes.append(platform.node())
+        componentes.append(os.environ.get("USERNAME", "") or os.environ.get("USER", ""))
+
+    # 4. Nombre del equipo y usuario del SO
     componentes.append(platform.node())
     componentes.append(os.environ.get("USERNAME", "") or os.environ.get("USER", ""))
 
-    # 4. MAC address como respaldo
+    # 5. MAC address como respaldo
     try:
         mac = hex(uuid.getnode())
         componentes.append(mac)
@@ -705,3 +712,18 @@ def validar_nota_meduca(valor: str) -> tuple[bool, float, str]:
         return False, 0.0, f"La nota máxima en el sistema MEDUCA es {NOTA_MAX}."
     
     return True, nota, "OK"
+
+def sanitizar_entrada(texto: str) -> str:
+    """
+    Sanitiza las entradas del usuario eliminando espacios múltiples,
+    tabulaciones y retornos de carro, previniendo comportamientos extraños
+    y facilitando el almacenamiento seguro.
+    """
+    if not texto:
+        return ""
+    import re
+    # Reemplazar retornos de carro, tabulaciones y saltos de línea con espacios simples
+    t = str(texto).replace("\r", " ").replace("\t", " ").replace("\n", " ")
+    # Remover múltiples espacios contiguos
+    t = re.sub(r'\s+', ' ', t)
+    return t.strip()

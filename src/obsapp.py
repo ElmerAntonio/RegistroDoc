@@ -24,6 +24,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.engine = engine
         self.estudiante_seleccionado = None
         self.grado_actual = ""
+        self._debounce_job = None
 
         # Layout
         self.grid_columnconfigure(0, weight=4)  # Lista Izquierda
@@ -153,12 +154,22 @@ class ObservacionesFrame(ctk.CTkFrame):
                 5))
         self.texto_obs = SpellcheckTextbox(panel_obs, height=110)
         self.texto_obs.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+        self.texto_obs.bind("<KeyRelease>", self.al_escribir_observacion)
+
+        btn_f = ctk.CTkFrame(panel_obs, fg_color="transparent")
+        btn_f.pack(fill="x", padx=20, pady=(0, 15))
 
         self.btn_guardar_plantilla = ctk.CTkButton(
-            panel_obs, text="💾 Guardar como nueva plantilla", fg_color="#334155", hover_color="#475569",
+            btn_f, text="💾 Guardar plantilla", fg_color="#334155", hover_color="#475569",
             font=("Segoe UI", 11, "bold"), height=28, command=self.guardar_como_plantilla
         )
-        self.btn_guardar_plantilla.pack(fill="x", padx=20, pady=(0, 15))
+        self.btn_guardar_plantilla.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        self.btn_sugerir_ia = ctk.CTkButton(
+            btn_f, text="🧠 Sugerir con IA", fg_color="#3B82F6", hover_color="#2563EB",
+            font=("Segoe UI", 11, "bold"), height=28, command=self.sugerir_observacion_ia, state="disabled"
+        )
+        self.btn_sugerir_ia.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
         self.btn_guardar = ctk.CTkButton(self.frame_der, text="📝 GUARDAR EN EXPEDIENTE OFICIAL", fg_color="#10B981", hover_color="#059669",
                                          font=("Segoe UI", 14, "bold"), height=45, command=self.guardar_observacion, state="disabled")
@@ -226,17 +237,63 @@ class ObservacionesFrame(ctk.CTkFrame):
     def seleccionar_estudiante(self, estudiante):
         self.estudiante_seleccionado = estudiante
         self.lbl_alumno_sel.configure(
-            text=f"👨‍🎓 Estudiante: {
-                estudiante['nombre']}",
+            text=f"👨‍🎓 Estudiante: {estudiante['nombre']}",
             text_color="white",
-            font=(
-                "Segoe UI",
-                18,
-                "bold"))
+            font=("Segoe UI", 18, "bold"))
         self.btn_guardar.configure(state="normal")
         self.btn_nota_acudiente.configure(state="normal")
         self.btn_abrir_expediente.configure(state="normal")
+        self.btn_sugerir_ia.configure(state="normal")
         self.texto_obs.delete("1.0", "end")
+
+        # Cargar observación borrador desde SQLite si existe (Tarea 12 y 24)
+        try:
+            cursor = self.engine.db_conn.cursor()
+            from utils.date_helpers import obtener_trimestre_actual
+            trim_num = obtener_trimestre_actual()
+            cursor.execute("SELECT comentario FROM observaciones WHERE estudiante_id = ? AND trimestre = ?;", (str(estudiante['id']), trim_num))
+            row = cursor.fetchone()
+            if row:
+                comentario_desc = self.engine.db_manager.desencriptar_campo(row[0])
+                self.texto_obs.insert("1.0", comentario_desc)
+                if hasattr(self.texto_obs, "check_spelling"):
+                    self.texto_obs.check_spelling()
+        except Exception as e:
+            print(f"[!] Error cargando borrador desde SQLite: {e}")
+
+    def al_escribir_observacion(self, event=None):
+        if getattr(self, "_debounce_job", None):
+            self.after_cancel(self._debounce_job)
+        self._debounce_job = self.after(2000, self.auto_guardar_borrador)
+
+    def auto_guardar_borrador(self):
+        if not self.estudiante_seleccionado:
+            return
+        observacion = self.texto_obs.get("1.0", "end").strip()
+        try:
+            cursor = self.engine.db_conn.cursor()
+            est_id = str(self.estudiante_seleccionado['id'])
+            from utils.date_helpers import obtener_trimestre_actual
+            trim_num = obtener_trimestre_actual()
+            
+            # Cifrar comentario a nivel de columna (Tarea 12)
+            comentario_cifrado = self.engine.db_manager.encriptar_campo(observacion)
+            
+            cursor.execute("SELECT id FROM observaciones WHERE estudiante_id = ? AND trimestre = ?;", (est_id, trim_num))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("UPDATE observaciones SET comentario = ? WHERE id = ?;", (comentario_cifrado, row[0]))
+            else:
+                cursor.execute("INSERT INTO observaciones (estudiante_id, trimestre, comentario) VALUES (?, ?, ?);", (est_id, trim_num, comentario_cifrado))
+            self.engine.db_conn.commit()
+            self.engine.db_manager.guardar_cifrado()
+            
+            # Mostrar toast sutil indicando el guardado
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast("✓ Borrador guardado automáticamente", color="#3B82F6")
+        except Exception as e:
+            print(f"[!] Error en auto_guardar_borrador: {e}")
 
 
     def aplicar_plantilla(self, opcion):
@@ -267,6 +324,9 @@ class ObservacionesFrame(ctk.CTkFrame):
                 "Falta información",
                 "Debe redactar la observación antes de guardar.")
             return
+
+        # Sincronizar borrador a base de datos de inmediato (Tarea 24)
+        self.auto_guardar_borrador()
 
         self.btn_guardar.configure(text="⏳ GUARDANDO...", state="disabled")
         self.btn_nota_acudiente.configure(state="disabled")
@@ -359,7 +419,7 @@ class ObservacionesFrame(ctk.CTkFrame):
                 return
                 
             from rdsecurity import cargar_config_segura
-            from documentos_maestro import generar_nota_acudiente
+            from documentos_maestro import generar_nota_acudiente, generar_citacion_txt
             from utils.footer_utils import abrir_documento
             
             cfg = cargar_config_segura({})
@@ -372,15 +432,26 @@ class ObservacionesFrame(ctk.CTkFrame):
                 "ano_lectivo": cfg.get("ano_lectivo", "2026"),
                 "fecha": datetime.datetime.now().strftime("%d-%m-%Y"),
                 "motivo": motivo,
-                "descripcion": desc
+                "descripcion": desc,
+                "mensaje": desc
             }
             ruta = generar_nota_acudiente(datos)
+            ruta_txt = generar_citacion_txt(datos)
             modal.destroy()
-            if ruta:
-                abrir_documento(ruta)
+            
+            if ruta or ruta_txt:
+                abrir_txt = messagebox.askyesno(
+                    "Abrir Citación", 
+                    "La citación ha sido generada.\n\n¿Desea abrir la versión de Texto Plano (.txt) en el Bloc de Notas?\n(Haga clic en 'No' para intentar abrir la plantilla de Word .docx)"
+                )
+                if abrir_txt and os.path.exists(ruta_txt):
+                    abrir_documento(ruta_txt)
+                elif not abrir_txt and os.path.exists(ruta):
+                    abrir_documento(ruta)
+                
                 root = self.winfo_toplevel()
                 if hasattr(root, "mostrar_toast"):
-                    root.mostrar_toast("✓ Nota generada exitosamente", color="#10B981")
+                    root.mostrar_toast("✓ Citación generada exitosamente", color="#10B981")
                     
         btn_gen = ctk.CTkButton(modal, text="Generar e Imprimir", fg_color="#10B981", hover_color="#059669", command=generar)
         btn_gen.pack(pady=20)
@@ -742,4 +813,88 @@ class ObservacionesFrame(ctk.CTkFrame):
                 
         btn_g = ctk.CTkButton(modal, text="Guardar Plantilla", fg_color="#10B981", hover_color="#059669", command=guardar)
         btn_g.pack(pady=15)
+
+    def sugerir_observacion_ia(self):
+        if not self.estudiante_seleccionado:
+            return
+            
+        est = self.estudiante_seleccionado
+        id_est = est['id']
+        grado = self.combo_grado.get()
+        
+        from utils.date_helpers import obtener_trimestre_actual
+        trim_num = obtener_trimestre_actual()
+        trim_str = f"Trimestre {trim_num}"
+        
+        # 1. Obtener promedio de calificaciones
+        promedio = 3.0
+        try:
+            proms = self.engine.obtener_promedios_reales(grado, None, trim_str)
+            if proms and est['nombre'] in proms:
+                promedio = proms[est['nombre']]
+        except Exception:
+            pass
+            
+        # 2. Obtener estadísticas de asistencia
+        ausencias = 0
+        tardanzas = 0
+        try:
+            stats_asistencia = self.engine.obtener_estadisticas_asistencia(grado, trim_str, id_est)
+            ausencias = stats_asistencia.get("ausencias", 0)
+            tardanzas = stats_asistencia.get("tardanzas", 0)
+        except Exception:
+            pass
+            
+        # 3. Obtener hábitos (Tarea 18)
+        habitos_negativos = []
+        try:
+            cursor = self.engine.db_conn.cursor()
+            cursor.execute("SELECT criterio_codigo, nota FROM habitos WHERE estudiante_id = ? AND trimestre = ?;", (str(id_est), trim_num))
+            for crit, nota in cursor.fetchall():
+                if nota in ["R", "X"]:
+                    habitos_negativos.append(crit)
+        except Exception:
+            pass
+            
+        # 4. Generar sugerencia cualitativa adaptada
+        obs_text = ""
+        cat_sug = "Académico"
+        
+        if promedio >= 4.5:
+            obs_text += f"El estudiante presenta un rendimiento académico sobresaliente con un promedio general de {promedio:.1f}. Demuestra un alto nivel de asimilación de conceptos y compromiso."
+            cat_sug = "Mención Honorífica"
+        elif promedio >= 3.0:
+            obs_text += f"El estudiante muestra un desempeño académico satisfactorio con un promedio de {promedio:.1f}. Se le insta a mantener el ritmo de estudio y participación."
+            cat_sug = "Académico"
+        else:
+            obs_text += f"El estudiante presenta dificultades académicas críticas con un promedio de {promedio:.1f}. Requiere reforzamiento continuo y apoyo guiado para mejorar sus resultados."
+            cat_sug = "Académico"
+            
+        # Asistencia
+        if ausencias > 3:
+            obs_text += f" Sin embargo, registra {ausencias} ausencias injustificadas, lo cual impacta negativamente su continuidad escolar."
+        elif tardanzas > 4:
+            obs_text += f" Se recomienda mejorar la puntualidad, ya que acumula {tardanzas} tardanzas en el periodo."
+            
+        # Hábitos
+        if habitos_negativos:
+            hab_str = ", ".join(habitos_negativos)
+            obs_text += f" Adicionalmente, requiere atención y reforzamiento conductual en los siguientes criterios de hábitos y actitudes: {hab_str}."
+            if "Responsabilidad" in habitos_negativos or "Puntualidad" in habitos_negativos:
+                obs_text += " Se sugiere establecer pautas de disciplina en casa para fortalecer el compromiso."
+            cat_sug = "Conducta"
+            
+        # Si no hay problemas
+        if promedio >= 4.5 and ausencias == 0 and not habitos_negativos:
+            obs_text += " ¡Excelente conducta y asistencia ejemplar!"
+            
+        # Insertar en el cuadro de texto
+        self.combo_categoria.set(cat_sug)
+        self.texto_obs.delete("1.0", "end")
+        self.texto_obs.insert("1.0", obs_text)
+        if hasattr(self.texto_obs, "check_spelling"):
+            self.texto_obs.check_spelling()
+            
+        # Guardar borrador automáticamente
+        self.auto_guardar_borrador()
 

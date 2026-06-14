@@ -195,6 +195,18 @@ class ConfigFrame(ctk.CTkFrame):
         )
         self.btn_sinc.grid(row=footer_row + 1, column=0, columnspan=4, pady=10)
 
+        # Tarea 25: Limpieza y Reinicio de Fin de Año Lectivo (Rollover)
+        self.btn_reset_ano = ctk.CTkButton(
+            f2,
+            text="🎓 CIERRE DE AÑO LECTIVO (ROLLOVER / ARCHIVO)",
+            fg_color="#EF4444",
+            hover_color="#DC2626",
+            height=45,
+            font=("Segoe UI", 14, "bold"),
+            command=self.cierre_ano_lectivo_ui,
+        )
+        self.btn_reset_ano.grid(row=footer_row + 2, column=0, columnspan=4, pady=10)
+
 
     def seleccionar_logo(self):
         ruta = filedialog.askopenfilename(
@@ -397,6 +409,16 @@ class ConfigFrame(ctk.CTkFrame):
             "logo_escuela_path": self.var_logo_path.get(),
         }
         guardar_config_segura(datos)
+        
+        # Guardar en el registro de Windows para desinstalación segura
+        import winreg
+        try:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\RegistroDocPro")
+            winreg.SetValueEx(key, "Cedula", 0, winreg.REG_SZ, datos["docente_cedula"])
+            winreg.CloseKey(key)
+        except Exception:
+            pass
+
         self.btn_sinc.configure(text="⏳ Sincronizando...", state="disabled"); self.update()
         def tarea():
             self.engine.sincronizar_plantilla_maestra(datos)
@@ -406,6 +428,31 @@ class ConfigFrame(ctk.CTkFrame):
     def finalizar_sinc(self):
         self.btn_sinc.configure(text="✨ SINCRONIZAR Y SOBREESCRIBIR EXCEL", state="normal")
         messagebox.showinfo("Éxito", "Libreta actualizada con éxito.")
+
+    def cierre_ano_lectivo_ui(self):
+        confirmar_1 = messagebox.askyesno(
+            "⚠️ Cierre de Año Lectivo",
+            "¿Está seguro de que desea realizar el Cierre del Año Lectivo?\n\n"
+            "Esta acción respaldará todos los datos actuales del año académico y los archivará de forma segura en su carpeta de Documentos. "
+            "Luego, se limpiarán todas las calificaciones, tareas, asistencias, hábitos y observaciones de la libreta activa.\n\n"
+            "¿Desea continuar con el cierre?"
+        )
+        if not confirmar_1:
+            return
+
+        promover = messagebox.askyesno(
+            "Cohort Rollover (Promoción de Estudiantes)",
+            "¿Desea promover automáticamente a los estudiantes al siguiente grado académico?\n\n"
+            "• Presione 'Sí' para promoverlos (ej. de 7° A a 8° A, de 1° a 2°).\n"
+            "• Presione 'No' para mantenerlos en su grado actual."
+        )
+
+        exito, mensaje = self.engine.realizar_cierre_ano_lectivo(promover_estudiantes=promover)
+        if exito:
+            messagebox.showinfo("✓ Cierre Exitoso", mensaje)
+            self.app_principal.reiniciar_motor(self.engine.ruta, self.engine.modalidad)
+        else:
+            messagebox.showerror("Error", mensaje)
 
     def cambiar_modalidad(self):
         nueva = self.var_modalidad.get().lower()
@@ -422,7 +469,7 @@ class ConfigFrame(ctk.CTkFrame):
             return
 
         archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_Premedia.xlsx"
-        ruta_nueva = os.path.join(BASE_DIR, "..", archivo_nuevo)
+        ruta_nueva = os.path.join(BASE_DIR, "..", "assets", "templates", archivo_nuevo)
         if not os.path.exists(ruta_nueva):
             self.var_modalidad.set(self.engine.modalidad.capitalize())
             return messagebox.showerror("Error", f"Falta el archivo: {archivo_nuevo}")

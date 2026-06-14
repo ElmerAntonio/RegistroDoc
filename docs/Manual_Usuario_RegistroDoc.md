@@ -23,7 +23,9 @@ conducta y hábitos de forma rápida, segura y profesional.  1. Cómo Iniciar el
   14. Registro Completo (Matriz Consolidada) ← ¡NUEVO!
   15. Solución de Problemas Comunes
   16. Glosario de Términos MEDUCA
-  
+  17. Estructura de Base de Datos y Tablas (SQLTools) ← ¡NUEVO!
+  18. Cumplimiento de Seguridad y Cifrado (Norma ISO) ← ¡NUEVO!
+
 
 ═══════════════════════════════════════════════════════════════
   1. CÓMO INICIAR EL PROGRAMA
@@ -391,6 +393,76 @@ conducta y hábitos de forma rápida, segura y profesional.  1. Cómo Iniciar el
   Trimestre   = Período académico (3 por año)
   Expediente  = Documento Word con historial del alumno
   Sincronizar = Copiar datos de configuración al Excel
+
+
+═══════════════════════════════════════════════════════════════
+  17. ESTRUCTURA DE BASE DE DATOS Y TABLAS (SQLTools)
+═══════════════════════════════════════════════════════════════
+
+  RegistroDoc Pro almacena todos sus datos en una base de datos local SQLite
+  cifrada de alta velocidad ("hot-data"). Para explorar y auditar esta base
+  de datos en tiempo real mediante VS Code SQLTools:
+
+  Paso 1: Inicie el programa. Esto descifrará dinámicamente la base de datos
+          temporal en la siguiente ruta:
+          C:\Users\<Tu_Usuario>\AppData\Local\RegistroDoc\temp\sqlite_temp.db
+
+  Paso 2: En VS Code, instale la extensión 'SQLTools' y el driver
+          'SQLTools SQLite' (por Matheus Teixeira).
+
+  Paso 3: Cree una nueva conexión en SQLTools apuntando al archivo
+          sqlite_temp.db.
+
+  Listado de Tablas y Estructura en la Base de Datos:
+  1. configuracion: Almacena opciones generales (clave, valor).
+  2. grados: Grupos asignados con su modalidad (id, modalidad).
+  3. estudiantes: Datos cifrados de alumnos (id, nombre, cedula_cifrada, sexo, grado_id).
+  4. materias: Asignaturas registradas (id, nombre, grado_id).
+  5. horario: Planificador semanal de clases (id, dia, hora, materia_id, grado_id).
+  6. notas: Calificaciones del trimestre (id, estudiante_id, materia_id, trimestre, tipo, descripcion, valor, puntos_obtenidos, puntos_maximos, fecha).
+  7. asistencia: Faltas, tardanzas y justificaciones (id, estudiante_id, fecha, estado, motivo).
+  8. observaciones: Historial de conducta del expediente (id, estudiante_id, fecha, categoria, texto).
+  9. habitos: Evaluaciones de hábitos y actitudes (id, estudiante_id, trimestre, criterio, frecuencia, valor, fecha).
+  10. tareas: Recordatorios de tareas programadas (id, titulo, grado_id, materia_id, tipo, fecha_limite, completada).
+  11. auditoria: Logs de auditoría inmutables para no repudio (id, timestamp, accion, detalle).
+
+  NOTA: Al cerrar la aplicación, el archivo sqlite_temp.db es borrado
+  y sobreescrito de manera segura mediante algoritmos de wiping.
+
+
+═══════════════════════════════════════════════════════════════
+  18. CUMPLIMIENTO DE SEGURIDAD Y CIFRADO (NORMA ISO)
+═══════════════════════════════════════════════════════════════
+
+  El diseño de seguridad de RegistroDoc Pro se rige bajo normativas internacionales
+  y nacionales estrictas para asegurar que el antivirus no bloquee la aplicación:
+
+  • ISO/IEC 25010 (Eficiencia de Rendimiento y Confidencialidad):
+    - Uso de base de datos relacional SQLite de lectura y escritura ultrarrápida.
+    - Cifrado simétrico AES-256 en reposo para evitar extracciones físicas.
+
+  • ISO/IEC 27001 (Control A.8.24 - Gestión de Activos y Cifrado):
+    - Cifrado en reposo AES-256 en modo GCM (Galois/Counter Mode) para verificar
+      la autenticidad e integridad física de la base de datos de producción.
+    - Las llaves criptográficas se generan en tiempo de ejecución de manera dinámica,
+      derivadas del número de serie de placa madre y procesador local con PBKDF2-HMAC-SHA256
+      (600,000 iteraciones). No se guardan llaves planas en ningún archivo.
+    - Cifrado de columnas específicas en base de datos para nombres y cédulas vinculando
+      el descifrado al proceso activo de ejecución (PID) para evitar memory dumping.
+
+  • Ley 81 del 26 de marzo de 2019 (Panamá - Protección de Datos Personales):
+    - Toda la información sensible del estudiante (cédulas, nombres, promedios)
+      permanece 100% local en la máquina y encriptada. No hay envío de datos por internet.
+    - Los entornos de prueba unitaria y de desarrollo utilizan generadores de datos ficticios,
+      garantizando que no se utilicen nombres reales de alumnos.
+
+  • Módulo Anti-Análisis (Anti-Debugging & VM/Sandbox Detección):
+    - Evita que atacantes o troyanos hagan ingeniería inversa de las funciones de clase.
+    - Detección activa de VirtualBox, VMware, QEMU e inactividad con auto-bloqueo tras 15 min.
+
+  • Robustez y Prevención de Corrupción de Datos:
+    - Escrituras atómicas con archivos temporales (.tmp) antes de renombrarse a .xlsx.
+    - Desinstalación segura que exige la cédula del docente antes de borrar la base de datos.
 
 
 ═══════════════════════════════════════════════════════════════

@@ -391,8 +391,26 @@ def generar_informe_calificaciones(datos):
         doc.add_paragraph("No hay calificaciones registradas para este estudiante.")
         
     doc.add_paragraph("")
-    doc.add_paragraph("")
-    doc.add_paragraph("")
+    
+    # Observación General / Sugerencias de Rendimiento (Tarea 23)
+    obs_val = datos.get("observacion_general", "").strip()
+    if obs_val:
+        p_obs_title = doc.add_paragraph()
+        run_obs_t = p_obs_title.add_run("Observaciones y Recomendaciones de Rendimiento:")
+        run_obs_t.bold = True
+        run_obs_t.font.size = Pt(11)
+        run_obs_t.font.name = "Arial"
+        run_obs_t.font.color.rgb = RGBColor(30, 58, 138)
+        
+        p_obs_text = doc.add_paragraph()
+        run_obs_val = p_obs_text.add_run(obs_val)
+        run_obs_val.font.size = Pt(10)
+        run_obs_val.font.name = "Arial"
+        
+        doc.add_paragraph("")
+    else:
+        doc.add_paragraph("")
+        doc.add_paragraph("")
     
     # Firmas
     tabla_firmas = doc.add_table(rows=2, cols=2)
@@ -545,3 +563,72 @@ def generar_lista_clase(datos):
     ruta = os.path.join(carpeta, f"Lista_Clase_{grado_str}.docx")
     doc.save(ruta)
     return ruta
+
+
+def generar_citacion_txt(datos):
+    """
+    Genera una citación estructurada en texto plano (.txt) para Notepad (Tarea 20).
+    """
+    escuela = datos.get("escuela_nombre", "Ministerio de Educación")
+    fecha = datos.get("fecha", datetime.datetime.now().strftime("%d-%m-%Y"))
+    docente = datos.get("docente_nombre", "Docente")
+    ano = datos.get("ano_lectivo", "2026")
+    alumno = datos.get("alumno", "Estudiante")
+    grado = datos.get("grado", "")
+    cedula = datos.get("cedula", "N/A")
+    motivo = datos.get("motivo", "Comunicado Oficial")
+    descripcion = datos.get("descripcion", "")
+
+    txt = f"""========================================================================
+             REPÚBLICA DE PANAMÁ - MINISTERIO DE EDUCACIÓN
+                      CITACIÓN OFICIAL DE PADRES
+========================================================================
+
+Fecha: {fecha}
+Centro Educativo: {escuela}
+Docente: {docente}
+Año Lectivo: {ano}
+
+Estimado(a) Acudiente de: {alumno}
+Grado: {grado}
+Cédula del Estudiante: {cedula}
+
+Por medio de la presente, se le cita formalmente a una reunión individual
+con el docente de su acudido(a) para tratar asuntos de carácter oficial.
+
+Detalle de la Citación:
+------------------------------------------------------------------------
+Motivo: {motivo}
+Descripción/Observación: 
+{descripcion}
+------------------------------------------------------------------------
+
+Lugar: Instalaciones del Plantel Educativo
+Fecha de la cita: ___/___/______   Hora: ______:______
+
+Su presencia es de vital importancia para garantizar el seguimiento y
+apoyo adecuado en el proceso formativo de su acudido(a).
+
+Agradeciendo su puntual asistencia.
+
+Atentamente,
+
+
+
+__________________________________       __________________________________
+     Firma del Docente                        Firma del Acudiente
+                                              Cédula: _____________________
+
+========================================================================
+                 "La educación es el camino al éxito"
+========================================================================
+"""
+    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "Citaciones")
+    if not os.path.exists(carpeta):
+        os.makedirs(carpeta, exist_ok=True)
+        
+    nombre_seguro = alumno.replace(" ", "_")
+    ruta_txt = os.path.join(carpeta, f"Citacion_{nombre_seguro}_{fecha.replace('-', '_')}.txt")
+    with open(ruta_txt, "w", encoding="utf-8") as f:
+        f.write(txt)
+    return ruta_txt

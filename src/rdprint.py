@@ -14,11 +14,8 @@ from tkinter import messagebox
 
 
 def _ruta_excel():
-    from config import BASE_DIR
     from rdsecurity import cargar_config_segura
-
-    base = BASE_DIR
-    raiz = os.path.join(base, "..")
+    from rdsql import obtener_dir_datos_usuario
 
     modalidad = "premedia"
     try:
@@ -27,32 +24,29 @@ def _ruta_excel():
     except Exception:
         pass
 
-    candidatos = []
-    if modalidad == "primaria":
-        candidatos.extend([
-            os.path.join(raiz, "Registro_Primaria.xlsx"),
-            os.path.join(base, "Registro_Primaria.xlsx"),
-        ])
-    else:
-        candidatos.extend([
-            os.path.join(raiz, "Registro_Premedia.xlsx"),
-            os.path.join(base, "Registro_Premedia.xlsx"),
-        ])
+    user_dir = obtener_dir_datos_usuario()
+    archivo = "Registro_Primaria.xlsx" if modalidad == "primaria" else "Registro_Premedia.xlsx"
+    ruta_appdata = os.path.join(user_dir, "temp", archivo)
 
-    # Fallback por si la modalidad del perfil no coincide.
-    candidatos.extend([
-        os.path.join(raiz, "Registro_Premedia.xlsx"),
-        os.path.join(raiz, "Registro_Primaria.xlsx"),
-        os.path.join(base, "Registro_Premedia.xlsx"),
-        os.path.join(base, "Registro_Primaria.xlsx"),
-    ])
+    if os.path.exists(ruta_appdata):
+        return ruta_appdata
 
-    for ruta in candidatos:
-        if os.path.exists(ruta):
-            return ruta
+    # Fallback a plantillas de la raíz
+    from config import BASE_DIR
+    raiz = os.path.join(BASE_DIR, "..")
+    candidatos = [
+        ruta_appdata,
+        os.path.join(raiz, "assets", "templates", archivo),
+        os.path.join(BASE_DIR, "assets", "templates", archivo),
+        os.path.join(raiz, archivo),
+        os.path.join(BASE_DIR, archivo),
+    ]
 
-    # Devuelve la ruta principal esperada aunque no exista para mantener mensajes consistentes.
-    return candidatos[0] if candidatos else os.path.join(raiz, "Registro_Premedia.xlsx")
+    for r in candidatos:
+        if os.path.exists(r):
+            return r
+
+    return ruta_appdata
 
 
 def _excel_disponible() -> bool:
@@ -112,22 +106,48 @@ def encontrar_hoja_impresion(wb, tipo, grado=None, materia=None) -> str:
 
 def abrir_para_imprimir(hoja: str = None) -> tuple[bool, str]:
     """
-    Abre el Excel con Microsoft Excel o LibreOffice para imprimir.
-    El usuario imprime desde la aplicación como siempre.
+    Abre una copia de exportación del Excel con Microsoft Excel o LibreOffice para imprimir.
+    Evita la manipulación directa del archivo de base de datos de la aplicación.
     Retorna (éxito: bool, mensaje: str)
     """
-    ruta = _ruta_excel()
-    if not os.path.exists(ruta):
-        return False, "No se encontró Registro_Premedia.xlsx"
+    ruta_original = _ruta_excel()
+    if not os.path.exists(ruta_original):
+        return False, "No se encontró el archivo de libreta correspondiente."
+
+    # Crear copia exportada (Aislamiento de base de datos)
+    try:
+        import shutil
+        from openpyxl import load_workbook
+        
+        user_docs = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc", "Exportados")
+        os.makedirs(user_docs, exist_ok=True)
+        
+        nombre_base = os.path.basename(ruta_original)
+        nombre_exportado = nombre_base.replace(".xlsx", "_Exportado.xlsx")
+        ruta_exportada = os.path.join(user_docs, nombre_exportado)
+        
+        shutil.copy2(ruta_original, ruta_exportada)
+        
+        # Escribir la marca de seguridad de exportación
+        wb_exp = load_workbook(ruta_exportada)
+        if "_RD_EXPORT_MARKER_" not in wb_exp.sheetnames:
+            ws_exp = wb_exp.create_sheet("_RD_EXPORT_MARKER_")
+            ws_exp.sheet_state = "hidden"
+            ws_exp["A1"] = "REGISTRO_DOC_SECURE_EXPORT"
+            wb_exp.save(ruta_exportada)
+        wb_exp.close()
+    except Exception as e_copy:
+        return False, f"No se pudo crear la copia de seguridad exportada: {e_copy}"
 
     sistema = platform.system()
 
     if sistema == "Windows":
         try:
             # Intentar abrir con Excel directamente
-            os.startfile(ruta)
+            os.startfile(ruta_exportada)
             return True, (
-                "El archivo Excel se abrió correctamente.\n\n"
+                f"Se ha exportado y abierto una copia de seguridad en:\n"
+                f"{ruta_exportada}\n\n"
                 "Para imprimir:\n"
                 "1. Ve a la hoja que deseas imprimir\n"
                 "2. Presiona Ctrl+P\n"
@@ -135,14 +155,14 @@ def abrir_para_imprimir(hoja: str = None) -> tuple[bool, str]:
                 "4. Haz clic en Imprimir"
             )
         except Exception as e:
-            return False, f"No se pudo abrir el archivo: {e}"
+            return False, f"No se pudo abrir el archivo exportado: {e}"
     else:
         # Linux/Mac — LibreOffice
         if _libreoffice_disponible():
             try:
-                subprocess.Popen(["libreoffice", "--calc", os.path.abspath(ruta)])
+                subprocess.Popen(["libreoffice", "--calc", os.path.abspath(ruta_exportada)])
                 return True, (
-                    "Excel abierto en LibreOffice. "
+                    f"Copia exportada abierta en LibreOffice:\n{ruta_exportada}\n\n"
                     "Usa Ctrl+P para imprimir."
                 )
             except Exception as e:

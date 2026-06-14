@@ -27,6 +27,8 @@ class TestSetupCentering(unittest.TestCase):
             def __init__(self, *args, **kwargs): pass
             def title(self, *args, **kwargs): pass
             def geometry(self, *args, **kwargs): pass
+            def configure(self, *args, **kwargs): pass
+            def resizable(self, *args, **kwargs): pass
             def winfo_screenwidth(self): return 1920
             def winfo_screenheight(self): return 1080
             def crear_interfaz(self): pass
@@ -56,21 +58,21 @@ class TestSetupCentering(unittest.TestCase):
             with patch.object(mock_ctk_class, 'geometry') as mock_geo:
                 wizard = SetupWizard()
                 # Verify geometry was called to center the window
-                # width=700, height=500, screen_w=1920, screen_h=1080
-                # x = (1920-700)//2 = 610
-                # y = (1080-500)//2 = 290
-                mock_geo.assert_called_with("700x500+610+290")
+                # width=850, height=680, screen_w=1920, screen_h=1080
+                # x = (1920-850)//2 = 535
+                # y = (1080-680)//2 = 200
+                mock_geo.assert_called_with("850x680+535+200")
 
     def test_logic_directly(self):
         # Simpler test: just the math
-        width, height = 700, 500
+        width, height = 850, 680
         screen_w, screen_h = 1920, 1080
         x = (screen_w - width) // 2
         y = (screen_h - height) // 2
 
-        self.assertEqual(x, 610)
-        self.assertEqual(y, 290)
-        self.assertEqual(f"{width}x{height}+{x}+{y}", "700x500+610+290")
+        self.assertEqual(x, 535)
+        self.assertEqual(y, 200)
+        self.assertEqual(f"{width}x{height}+{x}+{y}", "850x680+535+200")
 
 if __name__ == "__main__":
     unittest.main()

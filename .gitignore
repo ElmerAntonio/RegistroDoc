@@ -40,3 +40,10 @@ backups/
 
 # Dependencias offline binarias (incluidas en el zip de distribución pero ignoradas en git)
 dependencies/
+
+# Directorios de compilación e instaladores
+build/
+dist/
+Output/
+scratch/
+implementation_plan.md

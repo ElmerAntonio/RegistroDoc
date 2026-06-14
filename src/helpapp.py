@@ -449,6 +449,8 @@ class HelpFrame(ctk.CTkFrame):
             ("15. Reg. Completo ¡NUEVO!", "15. REGISTRO COMPLETO"),
             ("16. Problemas", "16. SOLUCIÓN DE PROBLEMAS"),
             ("17. Glosario", "17. GLOSARIO"),
+            ("18. Base de Datos", "17. ESTRUCTURA DE BASE DE DATOS"),
+            ("19. Seg. e ISO", "18. CUMPLIMIENTO DE SEGURIDAD"),
         ]
 
         # ─── Visor de texto ───

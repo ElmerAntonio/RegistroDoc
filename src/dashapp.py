@@ -902,9 +902,10 @@ class DashboardFrame(ctk.CTkFrame):
         btn_f_ex = ctk.CTkFrame(exf, fg_color="transparent")
         btn_f_ex.pack(fill="x", pady=4)
 
-        ctk.CTkButton(btn_f_ex, text="📄 PDF", width=40, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
-        ctk.CTkButton(btn_f_ex, text="📝 Word", width=40, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)
-        ctk.CTkButton(btn_f_ex, text="📊 Excel", width=40, fg_color="#059669", command=lambda: self.exportar_calificaciones("xlsx")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📄 PDF", width=35, fg_color="#E11D48", command=lambda: self.exportar_calificaciones("pdf")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📝 Word", width=35, fg_color="#2563EB", command=lambda: self.exportar_calificaciones("docx")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📊 Excel", width=35, fg_color="#059669", command=lambda: self.exportar_calificaciones("xlsx")).pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_f_ex, text="📝 TXT", width=35, fg_color="#4B5563", command=lambda: self.exportar_calificaciones("txt")).pack(side="left", padx=2, expand=True)
 
 
 
@@ -951,10 +952,17 @@ class DashboardFrame(ctk.CTkFrame):
             df = pd.DataFrame(todas_notas)
 
             if formato == "xlsx":
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-                    df.to_excel(tmp.name, index=False)
-                    res_path = tmp.name
-                messagebox.showinfo("Exportar Excel", f"Datos exportados a:\n{res_path}")
+                from tkinter import filedialog
+                res_path = filedialog.asksaveasfilename(
+                    defaultextension=".xlsx",
+                    filetypes=[("Libro de Excel", "*.xlsx")],
+                    title="Guardar Registro Oficial de Excel",
+                    initialfile=f"Registro_Oficial_{grados[0].replace('°', '')}.xlsx"
+                )
+                if res_path:
+                    import shutil
+                    shutil.copy2(self.engine.ruta, res_path)
+                    messagebox.showinfo("Exportar Excel", f"El Registro Oficial de Excel ha sido exportado con éxito a:\n{res_path}")
             elif formato == "docx":
                 from docx import Document
                 doc = Document()
@@ -1005,6 +1013,80 @@ class DashboardFrame(ctk.CTkFrame):
                     messagebox.showinfo("Exportar PDF", f"PDF generado en:\n{pdf_path}")
                 except Exception:
                     messagebox.showinfo("Aviso PDF", f"Documento generado en DOCX:\n{tmp_docx}\n\nNo se pudo convertir automáticamente a PDF (requiere MS Word en Windows).")
+            elif formato == "txt":
+                # Obtener info docente/escuela (Tarea 16)
+                cfg_doc = self.engine.obtener_datos_generales()
+                docente = cfg_doc.get("docente_nombre", "Docente")
+                escuela = cfg_doc.get("escuela_nombre", "Escuela")
+                ano = cfg_doc.get("ano_lectivo", "2026")
+                
+                txt_lines = []
+                txt_lines.append("========================================================================")
+                txt_lines.append("                      REGISTRO DOCENTE - MEDUCA PANAMÁ")
+                txt_lines.append("========================================================================")
+                txt_lines.append(f"Docente: {docente}")
+                txt_lines.append(f"Escuela: {escuela}")
+                txt_lines.append(f"Año Lectivo: {ano}")
+                txt_lines.append(f"Reporte de Calificaciones - {trimestre}")
+                txt_lines.append("========================================================================\n")
+                
+                for grado in grados:
+                    materias = self.engine.obtener_materias_por_grado(grado)
+                    estudiantes = self.engine.obtener_estudiantes_completos(grado)
+                    if not materias or not estudiantes: continue
+                    
+                    txt_lines.append(f"GRADO: {grado}")
+                    txt_lines.append("------------------------------------------------------------------------")
+                    if trimestre == "Todos los trimestres":
+                        txt_lines.append(f"{'No.':<4}{'Estudiante':<30}{'Materia':<20}{'T1':<6}{'T2':<6}{'T3':<6}{'Prom':<6}")
+                    else:
+                        txt_lines.append(f"{'No.':<4}{'Estudiante':<30}{'Materia':<20}{trimestre:<10}")
+                    txt_lines.append("------------------------------------------------------------------------")
+                    
+                    if trimestre == "Todos los trimestres":
+                        bulk_t1 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 1")
+                        bulk_t2 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 2")
+                        bulk_t3 = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, "Trimestre 3")
+                    else:
+                        bulk_trim = getattr(self.engine, 'obtener_promedios_reales_bulk', lambda g,m,t: {})(grado, materias, trimestre)
+                        
+                    for idx_est, est in enumerate(estudiantes, 1):
+                        nombre = est['nombre']
+                        for mat in materias:
+                            if trimestre == "Todos los trimestres":
+                                t1 = bulk_t1.get(mat, {}).get(nombre, 1.0) or 1.0
+                                t2 = bulk_t2.get(mat, {}).get(nombre, 1.0) or 1.0
+                                t3 = bulk_t3.get(mat, {}).get(nombre, 1.0) or 1.0
+                                prom = round((t1 + t2 + t3) / 3.0, 1)
+                                txt_lines.append(f"{idx_est:<4}{nombre[:28]:<30}{mat[:18]:<20}{t1:<6}{t2:<6}{t3:<6}{prom:<6}")
+                            else:
+                                val = bulk_trim.get(mat, {}).get(nombre, 1.0) or 1.0
+                                txt_lines.append(f"{idx_est:<4}{nombre[:28]:<30}{mat[:18]:<20}{val:<10}")
+                    txt_lines.append("========================================================================\n")
+                
+                # Guardar TXT
+                from tkinter import filedialog
+                res_path = filedialog.asksaveasfilename(
+                    defaultextension=".txt",
+                    filetypes=[("Archivo de Texto Plano", "*.txt")],
+                    title="Exportar Calificaciones en Texto Plano",
+                    initialfile=f"Reporte_Calificaciones_{grados[0].replace('°', '')}.txt"
+                )
+                if res_path:
+                    with open(res_path, "w", encoding="utf-8") as f:
+                        f.write("\n".join(txt_lines))
+                    
+                    # Abrir automáticamente en Notepad (Windows) o editor predeterminado
+                    try:
+                        import subprocess
+                        if os.name == "nt":
+                            subprocess.Popen(["notepad.exe", res_path])
+                        else:
+                            import webbrowser
+                            webbrowser.open(res_path)
+                    except Exception:
+                        pass
+                    messagebox.showinfo("Exportar TXT", f"Calificaciones exportadas y abiertas en Notepad:\n{res_path}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error al exportar: {str(e)}")

@@ -1,20 +1,271 @@
 import os
 import re
-from rdsecurity import validar_nota_meduca
+import logging
+from rdsecurity import validar_nota_meduca, sanitizar_entrada
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from utils.cleaner import ExcelCleaner
 
+logger = logging.getLogger("rddata")
+
+def _contar_estudiantes_excel(ruta_xls, modalidad):
+    """Cuenta el número de estudiantes en un archivo Excel de forma rápida y de sólo lectura."""
+    try:
+        wb = openpyxl.load_workbook(ruta_xls, data_only=True)
+        nombre_maestro = None
+        for sheet in wb.sheetnames:
+            if "MAESTRO" in sheet.upper():
+                nombre_maestro = sheet
+                break
+        if not nombre_maestro:
+            wb.close()
+            return 0
+        ws = wb[nombre_maestro]
+        cant = 0
+        columnas = [2, 4, 6] if modalidad == "premedia" else [2]
+        for col in columnas:
+            for r in range(5, 46):
+                if ws.cell(row=r, column=col).value:
+                    cant += 1
+        wb.close()
+        return cant
+    except Exception:
+        return 0
+
 class DataEngine:
     def __init__(self, ruta_excel, modalidad="premedia"):
-        self.ruta = ruta_excel
         self.modalidad = modalidad.lower()
+        
+        nombre_base = os.path.basename(ruta_excel)
+        if nombre_base in ("Registro_Premedia.xlsx", "Registro_Primaria.xlsx"):
+            # Redireccionar el archivo de trabajo a un directorio temporal privado de AppData
+            import shutil
+            from rdsql import obtener_dir_datos_usuario
+            user_dir = obtener_dir_datos_usuario()
+            active_excel = os.path.join(user_dir, "temp", nombre_base)
+            
+            # Copiar si no existe, o si el de la raíz tiene más estudiantes, o es más reciente y no vacío
+            if os.path.exists(ruta_excel):
+                if not os.path.exists(active_excel):
+                    shutil.copy2(ruta_excel, active_excel)
+                else:
+                    cant_orig = _contar_estudiantes_excel(ruta_excel, self.modalidad)
+                    cant_temp = _contar_estudiantes_excel(active_excel, self.modalidad)
+                    if cant_orig > cant_temp:
+                        shutil.copy2(ruta_excel, active_excel)
+                    else:
+                        mtime_origen = os.path.getmtime(ruta_excel)
+                        mtime_destino = os.path.getmtime(active_excel)
+                        if mtime_origen > mtime_destino + 2.0 and cant_orig > 0:
+                            shutil.copy2(ruta_excel, active_excel)
+            
+            self.ruta = active_excel
+        else:
+            self.ruta = ruta_excel
         self.cleaner = ExcelCleaner()
         self.fila_desc = 39 if self.modalidad == "primaria" else 42
         self._wb_cache = None
         self._wb_formulas_cache = None
         self._last_mtime = 0.0
+        
+        # Conexión a SQLite cifrada
+        from rdsql import SQLDatabaseManager
+        self.db_manager = SQLDatabaseManager()
+        self.db_conn = self.db_manager.conectar()
+        
         self._cargar_en_memoria()
+        self.sincronizar_excel_a_sql()
+
+    def sincronizar_excel_a_sql(self):
+        """Migra de forma unidireccional y robusta los datos desde Excel a SQLite."""
+        if not os.path.exists(self.ruta) and not self._wb_cache:
+            return
+
+        cursor = self.db_conn.cursor()
+
+        # Asegurar carga
+        if not self._wb_cache:
+            try:
+                self._cargar_en_memoria()
+            except Exception:
+                return
+
+        # 1. Cargar metadatos / Datos Generales
+        generales = self.obtener_datos_generales()
+        if generales:
+            for k, v in generales.items():
+                cursor.execute(
+                    "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);",
+                    (k, str(v))
+                )
+
+        # 2. Obtener grados activos
+        grados = self.obtener_grados_activos()
+
+        # Verificar si ya está poblado
+        cursor.execute("SELECT COUNT(*) FROM estudiantes;")
+        ya_poblado = cursor.fetchone()[0] > 0
+
+        if ya_poblado:
+            # Sincronización parcial en cada inicio: actualiza y cifra nombres, cédulas y sexos de estudiantes
+            for g in grados:
+                cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, 'A', ?);", (g, self.modalidad))
+                self.db_conn.commit()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (g, self.modalidad))
+                grado_row = cursor.fetchone()
+                if grado_row:
+                    grado_id = grado_row[0]
+                    estudiantes = self._obtener_estudiantes_desde_excel(g, wb=self._wb_cache)
+                    active_ids = {str(est["id"]) for est in estudiantes}
+                    
+                    # Cargar IDs de estudiantes registrados en la DB para este grado
+                    cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? AND estado = 'Activo';", (grado_id,))
+                    db_ids = {row[0] for row in cursor.fetchall()}
+                    
+                    # Desactivar estudiantes retirados
+                    for old_id in db_ids - active_ids:
+                        cursor.execute("UPDATE estudiantes SET estado = 'Retirado' WHERE id = ? AND grado_id = ?;", (old_id, grado_id))
+                    
+                    for est in estudiantes:
+                        nombre_cifrado = self.db_manager.encriptar_campo(est["nombre"])
+                        cedula_cifrada = self.db_manager.encriptar_campo(est["cedula"])
+                        sexo_cifrado = self.db_manager.encriptar_campo(est["sexo"])
+                        cursor.execute(
+                            "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                            (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                        )
+            self.db_conn.commit()
+            self.db_manager.guardar_cifrado()
+            return
+
+        # Sincronización completa (primera ejecución / base de datos vacía)
+        for g in grados:
+            # Encontrar modalidad activa
+            cursor.execute(
+                "INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, ?, ?);",
+                (g, "A", self.modalidad)
+            )
+            self.db_conn.commit()
+            
+            # Obtener el grado_id recién creado/existente
+            cursor.execute(
+                "SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;",
+                (g, "A", self.modalidad)
+            )
+            grado_id = cursor.fetchone()[0]
+            
+            # 3. Estudiantes (Cifrados)
+            estudiantes = self._obtener_estudiantes_desde_excel(g, wb=self._wb_cache)
+            for est in estudiantes:
+                nombre_cifrado = self.db_manager.encriptar_campo(est["nombre"])
+                cedula_cifrada = self.db_manager.encriptar_campo(est["cedula"])
+                sexo_cifrado = self.db_manager.encriptar_campo(est["sexo"])
+                cursor.execute(
+                    "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                    (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                )
+            
+            # 4. Materias
+            materias = self.obtener_materias_por_grado(g)
+            for mat in materias:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO materias (nombre, grado_id) VALUES (?, ?);",
+                    (mat, grado_id)
+                )
+                self.db_conn.commit()
+                
+                # Obtener materia_id
+                cursor.execute(
+                    "SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;",
+                    (mat, grado_id)
+                )
+                materia_id = cursor.fetchone()[0]
+                
+                # 5. Notas
+                for trim in (1, 2, 3):
+                    trim_str = f"Trimestre {trim}"
+                    for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
+                        descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo)
+                        if not descripciones:
+                            continue
+                        
+                        wb = self._wb_cache
+                        nombre_hoja = self._encontrar_hoja_prom(wb, g, mat)
+                        if not nombre_hoja:
+                            continue
+                        ws = wb[nombre_hoja]
+                        rango = self._obtener_rango_columnas(ws, trim_str, tipo)
+                        if rango == (None, None):
+                            continue
+                        
+                        col_inicio, col_fin = rango
+                        for c in range(col_inicio, col_fin + 1):
+                            val_desc = ws.cell(row=self.fila_desc, column=c).value
+                            if not val_desc:
+                                continue
+                            
+                            # Obtener fecha
+                            fecha = ws.cell(row=4, column=c).value or "01-01"
+                            desc_limpia = str(val_desc).replace('\n', ' ').strip()
+                            
+                            for est in estudiantes:
+                                fila_excel = 4 + int(est["id"])
+                                val_nota = ws.cell(row=fila_excel, column=c).value
+                                if val_nota is not None:
+                                    try:
+                                        cursor.execute(
+                                            """INSERT INTO notas 
+                                            (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha) 
+                                            VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                                            (str(est["id"]), materia_id, trim, tipo, desc_limpia, float(val_nota), str(fecha))
+                                        )
+                                    except Exception:
+                                        pass
+            
+            # 6. Asistencia
+            for trim in (1, 2, 3):
+                trim_str = f"Trimestre {trim}"
+                fechas = self.obtener_fechas_asistencia(g, trim_str)
+                for f_val in fechas:
+                    
+                    asistencia_col = self.buscar_asistencia_existente(g, trim_str, f_val)
+                    if asistencia_col:
+                        cursor.execute("SELECT id, nombre FROM estudiantes WHERE grado_id = ?;", (grado_id,))
+                        est_map = {}
+                        for r_est in cursor.fetchall():
+                            dec_name = self.db_manager.desencriptar_campo(r_est[1]).strip().lower()
+                            est_map[dec_name] = r_est[0]
+
+                        for est_nom, estado in asistencia_col.items():
+                            est_nom_clean = str(est_nom).strip().lower()
+                            est_id = est_map.get(est_nom_clean)
+                            if est_id:
+                                cursor.execute(
+                                    """INSERT OR REPLACE INTO asistencia 
+                                    (estudiante_id, fecha, estado) VALUES (?, ?, ?);""",
+                                    (est_id, f_val, estado)
+                                )
+        
+        # 7. Horario
+        try:
+            horario_excel = self.obtener_horario()
+            if horario_excel:
+                for h_slot in horario_excel:
+                    bloque = h_slot.get("hora", "")
+                    for dia in ('lunes', 'martes', 'miercoles', 'jueves', 'viernes'):
+                        val_dia = h_slot.get(dia, "")
+                        if val_dia:
+                            cursor.execute(
+                                """INSERT INTO horario (dia, bloque_hora, materia_id, grado_id) 
+                                VALUES (?, ?, NULL, NULL);""",
+                                (dia, bloque)
+                            )
+        except Exception:
+            pass
+
+        self.db_conn.commit()
+        self.db_manager.guardar_cifrado()
+
 
 
     def _safe_set_value(self, ws, row, column, value):
@@ -48,10 +299,24 @@ class DataEngine:
             self._wb_formulas_cache = None
 
         if os.path.exists(self.ruta):
+            # Tarea 22: Asegurar aislamiento de importación de Excel (prohibición estricta de lectura de archivos Excel exportados externos).
+            try:
+                wb_temp = openpyxl.load_workbook(self.ruta, read_only=True)
+                if "_RD_EXPORT_MARKER_" in wb_temp.sheetnames:
+                    wb_temp.close()
+                    raise PermissionError("SEGURIDAD: No se permite cargar, modificar o importar un archivo Excel exportado por el sistema.")
+                wb_temp.close()
+            except PermissionError as pe:
+                raise pe
+            except Exception:
+                pass
+
             try:
                 self._wb_cache = openpyxl.load_workbook(self.ruta, data_only=True)
                 self._wb_formulas_cache = openpyxl.load_workbook(self.ruta, data_only=False)
                 self._last_mtime = os.path.getmtime(self.ruta)
+            except PermissionError as pe:
+                raise pe
             except Exception:
                 self._wb_cache = None
                 self._wb_formulas_cache = None
@@ -196,6 +461,12 @@ class DataEngine:
         os.close(fd)
 
         try:
+            # Insertar automáticamente el logo de la escuela en la portada
+            try:
+                self._insertar_logo_escuela(wb)
+            except Exception:
+                pass
+                
             wb.save(temp_path)
             # Reemplazar de forma atómica
             if os.path.exists(self.ruta):
@@ -207,6 +478,41 @@ class DataEngine:
                 try: os.remove(temp_path)
                 except: pass
             raise e
+
+    def _insertar_logo_escuela(self, wb):
+        try:
+            # Excluir las plantillas limpias originales de la raíz del proyecto
+            from config import BASE_DIR
+            raiz_proyecto = os.path.abspath(os.path.join(BASE_DIR, ".."))
+            ruta_absoluta = os.path.abspath(self.ruta)
+            if os.path.dirname(ruta_absoluta).lower() == raiz_proyecto.lower():
+                return
+
+            from utils.footer_utils import get_school_logo_path
+            logo_path = get_school_logo_path()
+            if not logo_path or not os.path.exists(logo_path):
+                return
+            
+            # Buscar la hoja de portada/caratula
+            nombre_hoja = None
+            for name in wb.sheetnames:
+                if "PORTADA" in name.upper() or "CARATULA" in name.upper() or "CARÁTULA" in name.upper() or "VISTOSA" in name.upper():
+                    nombre_hoja = name
+                    break
+            
+            if nombre_hoja:
+                ws = wb[nombre_hoja]
+                # Limpiar imágenes previas para evitar acumulación
+                ws._images = []
+                
+                from openpyxl.drawing.image import Image as OpenpyxlImage
+                img = OpenpyxlImage(logo_path)
+                img.width = 90
+                img.height = 90
+                # Colocar en la esquina superior derecha
+                ws.add_image(img, "H1")
+        except Exception:
+            pass
 
         # Actualizar mtime para evitar recarga de caché redundante por nuestra propia escritura
         try:
@@ -220,6 +526,106 @@ class DataEngine:
         if result:
             self._cargar_en_memoria()
         return result
+
+    def realizar_cierre_ano_lectivo(self, promover_estudiantes=True) -> tuple[bool, str]:
+        """
+        Cierra el año lectivo actual:
+        1. Crea un respaldo en Documentos/RegistroDoc/Historial_Academico/ de la base de datos cifrada y el Excel.
+        2. Promueve cohortes al grado superior (o los gradúa/retira) si se solicita.
+        3. Borra calificaciones, asistencia, hábitos, observaciones y tareas.
+        4. Limpia el archivo Excel de notas.
+        5. Incrementa el año lectivo en la configuración.
+        """
+        try:
+            from rdsecurity import cargar_config_segura, guardar_config_segura
+            import datetime
+            import shutil
+
+            # 1. Obtener información de año actual
+            cfg = cargar_config_segura({})
+            ano_actual = cfg.get("ano_lectivo", "2026").strip()
+            
+            # Directorio de respaldo
+            dir_historial = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc", "Historial_Academico", f"Historial_Ano_{ano_actual}")
+            os.makedirs(dir_historial, exist_ok=True)
+            
+            # Copiar archivos
+            # Base de datos
+            db_manager_enc_path = os.path.join(self.db_manager.user_dir, "data", "registro.db.enc")
+            if os.path.exists(db_manager_enc_path):
+                shutil.copy2(db_manager_enc_path, os.path.join(dir_historial, "registro.db.enc"))
+            # Excel
+            if os.path.exists(self.ruta):
+                shutil.copy2(self.ruta, os.path.join(dir_historial, os.path.basename(self.ruta)))
+                
+            # 2. Procesar base de datos
+            cursor = self.db_conn.cursor()
+            
+            # Promoción de estudiantes
+            if promover_estudiantes:
+                promotion_map_primaria = {"1°": "2°", "2°": "3°", "3°": "4°", "4°": "5°", "5°": "6°"}
+                promotion_map_premedia = {"7°": "8°", "8°": "9°"}
+                
+                cursor.execute("SELECT id, nombre, seccion, modalidad FROM grados;")
+                grados_dict = {row[0]: (row[1], row[2], row[3]) for row in cursor.fetchall()}
+                
+                cursor.execute("SELECT id, nombre, grado_id FROM estudiantes WHERE estado = 'Activo';")
+                estudiantes = cursor.fetchall()
+                
+                for est_id, est_nombre, g_id in estudiantes:
+                    if g_id not in grados_dict:
+                        continue
+                    g_nombre, g_sec, g_mod = grados_dict[g_id]
+                    g_clean = g_nombre.strip()
+                    
+                    target_name = None
+                    if g_mod == "primaria" and g_clean in promotion_map_primaria:
+                        target_name = promotion_map_primaria[g_clean]
+                    elif g_mod == "premedia" and g_clean in promotion_map_premedia:
+                        target_name = promotion_map_premedia[g_clean]
+                        
+                    if target_name:
+                        # Buscar si ya existe el grado de destino
+                        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (target_name, g_sec, g_mod))
+                        row_target = cursor.fetchone()
+                        if row_target:
+                            target_g_id = row_target[0]
+                            cursor.execute("UPDATE estudiantes SET grado_id = ? WHERE id = ?;", (target_g_id, est_id))
+                        else:
+                            cursor.execute("INSERT INTO grados (nombre, seccion, modalidad) VALUES (?, ?, ?);", (target_name, g_sec, g_mod))
+                            new_g_id = cursor.lastrowid
+                            cursor.execute("UPDATE estudiantes SET grado_id = ? WHERE id = ?;", (new_g_id, est_id))
+                    else:
+                        # Estudiantes de último año se gradúan (se marcan como Retirado)
+                        cursor.execute("UPDATE estudiantes SET estado = 'Retirado' WHERE id = ?;", (est_id,))
+            
+            # Borrar datos del año anterior
+            cursor.execute("DELETE FROM notas;")
+            cursor.execute("DELETE FROM asistencia;")
+            cursor.execute("DELETE FROM observaciones;")
+            cursor.execute("DELETE FROM habitos;")
+            cursor.execute("DELETE FROM tareas;")
+            
+            # Incrementar año académico
+            try:
+                nuevo_ano = str(int(ano_actual) + 1)
+            except Exception:
+                nuevo_ano = "2027"
+                
+            cfg["ano_lectivo"] = nuevo_ano
+            guardar_config_segura(cfg)
+            
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('ano_lectivo', ?);", (nuevo_ano,))
+            cursor.execute("INSERT INTO auditoria (accion, detalle) VALUES (?, ?);", ("CIERRE_ANO_LECTIVO", f"Cierre del año lectivo {ano_actual}. Promoción: {promover_estudiantes}. Nuevo año: {nuevo_ano}"))
+            
+            self.db_conn.commit()
+            
+            # 3. Limpiar Excel
+            self.reiniciar_libreta()
+            
+            return True, f"Cierre de año lectivo {ano_actual} exitoso.\n\nSe creó un respaldo seguro en:\n{dir_historial}\n\nLos estudiantes activos han sido actualizados y el sistema se configuró para el año {nuevo_ano}."
+        except Exception as e:
+            return False, f"Error al procesar el cierre de año lectivo: {e}"
 
     def _encontrar_hoja_maestro(self, wb):
         if "MAESTRO" in wb.sheetnames:
@@ -572,40 +978,83 @@ class DataEngine:
         if should_close: wb.close()
         return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
 
-    def obtener_estudiantes_completos(self, grado, wb=None):
+    def _obtener_estudiantes_desde_excel(self, grado, wb=None):
+        """Extrae la lista de estudiantes directamente del archivo Excel (sin consultar SQL)."""
         if wb is None:
             self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return []
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
 
-        nombre_maestro = self._encontrar_hoja_maestro(wb)
-        ws_m = wb[nombre_maestro]
-        col_nom = self._obtener_columna_nombres(grado, wb=wb)
-        ws_planilla = None
-        if self.modalidad == "premedia":
-            for sheet in wb.sheetnames:
-                if "Planilla" in sheet and grado.replace("°","") in sheet:
-                    ws_planilla = wb[sheet]
-                    break
-        estudiantes = []
-        for r in range(5, 46):
-            nom = ws_m.cell(row=r, column=col_nom).value
-            if nom:
-                cedula = ""
-                if self.modalidad == "primaria":
-                    cedula = ws_m.cell(row=r, column=5).value
-                elif ws_planilla:
-                    fila_plan = 15 + (r - 4) 
-                    cedula = ws_planilla.cell(row=fila_plan, column=5).value
-                estudiantes.append({"id": r - 4, "nombre": str(nom).strip(), "cedula": str(cedula).strip() if cedula else ""})
+        try:
+            nombre_maestro = self._encontrar_hoja_maestro(wb)
+            ws_m = wb[nombre_maestro]
+            col_nom = self._obtener_columna_nombres(grado, wb=wb)
+            ws_planilla = None
+            if self.modalidad == "premedia":
+                for sheet in wb.sheetnames:
+                    if "Planilla" in sheet and grado.replace("°", "") in sheet:
+                        ws_planilla = wb[sheet]
+                        break
+            estudiantes = []
+            for r in range(5, 46):
+                nom = ws_m.cell(row=r, column=col_nom).value
+                if nom:
+                    cedula = ""
+                    if self.modalidad == "primaria":
+                        cedula = ws_m.cell(row=r, column=5).value
+                    elif ws_planilla:
+                        fila_plan = 15 + (r - 4)
+                        cedula = ws_planilla.cell(row=fila_plan, column=5).value
+                    estudiantes.append({
+                        "id": r - 4,
+                        "nombre": str(nom).strip(),
+                        "cedula": str(cedula).strip() if cedula else "",
+                        "sexo": "M"
+                    })
+            return estudiantes
+        finally:
+            if should_close:
+                wb.close()
 
-        if should_close: wb.close()
-        return estudiantes
+    def obtener_estudiantes_completos(self, grado, wb=None):
+        # 1. Intentar cargar desde SQLite y descifrar columnas
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (grado, "A", self.modalidad))
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                cursor.execute("SELECT id, nombre, cedula, sexo FROM estudiantes WHERE grado_id = ? AND estado = 'Activo' ORDER BY CAST(id AS INTEGER);", (grado_id,))
+                rows = cursor.fetchall()
+                if rows:
+                    estudiantes = []
+                    for r in rows:
+                        est_id = int(r[0]) if str(r[0]).isdigit() else r[0]
+                        nom_desc = self.db_manager.desencriptar_campo(r[1])
+                        ced_desc = self.db_manager.desencriptar_campo(r[2])
+                        sex_desc = self.db_manager.desencriptar_campo(r[3]) or "M"
+                        estudiantes.append({
+                            "id": est_id,
+                            "nombre": nom_desc,
+                            "cedula": ced_desc,
+                            "sexo": sex_desc
+                        })
+                    return estudiantes
+        except Exception as e:
+            logger.error(f"Error cargando estudiantes desde SQL: {e}")
 
-    def agregar_estudiante(self, grado, nombre, cedula="", sexo=""):
+        # Fallback a Excel
+        return self._obtener_estudiantes_desde_excel(grado, wb=wb)
+
+    def agregar_estudiante(self, grado, nombre, cedula="", sexo="M"):
         if not os.path.exists(self.ruta): return False
+
+        # Sanitizar entrada para evitar espacios raros, saltos de línea y tabulaciones (Tarea 13)
+        nombre = sanitizar_entrada(nombre)
+        cedula = sanitizar_entrada(cedula)
 
         # Validar limites
         max_estudiantes = 34 if self.modalidad == "primaria" else 36
@@ -635,6 +1084,29 @@ class DataEngine:
                     ws_p.cell(row=15+id_est, column=5).value = cedula
         self._save_wb(wb)
         wb.close()
+
+        # Sincronizar a SQLite
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, 'A', ?);", (grado, self.modalidad))
+            self.db_conn.commit()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                est_id = str(fila_vacia - 4)
+                nombre_cifrado = self.db_manager.encriptar_campo(nombre)
+                cedula_cifrada = self.db_manager.encriptar_campo(cedula)
+                sexo_cifrado = self.db_manager.encriptar_campo(sexo)
+                cursor.execute(
+                    "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                    (est_id, nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                )
+                self.db_conn.commit()
+                self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error guardando estudiante en SQLite: {e}")
+
         self._cargar_en_memoria()
         return True
 
@@ -643,7 +1115,17 @@ class DataEngine:
         wb = openpyxl.load_workbook(self.ruta)
         ws_m = wb[self._encontrar_hoja_maestro(wb)]
         col_nom = self._obtener_columna_nombres(grado)
+        
+        # Sanitizar datos modificados
+        datos_sanos = {}
         for id_est, datos in datos_modificados.items():
+            datos_sanos[id_est] = {
+                "nombre": sanitizar_entrada(datos["nombre"]),
+                "cedula": sanitizar_entrada(datos.get("cedula", "")),
+                "sexo": datos.get("sexo", "M")
+            }
+
+        for id_est, datos in datos_sanos.items():
             fila = 4 + int(id_est)
             ws_m.cell(row=fila, column=col_nom).value = datos["nombre"]
             if self.modalidad == "primaria": ws_m.cell(row=fila, column=5).value = datos["cedula"]
@@ -655,6 +1137,27 @@ class DataEngine:
                         ws_p.cell(row=15+int(id_est), column=5).value = datos["cedula"]
         self._save_wb(wb)
         wb.close()
+
+        # Sincronizar a SQLite
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                for id_est, datos in datos_sanos.items():
+                    nombre_cifrado = self.db_manager.encriptar_campo(datos["nombre"])
+                    cedula_cifrada = self.db_manager.encriptar_campo(datos.get("cedula", ""))
+                    sexo_cifrado = self.db_manager.encriptar_campo(datos.get("sexo", "M"))
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                        (str(id_est), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                    )
+                self.db_conn.commit()
+                self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error actualizando estudiantes en SQLite: {e}")
+
         self._cargar_en_memoria()
         return True
 
@@ -1212,31 +1715,23 @@ class DataEngine:
 
         honor = f"{best_student} ({best_prom:.2f})" if best_prom > 0.0 else "N/A"
 
-        # Conteo de habitos y actitudes
+        # Conteo de habitos y actitudes desde SQLite (Tarea 12, 19)
         s_count = 0
         r_count = 0
         x_count = 0
         try:
-            import json
-            ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
-            if os.path.exists(ruta_json):
-                with open(ruta_json, "r", encoding="utf-8") as f:
-                    habitos_data = json.load(f)
-                grados_activos = self.obtener_grados_activos(wb=wb)
-                for key, val_entry in habitos_data.items():
-                    grade_part = key.split("::")[0]
-                    if any(g.replace("°","") in grade_part.replace("°","") for g in grados_activos):
-                        est_evals = val_entry.get("estudiantes", {})
-                        for est_id, crit_vals in est_evals.items():
-                            for score in crit_vals.values():
-                                if score == "S":
-                                    s_count += 1
-                                elif score == "R":
-                                    r_count += 1
-                                elif score == "X":
-                                    x_count += 1
+            if hasattr(self, "db_conn") and self.db_conn:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT nota, COUNT(*) FROM habitos GROUP BY nota;")
+                for nota, cnt in cursor.fetchall():
+                    if nota == "S":
+                        s_count = cnt
+                    elif nota == "R":
+                        r_count = cnt
+                    elif nota == "X":
+                        x_count = cnt
         except Exception as e:
-            print(f"Error calculating habits stats in dashboard: {e}")
+            print(f"Error calculating habits stats from SQLite: {e}")
 
         return {
             "total": total,
@@ -1320,6 +1815,30 @@ class DataEngine:
             fila_excel = 4 + int(id_estudiante)
             try: ws.cell(row=fila_excel, column=col_vacia).value = nota
             except AttributeError: pass
+            
+        # Sincronizar a SQLite
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (grado, "A", self.modalidad))
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+                row_m = cursor.fetchone()
+                if row_m:
+                    materia_id = row_m[0]
+                    trim_num = int(trimestre.replace("Trimestre ", ""))
+                    for id_estudiante, val_nota in dic_notas.items():
+                        cursor.execute(
+                            """INSERT OR REPLACE INTO notas (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha)
+                            VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                            (str(id_estudiante), materia_id, trim_num, tipo_nota, desc, float(val_nota) if val_nota is not None else None, str(fecha))
+                        )
+                    self.db_conn.commit()
+                    self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error guardando notas en SQLite: {e}")
+
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1411,6 +1930,43 @@ class DataEngine:
             try: ws.cell(row=fila_excel, column=columna).value = nota
             except AttributeError: continue
 
+        # Sincronizar a SQLite
+        try:
+            desc = ws.cell(row=self.fila_desc, column=columna).value
+            fecha = ws.cell(row=4, column=columna).value or "01-01"
+            if desc:
+                desc_limpia = str(desc).replace('\n', ' ').strip()
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (grado, "A", self.modalidad))
+                row_g = cursor.fetchone()
+                if row_g:
+                    grado_id = row_g[0]
+                    cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+                    row_m = cursor.fetchone()
+                    if row_m:
+                        materia_id = row_m[0]
+                        for id_estudiante, val_nota in dic_notas.items():
+                            cursor.execute(
+                                """SELECT id FROM notas WHERE estudiante_id = ? AND materia_id = ? AND descripcion = ?;""",
+                                (str(id_estudiante), materia_id, desc_limpia)
+                            )
+                            row_n = cursor.fetchone()
+                            if row_n:
+                                cursor.execute(
+                                    "UPDATE notas SET valor = ?, fecha = ? WHERE id = ?;",
+                                    (float(val_nota) if val_nota is not None else None, str(fecha), row_n[0])
+                                )
+                            else:
+                                cursor.execute(
+                                    """INSERT INTO notas (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha)
+                                    VALUES (?, ?, 1, 'Diaria / Parcial', ?, ?, ?);""",
+                                    (str(id_estudiante), materia_id, desc_limpia, float(val_nota) if val_nota is not None else None, str(fecha))
+                                )
+                        self.db_conn.commit()
+                        self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error actualizando notas en SQLite: {e}")
+
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1499,6 +2055,21 @@ class DataEngine:
             celda = ws.cell(row=fila_excel, column=col_vacia)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
+
+        # Sincronizar a SQLite
+        try:
+            cursor = self.db_conn.cursor()
+            for id_estudiante, datos in dic_asistencia.items():
+                cursor.execute(
+                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado)
+                    VALUES (?, ?, ?);""",
+                    (str(id_estudiante), str(fecha), datos["estado"])
+                )
+            self.db_conn.commit()
+            self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error guardando asistencia en SQLite: {e}")
+
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1516,11 +2087,27 @@ class DataEngine:
         mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
         fila_fechas = mapa_trimestres.get(trimestre, 2)
         fuente_meduca = Font(name='Calibri', size=9, bold=True)
+        fecha = ws.cell(row=fila_fechas, column=columna).value or "01-01"
         for id_estudiante, datos in dic_asistencia.items():
             fila_excel = fila_fechas + int(id_estudiante)
             celda = ws.cell(row=fila_excel, column=columna)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
+
+        # Sincronizar a SQLite
+        try:
+            cursor = self.db_conn.cursor()
+            for id_estudiante, datos in dic_asistencia.items():
+                cursor.execute(
+                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado)
+                    VALUES (?, ?, ?);""",
+                    (str(id_estudiante), str(fecha), datos["estado"])
+                )
+            self.db_conn.commit()
+            self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.error(f"Error actualizando asistencia en SQLite: {e}")
+
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()

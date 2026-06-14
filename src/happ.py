@@ -274,6 +274,54 @@ class ReportesFrame(ctk.CTkFrame):
                 prom = sum(m["nota"] for m in materias if m["nota"] > 0) / len([m for m in materias if m["nota"] > 0]) if any(m["nota"] > 0 for m in materias) else 0
                 trimestres[t_key] = {"materias": materias, "promedio": round(prom, 1)}
             
+            # Promedio global
+            proms = [trimestres[tk]["promedio"] for tk in trimestres if trimestres[tk].get("promedio")]
+            prom_global = 3.0
+            estado_final = "EN PROCESO"
+            if proms:
+                prom_global = round(sum(proms) / len(proms), 1)
+                estado_final = "APROBADO" if prom_global >= 3.0 else "REPROBADO"
+
+            # Generar sugerencia/observación dinámica de rendimiento, asistencia y hábitos (Tarea 23)
+            ausencias = 0
+            tardanzas = 0
+            try:
+                stats_asistencia = self.engine.obtener_estadisticas_asistencia(grado, "Todos", est["id"])
+                ausencias = stats_asistencia.get("ausencias", 0)
+                tardanzas = stats_asistencia.get("tardanzas", 0)
+            except Exception:
+                pass
+                
+            habitos_negativos = []
+            try:
+                cursor = self.engine.db_conn.cursor()
+                cursor.execute("SELECT criterio_codigo, nota FROM habitos WHERE estudiante_id = ?;", (str(est["id"]),))
+                for crit, nota in cursor.fetchall():
+                    if nota in ["R", "X"]:
+                        habitos_negativos.append(crit)
+            except Exception:
+                pass
+                
+            obs_text = ""
+            if prom_global >= 4.5:
+                obs_text += f"El estudiante demuestra un desempeño sobresaliente con un promedio general de {prom_global:.1f}."
+            elif prom_global >= 3.0:
+                obs_text += f"El estudiante mantiene un rendimiento satisfactorio con un promedio de {prom_global:.1f}."
+            else:
+                obs_text += f"El estudiante presenta dificultades de aprendizaje con un promedio de {prom_global:.1f}."
+                
+            if ausencias > 2:
+                obs_text += f" Se le exhorta a asistir con mayor regularidad (registra {ausencias} ausencias)."
+            elif tardanzas > 3:
+                obs_text += f" Debe corregir la puntualidad (registra {tardanzas} tardanzas)."
+                
+            if habitos_negativos:
+                habs_unicos = sorted(list(set(habitos_negativos)))
+                obs_text += f" Asimismo, se recomienda reforzar hábitos y actitudes como: {', '.join(habs_unicos)}."
+            else:
+                if prom_global >= 4.5 and ausencias == 0:
+                    obs_text += " ¡Felicitaciones por su impecable conducta y asistencia!"
+
             datos = {
                 "alumno":          est["nombre"],
                 "cedula":          est.get("cedula", ""),
@@ -283,15 +331,9 @@ class ReportesFrame(ctk.CTkFrame):
                 "ano_lectivo":     cfg.get("ano_lectivo", "2026"),
                 "fecha":           datetime.datetime.now().strftime("%d-%m-%Y"),
                 "trimestres":      trimestres,
-                "observacion_general": "",
-                "estado_final":    "EN PROCESO"
+                "observacion_general": obs_text,
+                "estado_final":    estado_final
             }
-            
-            # Promedio global
-            proms = [trimestres[tk]["promedio"] for tk in trimestres if trimestres[tk].get("promedio")]
-            if proms:
-                prom_global = sum(proms) / len(proms)
-                datos["estado_final"] = "APROBADO" if prom_global >= 3.0 else "REPROBADO"
             
             ruta = generar_informe_calificaciones(datos)
             if ruta:

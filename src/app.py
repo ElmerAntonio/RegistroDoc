@@ -1,6 +1,12 @@
 import os
-from config import BASE_DIR
 import sys
+try:
+    from anti_analysis import run_anti_analysis_checks
+    run_anti_analysis_checks()
+except Exception:
+    pass
+
+from config import BASE_DIR
 import ctypes
 import json
 import tkinter as tk
@@ -463,7 +469,7 @@ class RegistroDocApp(ctk.CTk):
         archivo = ("Registro_Primaria.xlsx"
                    if modalidad_inicial == "primaria"
                    else "Registro_Premedia.xlsx")
-        ruta    = os.path.join(BASE_DIR, "..", archivo)
+        ruta    = os.path.join(BASE_DIR, "..", "assets", "templates", archivo)
         self.engine = DataEngine(ruta_excel=ruta, modalidad=modalidad_inicial)
 
         # Contenedor raíz
@@ -476,6 +482,9 @@ class RegistroDocApp(ctk.CTk):
 
         # ─── ATAJOS DE TECLADO GLOBALES ───
         self._registrar_atajos()
+
+        # ─── AUTO-BLOQUEO POR INACTIVIDAD ───
+        self._iniciar_inactividad_check()
 
         # ─── AUTO-BACKUP CADA 30 MIN ───
         self._iniciar_auto_backup()
@@ -674,12 +683,102 @@ class RegistroDocApp(ctk.CTk):
             "<Control-Key-9>": lambda e: self.mostrar_impresion(),
             "<F1>": lambda e: self.mostrar_ayuda(),
             "<Escape>": lambda e: self.mostrar_dashboard(),
+            "<Control-Key-s>": lambda e: self.ejecutar_atajo_guardar(),
+            "<Control-Key-S>": lambda e: self.ejecutar_atajo_guardar(),
+            "<Control-Key-e>": lambda e: self.ejecutar_atajo_exportar(),
+            "<Control-Key-E>": lambda e: self.ejecutar_atajo_exportar(),
         }
         for atajo, cmd in atajos.items():
             try:
                 self.bind(atajo, cmd)
             except Exception:
                 pass
+
+    def ejecutar_atajo_guardar(self):
+        # Encontrar frame activo (Tarea 17)
+        for class_name, f in self._frames.items():
+            try:
+                if f.winfo_exists() and f.winfo_viewable():
+                    if class_name == "NotasAsistenciaFrame":
+                        active_tab = f.tabview.get()
+                        if active_tab == "Notas":
+                            f.frame_notas.guardar_notas()
+                        elif active_tab == "Asistencia":
+                            f.frame_asistencia.guardar_asistencia()
+                    elif class_name == "ObservacionesFrame":
+                        f.guardar_observacion()
+                    elif class_name == "HabitosFrame":
+                        f.guardar_habitos()
+            except Exception as e:
+                print(f"[!] Error ejecutando guardar por atajo: {e}")
+
+    def ejecutar_atajo_exportar(self):
+        # Enrutar a reportes (Tarea 17)
+        self.mostrar_reportes()
+
+    def _iniciar_inactividad_check(self):
+        if self._destroyed:
+            return
+        try:
+            from anti_analysis import get_inactivity_time
+            inactivo_segundos = get_inactivity_time()
+            # Si supera 300 segundos (5 minutos) y no está ya bloqueada, bloquear la app
+            if inactivo_segundos >= 300 and not getattr(self, "_bloqueado", False):
+                self._bloquear_aplicacion()
+        except Exception:
+            pass
+        self.after(5000, self._iniciar_inactividad_check)
+
+    def _bloquear_aplicacion(self):
+        self._bloqueado = True
+        
+        # Capturar todos los eventos de teclado para deshabilitar atajos y navegación
+        def bloquear_evento(e):
+            return "break"
+        self.bind_all("<Key>", bloquear_evento)
+        
+        # Crear frame de bloqueo superpuesto a pantalla completa
+        self.frame_bloqueo = ctk.CTkFrame(self, fg_color="#0A141D")
+        self.frame_bloqueo.place(relx=0, rely=0, relwidth=1, relheight=1)
+        
+        from theme import C, FONT_TITLE, FONT_BODY
+        # Elementos del frame de bloqueo
+        lbl_titulo = ctk.CTkLabel(self.frame_bloqueo, text="🔒 APLICACIÓN BLOQUEADA POR INACTIVIDAD", font=(FONT_TITLE, 20, "bold"), text_color=C["rojo"])
+        lbl_titulo.pack(pady=(180, 20))
+        
+        lbl_instrucciones = ctk.CTkLabel(self.frame_bloqueo, text="Para reanudar su sesión de forma segura, ingrese su Cédula:", font=(FONT_BODY, 13), text_color=C["texto_sec"])
+        lbl_instrucciones.pack(pady=10)
+        
+        self.entry_cedula_lock = ctk.CTkEntry(self.frame_bloqueo, show="*", width=250, placeholder_text="Ingrese su Cédula")
+        self.entry_cedula_lock.pack(pady=10)
+        self.entry_cedula_lock.focus_force()
+        
+        # Permitir presionar Enter para desbloquear
+        self.entry_cedula_lock.bind("<Return>", lambda e: self._intentar_desbloquear())
+        
+        btn_desbloquear = ctk.CTkButton(self.frame_bloqueo, text="🔓 Desbloquear", fg_color=C["cian"], hover_color=C["verde"], command=self._intentar_desbloquear)
+        btn_desbloquear.pack(pady=10)
+        
+        self.lbl_error_lock = ctk.CTkLabel(self.frame_bloqueo, text="", text_color=C["rojo"], font=(FONT_BODY, 12, "bold"))
+        self.lbl_error_lock.pack(pady=5)
+
+    def _intentar_desbloquear(self):
+        cedula_ingresada = self.entry_cedula_lock.get().strip()
+        
+        # Cargar cédula configurada
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        cedula_correcta = cfg.get("docente_cedula", "").strip()
+        
+        if not cedula_correcta or cedula_ingresada == cedula_correcta:
+            # Desbloquear
+            self._bloqueado = False
+            self.unbind_all("<Key>")
+            self._registrar_atajos() # Restaurar atajos
+            self.frame_bloqueo.destroy()
+        else:
+            self.lbl_error_lock.configure(text="Cédula incorrecta. Intente de nuevo.")
+            self.entry_cedula_lock.delete(0, "end")
 
     # ─── AUTO-BACKUP ───────────────────────────────────────────────
     def _iniciar_auto_backup(self):
@@ -701,6 +800,13 @@ class RegistroDocApp(ctk.CTk):
 
     def _ejecutar_auto_backup(self):
         import shutil, datetime
+        try:
+            # 1. Respaldar base de datos SQLite cifrada (Tarea 15)
+            if hasattr(self.engine, "db_manager"):
+                self.engine.db_manager.respaldar_base_datos()
+        except Exception:
+            pass
+
         try:
             ruta_original = self.engine.ruta
             if not os.path.exists(ruta_original):
@@ -799,17 +905,22 @@ if __name__ == "__main__":
     cargar_config_segura({})
 
     if not os.path.exists(CONFIG_FILE):
-        # Inicializar automáticamente con un perfil de prueba/demostración
-        # para evitar pedir credenciales al iniciar por primera vez.
-        cfg = {
-            "modalidad": "premedia",
-            "docente_nombre": "Docente de Prueba",
-            "docente_cedula": "8-000-0000",
-            "escuela_nombre": "Escuela de Prueba",
-            "escuela_region": "Comarca Ngäbe Buglé",
-            "ano_lectivo": "2026"
-        }
-        guardar_config_segura(cfg)
-        iniciar_programa_principal()
+        try:
+            from setup import SetupWizard
+            wizard = SetupWizard()
+            wizard.mainloop()
+            if os.path.exists(CONFIG_FILE):
+                iniciar_programa_principal()
+        except Exception as e:
+            cfg = {
+                "modalidad": "premedia",
+                "docente_nombre": "Docente de Prueba",
+                "docente_cedula": "8-000-0000",
+                "escuela_nombre": "Escuela de Prueba",
+                "escuela_region": "Comarca Ngäbe Buglé",
+                "ano_lectivo": "2026"
+            }
+            guardar_config_segura(cfg)
+            iniciar_programa_principal()
     else:
         iniciar_programa_principal()

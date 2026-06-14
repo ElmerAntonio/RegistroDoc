@@ -1125,19 +1125,8 @@ class NotasFrame(ctk.CTkFrame):
         if pts > max_puntos:
             pts = max_puntos
             
-        p_aprob = exigencia * max_puntos
-        
-        if pts < p_aprob:
-            if p_aprob == 0:
-                nota = 3.0
-            else:
-                nota = 1.0 + 2.0 * (pts / p_aprob)
-        else:
-            den = max_puntos - p_aprob
-            if den == 0:
-                nota = 5.0
-            else:
-                nota = 3.0 + 2.0 * ((pts - p_aprob) / den)
+        # Fórmula directa: (Puntos Obtenidos / Puntos Máximos) * 4 + 1
+        nota = (pts / max_puntos) * 4.0 + 1.0
                 
         nota = round(nota, 1)
         if nota < 1.0:
