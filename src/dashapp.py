@@ -129,6 +129,11 @@ class DashboardFrame(ctk.CTkFrame):
         # Asistente y Alertas del Docente
         self._asistente_docente(panel)
 
+        # Distribución M/F/Retirados
+        self._dist_container = ctk.CTkFrame(panel, fg_color="transparent")
+        self._dist_container.pack(fill="x")
+        self._panel_distribucion_sexo(self._dist_container)
+
         # Gráficas
         self._graficas_container = ctk.CTkFrame(panel, fg_color="transparent")
         self._graficas_container.pack(fill="x")
@@ -140,7 +145,9 @@ class DashboardFrame(ctk.CTkFrame):
     # ── Marca de agua ──────────────────────────────────────────────────
     def _marca_agua(self, parent):
         """Canvas con texto PANAMÁ muy tenue como marca de agua."""
-        cv = tk.Canvas(parent, bg=C["fondo"], height=0,
+        from theme import obtener_color_por_modo
+        bg_col = obtener_color_por_modo(C["fondo"])
+        cv = tk.Canvas(parent, bg=bg_col, height=0,
                        highlightthickness=0, bd=0)
         cv.pack(fill="x")
         # Se dibuja sobre toda la pantalla con place desde el panel principal
@@ -198,8 +205,8 @@ class DashboardFrame(ctk.CTkFrame):
 
         materia, rango, dia = obtener_clase_actual(horario)
 
-        frame = ctk.CTkFrame(parent, fg_color="#0F2744", corner_radius=10,
-                             border_width=1, border_color="#1E3A5F")
+        frame = ctk.CTkFrame(parent, fg_color=C["card"], corner_radius=10,
+                             border_width=1, border_color=C["borde"])
         frame.pack(fill="x", padx=24, pady=(8, 4))
 
         inner = ctk.CTkFrame(frame, fg_color="transparent")
@@ -263,8 +270,8 @@ class DashboardFrame(ctk.CTkFrame):
         if not pendientes:
             return
 
-        frame = ctk.CTkFrame(parent, fg_color="#0F2744", corner_radius=10,
-                             border_width=1, border_color="#1E3A5F")
+        frame = ctk.CTkFrame(parent, fg_color=C["card"], corner_radius=10,
+                             border_width=1, border_color=C["borde"])
         frame.pack(fill="x", padx=24, pady=(8, 4))
 
         # Header
@@ -702,7 +709,58 @@ class DashboardFrame(ctk.CTkFrame):
             pb.pack(fill="x")
             pb.set(pct / 100.0)
 
-    # ── Gráficas ─────────────────────────────────────────────────────────
+    # ── Distribución de Estudiantes M/F/Retirados ────────────────────────
+    def _panel_distribucion_sexo(self, parent):
+        """Tarjeta de distribución de estudiantes por sexo y estado."""
+        try:
+            dist = self.engine.obtener_distribucion_sexo_estado()
+        except Exception:
+            dist = {"masculino": 0, "femenino": 0, "retirados": 0, "total": 0}
+
+        total = dist.get("total", 0)
+        masc  = dist.get("masculino", 0)
+        fem   = dist.get("femenino", 0)
+        ret   = dist.get("retirados", 0)
+
+        card = ctk.CTkFrame(parent, fg_color=C["card"],
+                            border_width=1, border_color=C["borde"],
+                            corner_radius=12)
+        card.pack(fill="x", padx=20, pady=(6, 10))
+
+        ctk.CTkLabel(card, text="👥 Distribución de Estudiantes",
+                     font=ctk.CTkFont("Segoe UI", 14, "bold"),
+                     text_color=C["cian"]).pack(anchor="w", padx=20, pady=(14, 8))
+
+        cols = ctk.CTkFrame(card, fg_color="transparent")
+        cols.pack(fill="x", padx=20, pady=(0, 16))
+        cols.columnconfigure((0, 1, 2, 3), weight=1, uniform="dist_col")
+
+        def _bar(parent_col, label, count, color):
+            pct = (count / total) if total > 0 else 0
+            ctk.CTkLabel(parent_col, text=label,
+                         font=ctk.CTkFont("Segoe UI", 12, "bold"),
+                         text_color=C["texto"]).pack(anchor="w")
+            ctk.CTkLabel(parent_col,
+                         text=f"{count} alumno{'s' if count != 1 else ''} ({pct*100:.0f}%)",
+                         font=ctk.CTkFont("Segoe UI", 11),
+                         text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 5))
+            pb = ctk.CTkProgressBar(parent_col, progress_color=color,
+                                    fg_color=C["borde"], height=10, corner_radius=5)
+            pb.pack(fill="x")
+            pb.set(pct)
+
+        metrics = [
+            ("🧑 Masculino",  masc, "#3B82F6"),
+            ("👩 Femenino",   fem,  "#EC4899"),
+            ("🚪 Retirados",  ret,  "#F97316"),
+            ("📋 Total",      total, C["cian"]),
+        ]
+        for col_idx, (lbl, cnt, clr) in enumerate(metrics):
+            col_f = ctk.CTkFrame(cols, fg_color="transparent")
+            col_f.grid(row=0, column=col_idx, padx=10, pady=4, sticky="nsew")
+            _bar(col_f, lbl, cnt, clr)
+
+    # ── Gráficas ──────────────────────────────────────────────────
     def _graficas(self, parent):
         self._graph_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self._graph_frame.pack(fill="x", padx=20, pady=6)
@@ -727,10 +785,14 @@ class DashboardFrame(ctk.CTkFrame):
                      text_color=C["texto_sec"]).pack(anchor="w", padx=16)
 
         # Matplotlib
+        from theme import obtener_C_res, obtener_color_por_modo
+        C_res = obtener_C_res()
+        acento_res = obtener_color_por_modo(self._acento)
+
         fig = Figure(figsize=(5.4, 2.8), dpi=96,
-                     facecolor=C["card"])
+                     facecolor=C_res["card"])
         ax = fig.add_subplot(111)
-        ax.set_facecolor(C["card"])
+        ax.set_facecolor(C_res["card"])
         fig.subplots_adjust(left=0.1, right=0.97, top=0.92, bottom=0.16)
 
         grados = self.engine.obtener_grados_activos()
@@ -753,11 +815,11 @@ class DashboardFrame(ctk.CTkFrame):
                 y_points.append(round(sum(notas_t)/len(notas_t), 2))
 
         if x_points:
-            ax.plot(x_points, y_points, color=self._acento, linewidth=2.2, label="Promedio Grupal",
+            ax.plot(x_points, y_points, color=acento_res, linewidth=2.2, label="Promedio Grupal",
                     zorder=3, solid_capstyle="round")
-            ax.fill_between(x_points, y_points, alpha=0.12, color=self._acento)
-            ax.scatter(x_points, y_points, color=self._acento, s=55, zorder=5,
-                       edgecolors=C["fondo"], linewidths=1.5)
+            ax.fill_between(x_points, y_points, alpha=0.12, color=acento_res)
+            ax.scatter(x_points, y_points, color=acento_res, s=55, zorder=5,
+                       edgecolors=C_res["fondo"], linewidths=1.5)
 
         if getattr(self, "_current_student", None):
             student_name = self._current_student["nombre"]
@@ -773,21 +835,21 @@ class DashboardFrame(ctk.CTkFrame):
                     x_indiv.append(idx)
                     y_indiv.append(round(sum(student_notes)/len(student_notes), 2))
             if x_indiv:
-                ax.plot(x_indiv, y_indiv, color=C["amarillo"], linewidth=2.2, label=student_name[:12],
+                ax.plot(x_indiv, y_indiv, color=C_res["amarillo"], linewidth=2.2, label=student_name[:12],
                         zorder=4, linestyle="--")
-                ax.scatter(x_indiv, y_indiv, color=C["amarillo"], s=60, zorder=6,
-                           edgecolors=C["fondo"], linewidths=1.5)
-                ax.legend(loc="upper left", facecolor=C["fondo"], edgecolor=C["borde"], labelcolor=C["texto"], fontsize=8)
+                ax.scatter(x_indiv, y_indiv, color=C_res["amarillo"], s=60, zorder=6,
+                           edgecolors=C_res["fondo"], linewidths=1.5)
+                ax.legend(loc="upper left", facecolor=C_res["fondo"], edgecolor=C_res["borde"], labelcolor=C_res["texto"], fontsize=8)
 
         font_mult = 1.0
         ax.set_xlim(0.7, 3.3)
         ax.set_ylim(1, 5.2)
-        ax.set_xlabel("Trimestres", color=C["texto_sec"], fontsize=int(9 * font_mult))
-        ax.set_ylabel("Notas 1–5", color=C["texto_sec"], fontsize=int(9 * font_mult))
-        ax.tick_params(colors=C["texto_sec"], labelsize=int(8 * font_mult))
+        ax.set_xlabel("Trimestres", color=C_res["texto_sec"], fontsize=int(9 * font_mult))
+        ax.set_ylabel("Notas 1–5", color=C_res["texto_sec"], fontsize=int(9 * font_mult))
+        ax.tick_params(colors=C_res["texto_sec"], labelsize=int(8 * font_mult))
         for spine in ax.spines.values():
-            spine.set_edgecolor(C["borde"])
-        ax.grid(True, color=C["borde"], linewidth=0.5, alpha=0.6)
+            spine.set_edgecolor(C_res["borde"])
+        ax.grid(True, color=C_res["borde"], linewidth=0.5, alpha=0.6)
         ax.set_xticks(x)
         ax.set_xticklabels(x_labels)
 
@@ -809,10 +871,15 @@ class DashboardFrame(ctk.CTkFrame):
                      font=ctk.CTkFont("Segoe UI", 10),
                      text_color=C["texto_sec"]).pack(anchor="w", padx=16)
 
+        # Matplotlib
+        from theme import obtener_C_res, obtener_color_por_modo
+        C_res = obtener_C_res()
+        acento_res = obtener_color_por_modo(self._acento)
+
         fig2 = Figure(figsize=(3.2, 2.8), dpi=96,
-                      facecolor=C["card"])
+                      facecolor=C_res["card"])
         ax2 = fig2.add_subplot(111)
-        ax2.set_facecolor(C["card"])
+        ax2.set_facecolor(C_res["card"])
         fig2.subplots_adjust(left=0.14, right=0.97, top=0.9, bottom=0.18)
 
         grados = self.engine.obtener_grados_activos()
@@ -830,19 +897,19 @@ class DashboardFrame(ctk.CTkFrame):
             else:
                 valores.append(1.0)
 
-        colores  = [self._acento] * len(grados)
+        colores  = [acento_res] * len(grados)
 
         ax2.bar(grados, valores, color=colores, width=0.6,
-                edgecolor=C["fondo"], linewidth=0.8)
+                edgecolor=C_res["fondo"], linewidth=0.8)
 
         font_mult = 1.0
         ax2.set_ylim(1, 5.3)
-        ax2.tick_params(colors=C["texto_sec"], labelsize=int(8 * font_mult))
+        ax2.tick_params(colors=C_res["texto_sec"], labelsize=int(8 * font_mult))
         for spine in ax2.spines.values():
-            spine.set_edgecolor(C["borde"])
-        ax2.grid(True, axis="y", color=C["borde"],
+            spine.set_edgecolor(C_res["borde"])
+        ax2.grid(True, axis="y", color=C_res["borde"],
                  linewidth=0.5, alpha=0.5)
-        ax2.set_ylabel("Promedio", color=C["texto_sec"], fontsize=int(8 * font_mult))
+        ax2.set_ylabel("Promedio", color=C_res["texto_sec"], fontsize=int(8 * font_mult))
 
         canvas2 = FigureCanvasTkAgg(fig2, master=card)
         canvas2.draw()
@@ -960,9 +1027,11 @@ class DashboardFrame(ctk.CTkFrame):
                     initialfile=f"Registro_Oficial_{grados[0].replace('°', '')}.xlsx"
                 )
                 if res_path:
-                    import shutil
-                    shutil.copy2(self.engine.ruta, res_path)
-                    messagebox.showinfo("Exportar Excel", f"El Registro Oficial de Excel ha sido exportado con éxito a:\n{res_path}")
+                    exito = self.engine.exportar_todo_a_excel(res_path)
+                    if exito:
+                        messagebox.showinfo("Exportar Excel", f"El Registro Oficial de Excel ha sido exportado con éxito a:\n{res_path}")
+                    else:
+                        messagebox.showerror("Error", "Ocurrió un error al exportar la información al archivo de Excel.")
             elif formato == "docx":
                 from docx import Document
                 doc = Document()

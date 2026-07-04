@@ -1,472 +1,520 @@
-# ══════════════════════════════════════════════════════════════════
-#       MANUAL DE USUARIO — RegistroDoc Pro v3.0 (2026)
-#       Guía Completa para el Docente Panameño
-#       Ministerio de Educación (MEDUCA) — Panamá
-# ══════════════════════════════════════════════════════════════════
+## ══════════════════════════════════════════════════════════════════
+##       MANUAL DE USUARIO — RegistroDoc Pro v5.0 (2026)
+##       Guia Completa para el Docente Panameno
+##       Ministerio de Educacion (MEDUCA) — Panama
+## ══════════════════════════════════════════════════════════════════
 
-¡Bienvenido a RegistroDoc Pro! Este programa fue diseñado especialmente
-para docentes panameños que trabajan en áreas donde no hay internet.
-Funciona 100% sin conexión y le ayudará a llevar sus notas, asistencia,
-conducta y hábitos de forma rápida, segura y profesional.  1. Cómo Iniciar el Programa
-  2. Pantalla de Inicio (Dashboard) y Horario
-  3. Módulo de Estudiantes
-  4. Módulo de Notas y Asistencia (Unificado)
-  5. Módulo de Observaciones (Expediente)
-  6. Módulo de Hábitos y Aptitudes
-  7. Módulo de Tareas Programadas        ← ¡NUEVO!
-  8. Módulo de Reportes y Gráficos
-  9. Módulo de Impresión
-  10. Configuración del Sistema
-  11. Atajos de Teclado (Rápidos)
-  12. Copias de Seguridad (Respaldos)
-  13. Reuniones (Actas y Formatos)        ← ¡NUEVO!
-  14. Registro Completo (Matriz Consolidada) ← ¡NUEVO!
-  15. Solución de Problemas Comunes
-  16. Glosario de Términos MEDUCA
-  17. Estructura de Base de Datos y Tablas (SQLTools) ← ¡NUEVO!
-  18. Cumplimiento de Seguridad y Cifrado (Norma ISO) ← ¡NUEVO!
+Bienvenido a RegistroDoc Pro v5.0. Este programa fue disenado para
+docentes panamenos que trabajan en areas sin internet. Funciona 100%
+sin conexion y le ayudara a llevar notas, asistencia, conducta y
+habitos de forma rapida, segura y profesional.
+
+NOVEDADES v5.0:
+  - Arquitectura SQL-First: todos los datos se leen desde SQLite
+  - Numeracion visual 1,2,3... en todas las listas de estudiantes
+  - Navegacion instantanea sin recarga entre modulos
+  - 90 pruebas automatizadas garantizan integridad del sistema
+
+INDICE:
+  1.  Como Iniciar el Programa
+  2.  Pantalla de Inicio (Dashboard)
+  3.  Modulo de Estudiantes
+  4.  Modulo de Calificaciones (Notas)
+  5.  Modulo de Asistencia
+  6.  Modulo de Observaciones (Expediente)
+  7.  Modulo de Habitos y Aptitudes
+  8.  Modulo de Tareas Programadas
+  9.  Modulo de Reportes y Graficos
+  10. Modulo de Registro Completo (Consolidado)
+  11. Modulo de Impresion
+  12. Modulo de Reuniones y Actas
+  13. Configuracion del Sistema
+  14. Atajos de Teclado
+  15. Copias de Seguridad (Respaldos)
+  16. Exportar a Excel
+  17. Solucion de Problemas Comunes
+  18. Glosario de Terminos MEDUCA
+  19. Estructura de Base de Datos (SQLTools)
+  20. Cumplimiento de Seguridad y Cifrado
 
 
 ═══════════════════════════════════════════════════════════════
-  1. CÓMO INICIAR EL PROGRAMA
+  1. COMO INICIAR EL PROGRAMA
 ═══════════════════════════════════════════════════════════════
 
   Paso 1: Busque el icono de RegistroDoc en su escritorio.
-  Paso 2: Haga DOBLE CLIC con el botón izquierdo del ratón.
-  Paso 3: Espere unos segundos mientras se carga.
-  Paso 4: Verá la pantalla azul oscura con el menú a la izquierda.
+  Paso 2: Haga DOBLE CLIC con el boton izquierdo del raton.
+  Paso 3: Espere unos segundos mientras se carga la base de datos.
+  Paso 4: Vera la pantalla principal con el menu a la izquierda.
 
-  IMPORTANTE: Si es la primera vez, el programa le pedirá
+  IMPORTANTE: Si es la primera vez, el programa le pedira
   configurar sus datos (nombre, escuela, grados, materias).
 
+  NOTA TECNICA: El programa descifra automaticamente su base de
+  datos local (SQLite) al iniciar. Todos los datos se leen desde
+  ahi — no desde el archivo Excel.
+
 
 ═══════════════════════════════════════════════════════════════
-  2. PANTALLA DE INICIO (DASHBOARD) Y HORARIO
+  2. PANTALLA DE INICIO (DASHBOARD)
 ═══════════════════════════════════════════════════════════════
 
-  Es lo primero que verá al abrir el programa. Además, en la barra
-  lateral izquierda tendrá siempre visible un widget con la clase actual
-  o la próxima clase según su horario configurado.
+  Es lo primero que vera al abrir el programa.
 
-  ¿Qué muestra el Dashboard?
-  • Tarjetas con el total de alumnos, alumnos en riesgo y
-    el alumno con mejor promedio del salón.
-  • Al buscar un alumno (escribiendo su nombre), las tarjetas, gráficas
-    y la sección de Hábitos y Aptitudes mostrarán información individual.
-  • Frase motivacional del día (versículos y educación).
-  • Tareas pendientes programadas con fechas de vencimiento.
-  • Gráficos de rendimiento académico.
-  • Acciones rápidas: Notas, Asistencia, Respaldo.
+  Que muestra el Dashboard:
+  • Tarjetas con total de alumnos, alumnos en riesgo y
+    el alumno con mejor promedio del salon.
+  • Al buscar un alumno (escribiendo su nombre) las tarjetas
+    y graficas muestran informacion individual.
+  • Frase motivacional del dia.
+  • Tareas pendientes con colores de urgencia.
+  • Graficos de rendimiento academico del trimestre.
+  • Panel de exportacion a Excel (pie de pagina).
+  • Boton de Respaldo rapido.
 
   CONSEJO: Presione Escape en cualquier pantalla para
-  volver aquí rápidamente.
+  volver aqui rapidamente. Use Ctrl+1 desde cualquier modulo.
 
 
 ═══════════════════════════════════════════════════════════════
-  3. MÓDULO DE ESTUDIANTES
+  3. MODULO DE ESTUDIANTES
 ═══════════════════════════════════════════════════════════════
 
   Atajo de teclado: Ctrl+2
 
-  ► AGREGAR un estudiante nuevo:
-    1. Presione "Estudiantes" en el menú izquierdo.
-    2. Escriba: APELLIDO, Nombre (con mayúsculas en apellido).
-    3. Escriba la cédula (opcional).
+  La lista muestra numeracion correlativa (1, 2, 3...).
+  Los IDs internos de la base de datos son invisibles al docente.
+
+  AGREGAR un estudiante nuevo:
+    1. Presione "Estudiantes" en el menu izquierdo.
+    2. Escriba: APELLIDO, Nombre (con mayusculas en apellido).
+    3. Escriba la cedula (opcional, formato 4-123-4567).
     4. Seleccione el sexo y presione "Guardar Nuevo".
+    5. El alumno aparecera numerado al final de la lista.
 
-  ► CORREGIR un nombre:
-    1. Haga clic en la casilla del nombre.
+  CORREGIR un nombre o cedula:
+    1. Haga clic en la casilla del nombre o cedula.
     2. Borre y escriba el correcto.
-    3. Presione "GUARDAR CAMBIOS".
+    3. Presione "GUARDAR MODIFICACIONES DE LA LISTA".
 
-  ► RETIRAR un estudiante:
-    1. Presione el botón rojo (papelera) junto al nombre.
-    2. Confirme presionando "Sí".
+  RETIRAR un estudiante:
+    1. Presione el boton rojo (papelera) junto al nombre.
+    2. Confirme presionando "Si".
 
-  NOTA: El máximo es 36 alumnos por grado (premedia) o
-  34 alumnos (primaria).
+  IMPRIMIR LISTA DE CLASE:
+    1. Presione el boton "Lista de Clase" (esquina superior derecha).
+    2. Se generara un documento Word con el listado oficial.
+
+  NOTA: Maximo 36 alumnos por grado (premedia) o 34 (primaria).
 
 
 ═══════════════════════════════════════════════════════════════
-  4. MÓDULO DE NOTAS Y ASISTENCIA (UNIFICADO)
+  4. MODULO DE CALIFICACIONES (NOTAS)
 ═══════════════════════════════════════════════════════════════
 
-  Atajo de teclado: Ctrl+3 (Notas) / Ctrl+4 (Asistencia)
+  Atajo de teclado: Ctrl+3
 
-  Este módulo unifica el registro de calificaciones y el control de asistencia
-  en una sola pantalla con pestañas para simplificar el flujo de trabajo del maestro.
+  REGISTRAR una nota nueva:
+    1. Seleccione Grado, Materia y Trimestre.
+    2. Elija el Tipo de nota:
+       • Parcial / Diaria  = tareas y talleres (1.0 a 5.0)
+       • Apreciacion       = cuadernos, participacion (1.0 a 5.0)
+       • Examen            = prueba trimestral oficial
+    3. Escriba la Fecha (DD-MM) y Descripcion del trabajo.
+    4. Coloque la nota de cada alumno en su casilla.
+       (Use las teclas Enter / Abajo / Arriba para navegar)
+    5. Presione el boton verde "GUARDAR NUEVA".
+       El guardado se realiza al instante en SQLite.
 
-  ► REGISTRAR una nota nueva (Pestaña "Notas"):
-    1. Seleccione Grado, Materia y Trimestre en la pestaña Notas.
-    2. Elija el Tipo de nota (Parcial/Diaria, Apreciación, Examen).
-    3. Escriba la Fecha (DD-MM) y Descripción del trabajo.
-    4. Coloque la nota de cada alumno (1.0 a 5.0) en su casilla.
-    5. Presione el botón verde "GUARDAR NUEVA".
+  CORREGIR una nota ya guardada:
+    1. Cambie a la pestana "Modificar" dentro de Notas.
+    2. Seleccione la descripcion del trabajo en el desplegable.
+    3. La fecha es NO MODIFICABLE (protege el historial oficial).
+    4. Realice las correcciones y presione "ACTUALIZAR NOTAS".
 
-  ► CORREGIR una nota ya guardada:
-    1. Cambie a la pestaña secundaria "Modificar" dentro de Notas.
-    2. Seleccione la descripción del trabajo, modifique y presione "ACTUALIZAR EXCEL".
+  MODO PUNTOS:
+    - Active "Usar Puntos" para ingresar puntaje obtenido / maximo.
+    - El programa calcula la nota automaticamente.
 
-  ► PASAR LISTA (Pestaña "Asistencia"):
-    1. Seleccione Grado y Trimestre en la pestaña Asistencia.
+
+═══════════════════════════════════════════════════════════════
+  5. MODULO DE ASISTENCIA
+═══════════════════════════════════════════════════════════════
+
+  Atajo de teclado: Ctrl+4
+
+  PASAR LISTA:
+    1. Seleccione Grado y Trimestre.
     2. Escriba la fecha de hoy (DD-MM).
-    3. Presione "Todos Presentes" (¡un solo clic!).
-    4. Corrija SOLO las excepciones:
-       • P = Presente (se guarda como '.' en Excel)
-       • A = Ausente (faltó sin justificación, se guarda como '-')
-       • T = Tardanza (llegó tarde, se guarda como 'T')
-       • E = Excusa (Falta justificada, NO resta puntos, se guarda como 'E')
-    5. Escriba el motivo de cada ausencia/tardanza y presione "GUARDAR ASISTENCIA".
+    3. Presione "Todos Presentes" (un solo clic para marcar el grupo).
+    4. Corrija SOLO las excepciones con la simbologia oficial MEDUCA:
+       • P = Presente   (se guarda como '.' en SQLite)
+       • A = Ausente    (se guarda como '-' en SQLite)
+       • T = Tardanza   (se guarda como 'T' en SQLite)
+       • E = Excusa     (falta justificada, NO resta puntos de asistencia)
+    5. Escriba el motivo de ausencia / tardanza si corresponde.
+    6. Presione "GUARDAR ASISTENCIA".
+
+  MODIFICAR asistencia ya guardada:
+    1. Pestana "Modificar" → seleccione el Trimestre y la Fecha.
+    2. Presione "Cargar a la Lista".
+    3. Edite los estados y presione "ACTUALIZAR".
+
+  NOTA: El sistema genera automaticamente un expediente Word
+  para las ausencias y tardanzas con su justificacion.
 
 
 ═══════════════════════════════════════════════════════════════
-  6. MÓDULO DE OBSERVACIONES (EXPEDIENTE)
+  6. MODULO DE OBSERVACIONES (EXPEDIENTE)
 ═══════════════════════════════════════════════════════════════
 
   Atajo de teclado: Ctrl+5
 
-  ► REGISTRAR una observación:
-    1. Seleccione el Grado
-    2. Haga clic en el nombre del alumno
-    3. Elija la categoría:
+  REGISTRAR una observacion:
+    1. Seleccione el Grado.
+    2. Haga clic en el nombre del alumno.
+    3. Elija la categoria:
        • Conducta         (comportamiento en clase)
-       • Académico         (rendimiento escolar)
-       • Citación          (llamado al acudiente)
-       • Mérito            (reconocimiento positivo)
-    4. Escriba la observación o elija una plantilla
-    5. Presione "GUARDAR EN EXPEDIENTE OFICIAL"
+       • Academico        (rendimiento escolar)
+       • Citacion         (llamado al acudiente)
+       • Merito           (reconocimiento positivo)
+    4. Escriba la observacion o elija una plantilla predefinida.
+    5. Presione "GUARDAR EN EXPEDIENTE OFICIAL".
 
-  El programa crea automáticamente un documento Word (.docx)
-  en la carpeta "Expedientes_Estudiantes" con el historial
-  completo del alumno. ¡Listo para imprimir!
+  El programa guarda la observacion en SQLite Y crea / actualiza
+  automaticamente un documento Word en "Expedientes_Estudiantes"
+  con el historial completo del alumno. Listo para imprimir.
+
+  CORRECTOR ORTOGRAFICO:
+    - Las palabras mal escritas se subrayan en rojo.
+    - Haga clic derecho en una palabra para ver sugerencias.
 
 
 ═══════════════════════════════════════════════════════════════
-  7. MÓDULO DE HÁBITOS Y APTITUDES
+  7. MODULO DE HABITOS Y APTITUDES
 ═══════════════════════════════════════════════════════════════
 
   Atajo de teclado: Ctrl+6
 
-  ► CALIFICAR hábitos:
-    1. Seleccione Grado, Trimestre y Frecuencia
-       • Diario  = califica un día específico
+  CALIFICAR habitos:
+    1. Seleccione Grado, Trimestre y Frecuencia:
+       • Diario  = califica un dia especifico
        • Semanal = califica una semana completa
        • Mensual = califica un mes
-    2. Haga clic en un alumno de la lista
+    2. Haga clic en un alumno de la lista.
     3. Califique cada criterio:
-       • S (Satisfactorio)   → Verde
-       • R (Regular)          → Amarillo
-       • X (No Satisface)    → Rojo
-    4. Use el botón "Sugerencia de IA" para que el
-       sistema analice automáticamente al alumno
-    5. Presione "GUARDAR EVALUACIONES"
+       • S (Satisfactorio)  → Verde
+       • R (Regular)        → Amarillo
+       • X (No Satisface)   → Rojo
+    4. Use el boton "Sugerencia de IA" para analisis automatico.
+    5. Presione "GUARDAR EVALUACIONES".
 
-  ⚠️ REGLA IMPORTANTE: La frecuencia se BLOQUEA después
-  del primer guardado del trimestre. No podrá cambiarla
-  hasta el siguiente trimestre.
+  ADVERTENCIA: La frecuencia se BLOQUEA despues del primer
+  guardado del trimestre para mantener los datos ordenados.
 
 
 ═══════════════════════════════════════════════════════════════
-  8. MÓDULO DE TAREAS PROGRAMADAS (NUEVO)
+  8. MODULO DE TAREAS PROGRAMADAS
 ═══════════════════════════════════════════════════════════════
 
-  Acceso: Botón "📌 Tareas" en el menú izquierdo
+  Acceso: Boton "Tareas" en el menu izquierdo.
 
-  Este módulo le permite programar evaluaciones y trabajos
-  con ANTICIPACIÓN. El Dashboard le recordará cuándo debe
-  aplicarlos.
+  CREAR una tarea:
+    1. Escriba el titulo (ej: "Examen de Espanol T1").
+    2. Seleccione Grado, Materia y Tipo.
+    3. Escriba la fecha limite (DD-MM-YYYY).
+    4. Presione "PROGRAMAR TAREA".
 
-  ► CREAR una tarea:
-    1. Escriba el título (ej: "Examen de Español T1")
-    2. Seleccione Grado, Materia y Tipo
-    3. Escriba la fecha límite (DD-MM-YYYY)
-    4. Presione "PROGRAMAR TAREA"
+  COLORES de urgencia en el Dashboard:
+    Rojo    = Tarea vencida (ya paso la fecha)
+    Amarillo = Vence HOY
+    Naranja = Vence en 1-2 dias
+    Azul    = Fecha normal / futura
 
-  ► VER tareas en el Dashboard:
-    • Las tareas aparecen con colores de urgencia:
-      ⛔ Rojo     = Tarea vencida (ya pasó la fecha)
-      ⚠️ Amarillo = Vence HOY
-      🔔 Naranja  = Vence en 1-2 días
-      📅 Azul     = Fecha normal
-
-  ► COMPLETAR una tarea:
-    1. Presione el botón ✅ junto a la tarea
-    2. La tarea se moverá a "Completadas"
-
-  ► AL PRESIONAR una tarea en el Dashboard:
-    El programa lo llevará directamente a la pantalla
-    de Notas para que registre las calificaciones.
+  COMPLETAR: Presione el boton junto a la tarea.
+  Al presionar una tarea en el Dashboard, va directo a Notas.
 
 
 ═══════════════════════════════════════════════════════════════
-  9. MÓDULO DE REPORTES Y GRÁFICOS
+  9. MODULO DE REPORTES Y GRAFICOS
 ═══════════════════════════════════════════════════════════════
 
-  Atajos: Ctrl+7 (Reportes) / Ctrl+8 (Gráficos)
+  Atajos: Ctrl+7 (Reportes) / Ctrl+8 (Graficos)
 
-  ► REPORTES: Muestra tablas con promedios, asistencia y
-    rendimiento general por grado, materia y trimestre.
+  REPORTES: Tablas con promedios, asistencia y rendimiento
+  general por grado, materia y trimestre. Datos 100% desde SQL.
 
-  ► GRÁFICOS: Genera gráficas visuales de barras y líneas
-    que puede presentar en reuniones de padres o a la
-    dirección de la escuela.
+  GRAFICOS: Barras y lineas para presentar en reuniones de
+  padres o a la direccion de la escuela.
+
+  CUADRO DE HONOR: Lista automatica de los mejores alumnos
+  por trimestre basada en promedios calculados desde SQLite.
 
 
 ═══════════════════════════════════════════════════════════════
-  10. MÓDULO DE IMPRESIÓN
+  10. MODULO DE REGISTRO COMPLETO (CONSOLIDADO)
+═══════════════════════════════════════════════════════════════
+
+  VISTA DE CALIFICACIONES:
+    1. Presione "Registro Completo" en el menu izquierdo.
+    2. Seleccione Grado, Trimestre y Materia.
+    3. Tarjetas resumen: actividades tomadas, promedio grupal,
+       porcentaje de aprobacion y nota maxima del salon.
+    4. Cuadricula: un alumno por fila, una columna por actividad.
+       La fecha aparece debajo del titulo de cada tarea.
+       Verde = nota alta (>=4.5), Rojo = reprobatoria (<3.0).
+
+  VISTA DE ASISTENCIA:
+    1. Cambie a la pestana "Asistencia".
+    2. Tarjetas: dias evaluados, % asistencia promedio,
+       alumnos con 100% y alumnos en alerta (<90%).
+    3. Matriz: historial completo por fecha con colores indicativos
+       y porcentaje de asistencia acumulado por alumno.
+
+  NOTA: Cambiar trimestre, grado o materia actualiza los datos
+  instantaneamente sin recargar toda la pantalla.
+
+
+═══════════════════════════════════════════════════════════════
+  11. MODULO DE IMPRESION
 ═══════════════════════════════════════════════════════════════
 
   Atajo de teclado: Ctrl+9
 
-  Tipos de documentos que puede imprimir:
-  • Portada oficial
-  • Planilla de calificaciones
-  • Lista de asistencia
-  • Resumen de notas
-  • Expedientes individuales
+  Tipos de documentos:
+  • Portada oficial del grado
+  • Planilla de calificaciones por materia
+  • Lista de asistencia del trimestre
+  • Resumen de notas (Reporte Docente)
+  • Reporte de Direccion / Aprobados
+  • Plantilla auxiliar en blanco (para impresion manual)
 
-  ► CÓMO IMPRIMIR:
-    1. Seleccione el tipo de documento
-    2. Seleccione Grado y Materia (si aplica)
-    3. "Abrir en Excel" para revisar antes
-    4. "Enviar a Impresora" para imprimir directo
+  COMO IMPRIMIR:
+    1. Seleccione el tipo de documento.
+    2. Seleccione Grado y Materia (si aplica).
+    3. Presione "Abrir en Excel" para revisar antes.
+    4. O presione "Enviar a Impresora" para imprimir directo.
+
+  NOTA: Los datos se obtienen de SQLite y se vuelcan al Excel
+  para impresion. El archivo Excel de plantilla no se altera.
 
 
 ═══════════════════════════════════════════════════════════════
-  11. CONFIGURACIÓN DEL SISTEMA
+  12. MODULO DE REUNIONES Y ACTAS
 ═══════════════════════════════════════════════════════════════
 
-  Aquí configura los datos de su escuela y su perfil:
-  • Nombre del docente, cédula, teléfono, correo
-  • Nombre de la escuela, región, distrito
+  REUNION DE DOCENTES:
+    Acta con: fecha, hora, lugar, asistentes, agenda,
+    acuerdos y compromisos, firmas.
+
+  REUNION CON PADRES DE FAMILIA:
+    Formato de citacion con: datos del alumno, motivo,
+    descripcion, acuerdos, compromisos, firmas.
+
+  Acceso: Menu izquierdo → "Reuniones"
+
+
+═══════════════════════════════════════════════════════════════
+  13. CONFIGURACION DEL SISTEMA
+═══════════════════════════════════════════════════════════════
+
+  Configure sus datos institucionales:
+  • Nombre del docente, cedula, telefono, correo
+  • Nombre de la escuela, region, distrito
   • Director, subdirector, coordinador
   • Horario de clases (se muestra en el Dashboard)
-  • Gestión de materias y grados
+  • Gestion de materias y grados
 
-  SINCRONIZAR: El botón "Sincronizar y Sobreescribir"
-  copia todos estos datos a todas las hojas del Excel
-  automáticamente.
-
-
-═══════════════════════════════════════════════════════════════
-  12. ATAJOS DE TECLADO
-═══════════════════════════════════════════════════════════════
-
-  Ctrl+1  →  Dashboard (Inicio)
-  Ctrl+2  →  Estudiantes
-  Ctrl+3  →  Notas
-  Ctrl+4  →  Asistencia
-  Ctrl+5  →  Observaciones
-  Ctrl+6  →  Hábitos
-  Ctrl+7  →  Reportes
-  Ctrl+8  →  Gráficos
-  Ctrl+9  →  Impresión
-  F1      →  Ayuda
-  Escape  →  Volver al Dashboard
-
-  CONSEJO: Use Ctrl+1 a Ctrl+9 para navegar sin usar
-  el ratón. ¡Es mucho más rápido!
+  SINCRONIZAR: El boton "Sincronizar y Sobreescribir" copia
+  todos estos datos al archivo Excel oficial automaticamente.
 
 
 ═══════════════════════════════════════════════════════════════
-  13. COPIAS DE SEGURIDAD (RESPALDOS)
+  14. ATAJOS DE TECLADO
 ═══════════════════════════════════════════════════════════════
 
-  Su información es valiosa. Haga respaldos frecuentes.
+  Ctrl+1  → Dashboard (Inicio)
+  Ctrl+2  → Estudiantes
+  Ctrl+3  → Notas / Calificaciones
+  Ctrl+4  → Asistencia
+  Ctrl+5  → Observaciones
+  Ctrl+6  → Habitos
+  Ctrl+7  → Reportes
+  Ctrl+8  → Graficos
+  Ctrl+9  → Impresion
+  Ctrl+S  → Guardar en la pantalla actual
+  F1      → Abrir esta Ayuda
+  Escape  → Volver al Dashboard
 
-  ► RESPALDO AUTOMÁTICO:
-    El programa hace un respaldo silencioso cada 30 minutos
-    en la carpeta "Respaldos_Auto". Máximo 10 copias.
-
-  ► RESPALDO MANUAL:
-    1. En el Dashboard, presione "💾 Respaldo"
-    2. Se crea una copia en "Respaldos_Locales"
-
-  ► RESPALDO EN USB:
-    1. Conecte su memoria USB
-    2. Copie el archivo Excel y la carpeta Expedientes
-       a la memoria USB
-    3. Haga esto CADA VIERNES para máxima seguridad
-
-  ⚠️ NUNCA borre el archivo Excel original sin tener
-  un respaldo primero.
+  CONSEJO: Use Ctrl+1 a Ctrl+9 para navegar sin el raton.
 
 
 ═══════════════════════════════════════════════════════════════
-  14. REUNIONES (ACTAS Y FORMATOS)
+  15. COPIAS DE SEGURIDAD (RESPALDOS)
 ═══════════════════════════════════════════════════════════════
 
-  El programa incluye formatos para dos tipos de reuniones:
+  Su informacion es valiosa. Haga respaldos frecuentes.
 
-  ► REUNIÓN DE DOCENTES:
-    Acta de reunión con campos para:
-    • Fecha, hora, lugar
-    • Asistentes (lista de docentes)
-    • Agenda / temas tratados
-    • Acuerdos y compromisos
-    • Firma del director y participantes
+  RESPALDO AUTOMATICO:
+    El programa hace una copia silenciosa cada 30 minutos
+    en la carpeta "Respaldos_Auto". Maximo 10 copias.
+    Formato: registro_db_backup_YYYY-MM-DD_HH-MM.db.enc
 
-  ► REUNIÓN CON PADRES DE FAMILIA:
-    Formato de citación y acta con:
-    • Datos del alumno y acudiente
-    • Motivo de la reunión
-    • Descripción de la situación
-    • Acuerdos con el padre/madre
-    • Compromisos del alumno
-    • Firmas del docente, acudiente y alumno
+  RESPALDO MANUAL:
+    1. En el Dashboard, presione "Respaldo".
+    2. Se crea una copia en "Respaldos_Locales" con timestamp.
 
-  Acceso: Módulo de Observaciones → Categoría "Citación"
-  o directamente desde Configuración → Formatos.
+  RESPALDO EN USB:
+    Copie la carpeta "data/" y "Expedientes_Estudiantes/"
+    a su memoria USB. Haga esto cada viernes.
+
+  NUNCA borre el archivo registro.db.enc sin tener respaldo.
 
 
 ═══════════════════════════════════════════════════════════════
-  15. REGISTRO COMPLETO (MATRIZ CONSOLIDADA)
+  16. EXPORTAR A EXCEL
 ═══════════════════════════════════════════════════════════════
 
-  El módulo de Registro Completo consolida en un solo lugar todas las
-  calificaciones y registros de asistencia acumulados del trimestre actual.
+  RegistroDoc Pro trabaja internamente con SQLite (rapido).
+  Cuando necesite el archivo Excel oficial MEDUCA:
 
-  ► VISTA DE CALIFICACIONES:
-    1. Presione "Registro Completo" en el menú izquierdo (o use la navegación).
-    2. Seleccione el Grado/Grupo, Trimestre y Materia a consultar.
-    3. Verá tarjetas con el resumen de actividades del salón, el promedio
-       grupal del trimestre, el porcentaje de aprobación y la nota máxima.
-    4. La cuadrícula muestra el listado completo de alumnos y una columna
-       por cada actividad calificada, con colores adaptativos (verde para
-       notas altas >= 4.5, rojo para notas reprobatorias < 3.0), y el
-       promedio final ponderado.
+  1. Vaya al Dashboard (Ctrl+1).
+  2. Localice el panel "Exportar Calificaciones" en el pie de pagina.
+  3. Seleccione "Todos los trimestres" o un trimestre especifico.
+  4. Presione el boton Excel.
+  5. El programa vuelca TODOS los datos de SQLite al archivo Excel.
 
-  ► VISTA DE ASISTENCIA:
-    1. Cambie a la pestaña "Asistencia" en la parte superior.
-    2. Verá tarjetas con el total de días evaluados, porcentaje de asistencia
-       promedio, alumnos con asistencia perfecta (100%) y alertas de alumnos
-       con asistencia crítica (< 90%).
-    3. La matriz muestra el historial completo por fecha mostrando P (Presente),
-       A (Ausente), T (Tardanza) y E (Excusa) en celdas de colores
-       indicativos y el porcentaje de asistencia acumulado por alumno.
+  IMPORTANTE: El Excel resultante es para impresion y entrega
+  a la direccion. No lo use para editar datos manualmente;
+  use el programa para eso.
 
 
 ═══════════════════════════════════════════════════════════════
-  16. SOLUCIÓN DE PROBLEMAS COMUNES
+  17. SOLUCION DE PROBLEMAS COMUNES
 ═══════════════════════════════════════════════════════════════
+
+  PROBLEMA: "Las notas no aparecen en mi archivo Excel fisico"
+  SOLUCION: Use la funcion Exportar a Excel del Dashboard (seccion 16).
+            El programa trabaja en SQLite por velocidad. El Excel
+            se actualiza solo cuando usted lo exporta.
+
+  PROBLEMA: "El programa muestra letras y numeros raros"
+  SOLUCION: Los datos estan cifrados. Si ve texto como
+            "ed6f444c..." es un problema de descifrado.
+            Contacte soporte. Sus datos estan seguros.
+
+  PROBLEMA: "No puedo cambiar la frecuencia de Habitos"
+  SOLUCION: La frecuencia se bloquea tras el primer guardado
+            del trimestre. Espere al siguiente trimestre.
 
   PROBLEMA: "Error al guardar / Acceso denegado"
-  SOLUCIÓN: Cierre el archivo Excel si lo tiene abierto
-            en Microsoft Excel. Solo puede estar abierto
-            en UN programa a la vez.
-
-  PROBLEMA: "Las notas no aparecen en el Excel"
-  SOLUCIÓN: Las fórmulas del Excel se calculan al abrir
-            el archivo en Microsoft Excel. Abra el Excel,
-            espere 5 segundos y guárdelo (Ctrl+S en Excel).
-
-  PROBLEMA: "No puedo cambiar la frecuencia de Hábitos"
-  SOLUCIÓN: La frecuencia se bloquea después del primer
-            guardado del trimestre. Debe esperar al
-            siguiente trimestre.
+  SOLUCION: No tenga el Excel abierto en Excel/LibreOffice
+            mientras el programa exporta.
 
   PROBLEMA: "El programa no abre"
-  SOLUCIÓN: Verifique que Python está instalado.
-            Haga clic derecho → "Ejecutar como administrador".
+  SOLUCION: Haga clic derecho → "Ejecutar como administrador".
+            Verifique que Python 3.10+ esta instalado.
 
-  PROBLEMA: "Perdí mis datos"
-  SOLUCIÓN: Busque en la carpeta "Respaldos_Auto" o
-            "Respaldos_Locales". Renombre el respaldo
-            más reciente al nombre original del Excel.
-
-
-═══════════════════════════════════════════════════════════════
-  17. GLOSARIO DE TÉRMINOS MEDUCA
-═══════════════════════════════════════════════════════════════
-
-  S  = Satisfactorio (cumple bien el criterio)
-  R  = Regular (cumple parcialmente)
-  X  = No Satisface (requiere atención urgente)
-  P  = Presente (asistió a clase)
-  A  = Ausente (faltó sin justificación)
-  T  = Tardanza (llegó tarde)
-  E  = Excusa (falta justificada, NO resta puntos)
-
-  Parcial     = Nota de tareas/talleres (1.0 a 5.0)
-  Apreciación = Nota de cuadernos/participación (1.0 a 5.0)
-  Examen      = Prueba trimestral oficial
-  Trimestre   = Período académico (3 por año)
-  Expediente  = Documento Word con historial del alumno
-  Sincronizar = Copiar datos de configuración al Excel
+  PROBLEMA: "Perdi mis datos"
+  SOLUCION: Busque en "Respaldos_Auto" o "Respaldos_Locales".
+            El archivo mas reciente tiene sus datos guardados.
+            Renombrelo a "registro.db.enc" en la carpeta data/.
 
 
 ═══════════════════════════════════════════════════════════════
-  17. ESTRUCTURA DE BASE DE DATOS Y TABLAS (SQLTools)
+  18. GLOSARIO DE TERMINOS MEDUCA
 ═══════════════════════════════════════════════════════════════
 
-  RegistroDoc Pro almacena todos sus datos en una base de datos local SQLite
-  cifrada de alta velocidad ("hot-data"). Para explorar y auditar esta base
-  de datos en tiempo real mediante VS Code SQLTools:
+  CALIFICACIONES:
+  Parcial / Diaria  = Nota de tareas y talleres (1.0 a 5.0)
+  Apreciacion       = Nota de cuadernos y participacion (1.0 a 5.0)
+  Examen            = Prueba trimestral oficial
+  Trimestre         = Periodo academico (3 por ano lectivo)
 
-  Paso 1: Inicie el programa. Esto descifrará dinámicamente la base de datos
-          temporal en la siguiente ruta:
-          C:\Users\<Tu_Usuario>\AppData\Local\RegistroDoc\temp\sqlite_temp.db
+  ASISTENCIA (simbologia oficial MEDUCA):
+  . (Presente)      = Asistio a clase
+  - (Ausente)       = Falto sin justificacion
+  T (Tardanza)      = Llego tarde
+  E (Excusa)        = Falta justificada, NO resta puntos
 
-  Paso 2: En VS Code, instale la extensión 'SQLTools' y el driver
-          'SQLTools SQLite' (por Matheus Teixeira).
+  HABITOS Y APTITUDES:
+  S (Satisfactorio) = Cumple bien el criterio     → Verde
+  R (Regular)       = Cumple parcialmente          → Amarillo
+  X (No Satisface)  = Requiere atencion urgente    → Rojo
 
-  Paso 3: Cree una nueva conexión en SQLTools apuntando al archivo
-          sqlite_temp.db.
-
-  Listado de Tablas y Estructura en la Base de Datos:
-  1. configuracion: Almacena opciones generales (clave, valor).
-  2. grados: Grupos asignados con su modalidad (id, modalidad).
-  3. estudiantes: Datos cifrados de alumnos (id, nombre, cedula_cifrada, sexo, grado_id).
-  4. materias: Asignaturas registradas (id, nombre, grado_id).
-  5. horario: Planificador semanal de clases (id, dia, hora, materia_id, grado_id).
-  6. notas: Calificaciones del trimestre (id, estudiante_id, materia_id, trimestre, tipo, descripcion, valor, puntos_obtenidos, puntos_maximos, fecha).
-  7. asistencia: Faltas, tardanzas y justificaciones (id, estudiante_id, fecha, estado, motivo).
-  8. observaciones: Historial de conducta del expediente (id, estudiante_id, fecha, categoria, texto).
-  9. habitos: Evaluaciones de hábitos y actitudes (id, estudiante_id, trimestre, criterio, frecuencia, valor, fecha).
-  10. tareas: Recordatorios de tareas programadas (id, titulo, grado_id, materia_id, tipo, fecha_limite, completada).
-  11. auditoria: Logs de auditoría inmutables para no repudio (id, timestamp, accion, detalle).
-
-  NOTA: Al cerrar la aplicación, el archivo sqlite_temp.db es borrado
-  y sobreescrito de manera segura mediante algoritmos de wiping.
+  OTROS:
+  Expediente        = Documento Word con historial del alumno
+  Sincronizar       = Copiar configuracion al Excel oficial
+  SQLite            = Base de datos local de alta velocidad
+  AES-256-GCM       = Cifrado militar para proteger sus datos
+  Exportar          = Volcar datos de SQLite al Excel MEDUCA
 
 
 ═══════════════════════════════════════════════════════════════
-  18. CUMPLIMIENTO DE SEGURIDAD Y CIFRADO (NORMA ISO)
+  19. ESTRUCTURA DE BASE DE DATOS Y TABLAS (SQLTools)
 ═══════════════════════════════════════════════════════════════
 
-  El diseño de seguridad de RegistroDoc Pro se rige bajo normativas internacionales
-  y nacionales estrictas para asegurar que el antivirus no bloquee la aplicación:
+  RegistroDoc Pro almacena todos sus datos en SQLite cifrado.
+  Para explorar en tiempo real con VS Code SQLTools:
 
-  • ISO/IEC 25010 (Eficiencia de Rendimiento y Confidencialidad):
-    - Uso de base de datos relacional SQLite de lectura y escritura ultrarrápida.
-    - Cifrado simétrico AES-256 en reposo para evitar extracciones físicas.
+  Paso 1: Inicie el programa. La BD temporal se descifra en:
+          C:\Users\<Usuario>\AppData\Local\RegistroDoc\temp\sqlite_temp.db
 
-  • ISO/IEC 27001 (Control A.8.24 - Gestión de Activos y Cifrado):
-    - Cifrado en reposo AES-256 en modo GCM (Galois/Counter Mode) para verificar
-      la autenticidad e integridad física de la base de datos de producción.
-    - Las llaves criptográficas se generan en tiempo de ejecución de manera dinámica,
-      derivadas del número de serie de placa madre y procesador local con PBKDF2-HMAC-SHA256
-      (600,000 iteraciones). No se guardan llaves planas en ningún archivo.
-    - Cifrado de columnas específicas en base de datos para nombres y cédulas vinculando
-      el descifrado al proceso activo de ejecución (PID) para evitar memory dumping.
+  Paso 2: En VS Code, instale extension "SQLTools" y driver
+          "SQLTools SQLite" (por Matheus Teixeira).
 
-  • Ley 81 del 26 de marzo de 2019 (Panamá - Protección de Datos Personales):
-    - Toda la información sensible del estudiante (cédulas, nombres, promedios)
-      permanece 100% local en la máquina y encriptada. No hay envío de datos por internet.
-    - Los entornos de prueba unitaria y de desarrollo utilizan generadores de datos ficticios,
-      garantizando que no se utilicen nombres reales de alumnos.
+  Paso 3: Cree una conexion apuntando al sqlite_temp.db.
 
-  • Módulo Anti-Análisis (Anti-Debugging & VM/Sandbox Detección):
-    - Evita que atacantes o troyanos hagan ingeniería inversa de las funciones de clase.
-    - Detección activa de VirtualBox, VMware, QEMU e inactividad con auto-bloqueo tras 15 min.
+  TABLAS DISPONIBLES:
+  1. configuracion  — opciones generales (clave/valor)
+  2. grados         — grupos con modalidad (primaria/premedia)
+  3. estudiantes    — datos cifrados (nombre, cedula, sexo, grado_id)
+  4. materias       — asignaturas por grado
+  5. horario        — planificador semanal
+  6. notas          — calificaciones (tipo, descripcion, valor, fecha, trimestre)
+  7. asistencia     — registros diarios (estado, motivo, fecha)
+  8. observaciones  — historial de conducta del expediente
+  9. habitos        — evaluaciones S/R/X por criterio y trimestre
+  10. tareas        — recordatorios programados con fecha limite
+  11. reuniones     — actas y citaciones
+  12. auditoria     — log inmutable de todas las transacciones
 
-  • Robustez y Prevención de Corrupción de Datos:
-    - Escrituras atómicas con archivos temporales (.tmp) antes de renombrarse a .xlsx.
-    - Desinstalación segura que exige la cédula del docente antes de borrar la base de datos.
+  NOTA: Al cerrar el programa, sqlite_temp.db es eliminado
+  y sobreescrito de forma segura (wiping con datos aleatorios).
 
 
 ═══════════════════════════════════════════════════════════════
-  © 2026 RegistroDoc Pro — MEDUCA Panamá
-  "Instruye al niño en su camino, y aun cuando
-   fuere viejo no se apartará de él." — Proverbios 22:6
+  20. CUMPLIMIENTO DE SEGURIDAD Y CIFRADO
+═══════════════════════════════════════════════════════════════
+
+  ISO/IEC 27001:2022 — Control A.8.24 (Cifrado):
+    - AES-256-GCM en reposo para la base de datos de produccion.
+    - La llave se deriva del numero de serie del hardware local
+      con PBKDF2-HMAC-SHA256 (600,000 iteraciones). No se guarda
+      ninguna llave en texto plano en el disco.
+    - Nonce aleatorio unico por cada escritura (sin reutilizacion).
+    - Columnas sensibles (nombres, cedulas) cifradas individualmente
+      con llave derivada adicional por columna.
+
+  Ley 81 del 26 de marzo de 2019 (Panama):
+    - Toda la informacion personal (cedulas, nombres, promedios)
+      es cifrada y permanece 100% local en la maquina del docente.
+    - No hay envio de datos por internet en ninguna operacion.
+    - Los entornos de prueba usan datos ficticios generados.
+
+  NIST SP 800-38D:
+    - Modo Galois/Counter Mode (GCM) que verifica autenticidad e
+      integridad del archivo cifrado antes de abrirlo.
+
+  Robustez contra corrupcion:
+    - Escrituras atomicas: se usa archivo .tmp antes de renombrar.
+    - Respaldos automaticos cada 30 minutos.
+    - Log de auditoria inmutable para no repudio.
+    - Desinstalacion segura que exige cedula del docente.
+
+
+═══════════════════════════════════════════════════════════════
+  (c) 2026 RegistroDoc Pro — MEDUCA Panama
+  "Instruye al nino en su camino, y aun cuando
+   fuere viejo no se apartara de el." — Proverbios 22:6
 ═══════════════════════════════════════════════════════════════

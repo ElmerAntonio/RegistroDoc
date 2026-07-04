@@ -20,11 +20,13 @@ def test_frontend_student_limit_warning(monkeypatch):
     class FakeEngine:
         modalidad = "primaria"
         def obtener_estudiantes_completos(self, grado, wb=None):
-            return [{"id": i, "nombre": f"Estudiante {i}", "cedula": ""} for i in range(34)]
+            return [{"id": i, "nombre": f"Estudiante {i}", "cedula": "", "sexo": "M"} for i in range(34)]
         def obtener_grados_activos(self, wb=None):
             return ["7°"]
-        def agregar_estudiante(self, grado, nombre, cedula=""):
+        def agregar_estudiante(self, grado, nombre, cedula="", sexo="M"):
             pass
+        def obtener_estudiantes_retirados(self, grado=None):
+            return []
 
     engine = FakeEngine()
     engine.agregar_estudiante = MagicMock()

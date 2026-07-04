@@ -4,6 +4,7 @@ import datetime
 import threading
 import os
 from config import BASE_DIR
+from theme import C
 
 try:
     from docx import Document
@@ -37,7 +38,7 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.al_cambiar_grado(self.combo_grado.get())
 
     def crear_panel_izquierdo(self):
-        frame_izq = ctk.CTkFrame(self, fg_color="#1A2638", corner_radius=10)
+        frame_izq = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=10)
         frame_izq.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
         top = ctk.CTkFrame(frame_izq, fg_color="transparent")
@@ -57,7 +58,7 @@ class AsistenciaFrame(ctk.CTkFrame):
             top, values=grados, command=self.al_cambiar_grado)
         self.combo_grado.pack(side="left", padx=10)
 
-        header = ctk.CTkFrame(frame_izq, fg_color="#253650", corner_radius=5)
+        header = ctk.CTkFrame(frame_izq, fg_color=C["badge_bg"], corner_radius=5)
         header.pack(fill="x", padx=15, pady=(5, 0), ipady=5)
         ctk.CTkLabel(
             header,
@@ -106,7 +107,7 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.scroll_estudiantes.pack(fill="both", expand=True, padx=15, pady=5)
 
     def crear_panel_derecho(self):
-        frame_der = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=10)
+        frame_der = ctk.CTkFrame(self, fg_color=C["card_alt"], corner_radius=10)
         frame_der.grid(row=0, column=1, sticky="nsew")
 
         ctk.CTkLabel(
@@ -280,60 +281,96 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.cargar_estudiantes(grado)
         self.cargar_fechas()
 
+    def _limpiar_scroll(self):
+        pool_frames = set()
+        if hasattr(self, "_pool_filas"):
+            for f_row, _ in self._pool_filas:
+                pool_frames.add(f_row)
+                f_row.pack_forget()
+        for w in self.scroll_estudiantes.winfo_children():
+            if w not in pool_frames:
+                w.destroy()
+
+    def _obtener_fila_reciclada(self, index):
+        if not hasattr(self, "_pool_filas"):
+            self._pool_filas = []
+        if index < len(self._pool_filas):
+            f_row, widgets = self._pool_filas[index]
+            f_row.pack(fill="x", pady=2)
+            return f_row, widgets
+        
+        f_row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
+        f_row.pack(fill="x", pady=2)
+        
+        num_lbl = ctk.CTkLabel(f_row, text="", width=30)
+        num_lbl.pack(side="left")
+        
+        nombre_lbl = ctk.CTkLabel(f_row, text="", width=220, anchor="w")
+        nombre_lbl.pack(side="left")
+        
+        seg_btn = ctk.CTkSegmentedButton(
+            f_row,
+            values=["P", "A", "T", "E"],
+            width=160,
+            selected_color="#3B82F6"
+        )
+        seg_btn.pack(side="left", padx=10)
+        
+        entry_exc = ctk.CTkEntry(
+            f_row,
+            placeholder_text="Solo si falta, tarde o excusa",
+            fg_color=C["input"],
+            state="disabled"
+        )
+        entry_exc.pack(side="left", fill="x", expand=True, padx=5)
+        
+        widgets = {
+            "num": num_lbl,
+            "nombre": nombre_lbl,
+            "btn": seg_btn,
+            "exc": entry_exc
+        }
+        
+        self._pool_filas.append((f_row, widgets))
+        return f_row, widgets
+
+    def _limpiar_filas_excedentes(self, num_requeridos):
+        if not hasattr(self, "_pool_filas"):
+            return
+        for idx in range(num_requeridos, len(self._pool_filas)):
+            f_row, _ = self._pool_filas[idx]
+            f_row.pack_forget()
+
     def cargar_estudiantes(self, grado=None):
         if grado is None:
             grado = self.combo_grado.get()
-        for w in self.scroll_estudiantes.winfo_children():
-            w.destroy()
+        self._limpiar_scroll()
         self.entradas_asistencia.clear()
         self.col_a_modificar = None
 
         ests = self.engine.obtener_estudiantes_completos(grado)
-        for est in ests:
-            row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
-            row.pack(fill="x", pady=2)
-
-            ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
-            ctk.CTkLabel(
-                row,
-                text=est['nombre'],
-                width=220,
-                anchor="w").pack(
-                side="left")
-
-            seg_btn = ctk.CTkSegmentedButton(
-                row,
-                values=[
-                    "P",
-                    "A",
-                    "T",
-                    "E"],
-                width=160,
-                selected_color="#3B82F6")
-            seg_btn.set("P")
-            seg_btn.pack(side="left", padx=10)
-
-            # Bloqueado por defecto porque inicia en "P" (Presente)
-            entry_exc = ctk.CTkEntry(
-                row,
-                placeholder_text="Solo si falta, tarde o excusa",
-                fg_color="#0F1923",
-                state="disabled")
-            entry_exc.pack(side="left", fill="x", expand=True, padx=5)
-
-            seg_btn.configure(
-                command=lambda valor,
-                entry=entry_exc: self.activar_excusa(
-                    valor,
-                    entry))
-
-            # Bind keyboard navigation on the excuse entries
-            entry_exc.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
-            entry_exc.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
-            entry_exc.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
-
+        num_requeridos = len(ests)
+        for i, est in enumerate(ests):
+            f_row, widgets = self._obtener_fila_reciclada(i)
+            
+            widgets["num"].configure(text=f"{i+1}.")
+            widgets["nombre"].configure(text=est['nombre'])
+            widgets["btn"].set("P")
+            widgets["exc"].configure(state="disabled", placeholder_text="Solo si falta, tarde o excusa")
+            widgets["exc"].delete(0, "end")
+            
+            widgets["btn"].configure(
+                command=lambda valor, entry=widgets["exc"]: self.activar_excusa(valor, entry)
+            )
+            
+            widgets["exc"].bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+            widgets["exc"].bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+            widgets["exc"].bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+            
             self.entradas_asistencia[est['id']] = {
-                "nombre": est['nombre'], "btn": seg_btn, "exc": entry_exc}
+                "nombre": est['nombre'], "btn": widgets["btn"], "exc": widgets["exc"]}
+            
+        self._limpiar_filas_excedentes(num_requeridos)
 
     def activar_excusa(self, valor, entry_widget):
         """Habilita la casilla SOLO para ausencias, tardanzas y excusas."""
@@ -492,8 +529,9 @@ class AsistenciaFrame(ctk.CTkFrame):
         datos_excel = resultado["asistencia"]
 
         for id_est, widgets in self.entradas_asistencia.items():
-            if id_est in datos_excel:
-                estado_excel = datos_excel[id_est]
+            idx_1based = int(id_est) % 100 if str(id_est).isdigit() else id_est
+            if idx_1based in datos_excel:
+                estado_excel = datos_excel[idx_1based]
                 estado_ui = EXCEL_A_UI.get(estado_excel, "P")
                 widgets["btn"].set(estado_ui)
                 self.activar_excusa(estado_ui, widgets["exc"])

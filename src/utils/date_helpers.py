@@ -174,7 +174,7 @@ def iniciar_sincronizacion_hora_panama():
         # 1. Intentar con WorldTimeAPI (Panamá es GMT-5)
         try:
             req = urllib.request.Request(
-                "http://worldtimeapi.org/api/timezone/America/Panama",
+                "https://worldtimeapi.org/api/timezone/America/Panama",
                 headers={"User-Agent": "RegistroDoc/3.0"}
             )
             with urllib.request.urlopen(req, timeout=2.0) as response:

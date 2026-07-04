@@ -632,3 +632,175 @@ __________________________________       __________________________________
     with open(ruta_txt, "w", encoding="utf-8") as f:
         f.write(txt)
     return ruta_txt
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXPEDIENTE DE RETIRO
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generar_expediente_retiro(datos: dict) -> str:
+    """Genera un documento Word con el expediente completo del alumno retirado.
+
+    datos dict keys:
+        nombre, cedula, grado, motivo, acudiente,
+        docente_nombre, escuela_nombre, ano_lectivo,
+        asistencia (dict con pct_asistencia, total_dias, dias_asistidos),
+        notas_t1, notas_t2, notas_t3 (dicts materia->promedio)
+    Retorna la ruta al .docx generado.
+    """
+    doc  = Document()
+    hoy  = datetime.date.today().strftime("%d/%m/%Y")
+    nombre   = datos.get("nombre", "")
+    cedula   = datos.get("cedula", "")
+    grado    = datos.get("grado", "")
+    motivo   = datos.get("motivo", "")
+    acudiente= datos.get("acudiente", "")
+    docente  = datos.get("docente_nombre", "")
+    escuela  = datos.get("escuela_nombre", "")
+    ano      = datos.get("ano_lectivo", str(datetime.date.today().year))
+
+    # ── Márgenes ──────────────────────────────────────────────────────────
+    from docx.oxml.ns import qn
+    sec = doc.sections[0]
+    sec.left_margin   = Inches(1.0)
+    sec.right_margin  = Inches(1.0)
+    sec.top_margin    = Inches(0.9)
+    sec.bottom_margin = Inches(0.9)
+
+    # ── Encabezado institucional ───────────────────────────────────────────
+    try:
+        add_header_with_logo(doc, escuela, ano)
+    except Exception:
+        pass
+
+    # ── Título ────────────────────────────────────────────────────────────
+    p_tit = doc.add_paragraph()
+    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tit = p_tit.add_run("EXPEDIENTE DE RETIRO DE ESTUDIANTE")
+    run_tit.bold      = True
+    run_tit.font.size = Pt(14)
+    run_tit.font.color.rgb = RGBColor(0xC0, 0x38, 0x38)
+    doc.add_paragraph()
+
+    # ── Datos personales ──────────────────────────────────────────────────
+    def _encabezado_seccion(texto):
+        p = doc.add_paragraph()
+        r = p.add_run(texto)
+        r.bold      = True
+        r.font.size = Pt(11)
+        r.font.color.rgb = RGBColor(0x1E, 0x40, 0xAF)
+        p.paragraph_format.space_after = Pt(4)
+        return p
+
+    _encabezado_seccion("I. DATOS PERSONALES")
+
+    tbl = doc.add_table(rows=4, cols=2)
+    tbl.style = "Table Grid"
+    pares = [
+        ("Nombre completo:", nombre),
+        ("Cédula / ID:",     cedula),
+        ("Grado:",           grado),
+        ("Nombre del acudiente:", acudiente),
+    ]
+    for i, (lbl, val) in enumerate(pares):
+        row = tbl.rows[i]
+        row.cells[0].text = lbl
+        row.cells[0].paragraphs[0].runs[0].bold = True
+        row.cells[1].text = val
+    doc.add_paragraph()
+
+    # ── Datos del retiro ──────────────────────────────────────────────────
+    _encabezado_seccion("II. DATOS DEL RETIRO")
+    tbl2 = doc.add_table(rows=2, cols=2)
+    tbl2.style = "Table Grid"
+    tbl2.rows[0].cells[0].text = "Fecha de retiro:"
+    tbl2.rows[0].cells[0].paragraphs[0].runs[0].bold = True
+    tbl2.rows[0].cells[1].text = hoy
+    tbl2.rows[1].cells[0].text = "Motivo:"
+    tbl2.rows[1].cells[0].paragraphs[0].runs[0].bold = True
+    tbl2.rows[1].cells[1].text = motivo
+    doc.add_paragraph()
+
+    # ── Asistencia ────────────────────────────────────────────────────────
+    _encabezado_seccion("III. RESUMEN DE ASISTENCIA")
+    asis = datos.get("asistencia") or {}
+    if isinstance(asis, dict) and asis:
+        pct  = asis.get("pct_asistencia", asis.get("porcentaje", 0))
+        tot  = asis.get("total_dias", asis.get("total", 0))
+        asi  = asis.get("dias_asistidos", asis.get("asistidos", 0))
+        p_a  = doc.add_paragraph(f"Días totales: {tot}   |   Días asistidos: {asi}   |   "
+                                  f"Porcentaje de asistencia: {pct:.1f}%")
+    else:
+        p_a = doc.add_paragraph("No hay datos de asistencia registrados.")
+    doc.add_paragraph()
+
+    # ── Notas por trimestre ───────────────────────────────────────────────
+    _encabezado_seccion("IV. RESUMEN ACADÉMICO POR TRIMESTRE")
+
+    trimestres = [
+        ("Trimestre 1", datos.get("notas_t1") or {}),
+        ("Trimestre 2", datos.get("notas_t2") or {}),
+        ("Trimestre 3", datos.get("notas_t3") or {}),
+    ]
+
+    for t_nombre, notas in trimestres:
+        if not notas:
+            continue
+        p_tit_t = doc.add_paragraph()
+        r_tit_t = p_tit_t.add_run(t_nombre)
+        r_tit_t.bold      = True
+        r_tit_t.font.size = Pt(10)
+
+        materias = list(notas.keys())
+        if materias:
+            tbl_n = doc.add_table(rows=1 + len(materias), cols=2)
+            tbl_n.style = "Table Grid"
+            tbl_n.rows[0].cells[0].text = "Materia"
+            tbl_n.rows[0].cells[1].text = "Promedio"
+            for ci in range(2):
+                tbl_n.rows[0].cells[ci].paragraphs[0].runs[0].bold = True
+                set_cell_background(tbl_n.rows[0].cells[ci], "1E40AF")
+                for r in tbl_n.rows[0].cells[ci].paragraphs[0].runs:
+                    r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            for i, mat in enumerate(materias):
+                prom = notas[mat]
+                tbl_n.rows[i + 1].cells[0].text = mat
+                tbl_n.rows[i + 1].cells[1].text = f"{prom:.1f}" if isinstance(prom, float) else str(prom)
+        doc.add_paragraph()
+
+    # ── Firmas ────────────────────────────────────────────────────────────
+    _encabezado_seccion("V. FIRMAS")
+    doc.add_paragraph()
+    p_f = doc.add_paragraph()
+    p_f.add_run("Docente a cargo: ").bold = True
+    p_f.add_run("_________________________________    ")
+    p_f.add_run("Fecha: ").bold = True
+    p_f.add_run("_____________")
+
+    doc.add_paragraph()
+    p_d = doc.add_paragraph()
+    p_d.add_run("Director(a): ").bold = True
+    p_d.add_run("_________________________________    ")
+    p_d.add_run("Fecha: ").bold = True
+    p_d.add_run("_____________")
+
+    doc.add_paragraph()
+    p_ac = doc.add_paragraph()
+    p_ac.add_run("Acudiente: ").bold = True
+    p_ac.add_run("_________________________________    ")
+    p_ac.add_run("Fecha: ").bold = True
+    p_ac.add_run("_____________")
+
+    # ── Pie de página ─────────────────────────────────────────────────────
+    try:
+        add_footer_with_logo(doc, escuela, ano)
+    except Exception:
+        pass
+
+    # ── Guardar ───────────────────────────────────────────────────────────
+    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "Retiros")
+    os.makedirs(carpeta, exist_ok=True)
+    nombre_seguro = nombre.replace(" ", "_").replace(",", "")
+    ruta = os.path.join(carpeta, f"Expediente_Retiro_{nombre_seguro}_{hoy.replace('/', '-')}.docx")
+    doc.save(ruta)
+    return ruta

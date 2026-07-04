@@ -267,43 +267,28 @@ class PanelImpresion:
                  font=("Segoe UI", 10), fg=C["texto_med"], bg=C["blanco"],
                  justify="center").pack(pady=(0, 20))
 
-        # Hojas disponibles (Cargadas dinámicamente)
-        import openpyxl
-        hojas_comunes = []
+        # Hojas disponibles — construidas desde SQL + hojas fijas (SIN abrir el Excel)
+        hojas_comunes = [
+            ("Portada",  "\U0001f4cb Portada / Car\u00e1tula oficial"),
+            ("Caratula", "\U0001f4c4 Car\u00e1tula del registro"),
+            ("Horarios", "\U0001f550 Horario de clases"),
+        ]
         try:
-            wb = openpyxl.load_workbook(app.engine.ruta, read_only=True)
-            sheet_names = wb.sheetnames
-            wb.close()
+            grados_sql = app.engine.obtener_grados_activos() if hasattr(app, 'engine') else []
+            for g in grados_sql:
+                hojas_comunes.append(("Asistencia (" + g + ")", "\U0001f4c5 Asistencia \u2014 Grado " + g))
+                hojas_comunes.append(("RESUMEN_" + g, "\U0001f4c8 RESUMEN \u2014 " + g))
+            for g in grados_sql:
+                try:
+                    materias = app.engine.obtener_materias_por_grado(g)
+                    for mat in materias:
+                        if mat and mat not in ["Sin materias", "General"]:
+                            hojas_comunes.append(("Planilla (" + mat + " " + g + ")", "\U0001f4ca Planilla \u2014 " + mat + " " + g))
+                except Exception:
+                    pass
         except Exception:
-            sheet_names = []
+            pass  # Las hojas estaticas son suficientes como fallback
 
-        for sheet in sheet_names:
-            sheet_upper = sheet.upper()
-            if "PORTADA" in sheet_upper and "VISTOSA" not in sheet_upper:
-                hojas_comunes.append((sheet, "📋 Portada / Carátula oficial"))
-            elif "CARATULA" in sheet_upper or "CARÁTULA" in sheet_upper or "VISTOSA" in sheet_upper:
-                hojas_comunes.append((sheet, "📄 Carátula del registro"))
-            elif "ASISTENCIA" in sheet_upper:
-                grade = sheet.replace("Asistencia", "").replace("(", "").replace(")", "").strip()
-                hojas_comunes.append((sheet, f"📅 Asistencia — Grado {grade}"))
-            elif "PROM" in sheet_upper:
-                subj = sheet.replace("PROM", "").replace("(", "").replace(")", "").strip()
-                hojas_comunes.append((sheet, f"📝 PROM — {subj}"))
-            elif "PLANILLA" in sheet_upper:
-                subj = sheet.replace("Planilla", "").replace("(", "").replace(")", "").strip()
-                hojas_comunes.append((sheet, f"📊 Planilla — {subj}"))
-            elif "HORARIO" in sheet_upper:
-                hojas_comunes.append((sheet, "🕐 Horario de clases"))
-            elif "RESUMEN" in sheet_upper:
-                grade = sheet.replace("RESUMEN", "").replace("(", "").replace(")", "").strip()
-                hojas_comunes.append((sheet, f"📈 RESUMEN — {grade if grade else 'General'}"))
-
-        if not hojas_comunes:
-            hojas_comunes = [
-                ("Portada",           "📋 Portada / Carátula oficial"),
-                ("Caratula",          "📄 Carátula del registro"),
-                ("Horarios",          "🕐 Horario de clases"),
-            ]
 
         sel_f = tk.LabelFrame(cuerpo, text="  Selecciona qué imprimir  ",
                               font=("Segoe UI", 10, "bold"), bg=C["blanco"],

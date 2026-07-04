@@ -39,8 +39,8 @@ class GraficosFrame(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.engine = engine
 
-        from theme import C
-        self.C = C
+        from theme import obtener_C_res
+        self.C = obtener_C_res()
 
         # Estructura principal
         self.grid_columnconfigure(0, weight=1)
@@ -770,7 +770,8 @@ class GraficosFrame(ctk.CTkFrame):
                         
                         asis_dict = info["asis_cache"][fecha]
                         est_id = info["name_to_id"].get(est_name.upper().strip())
-                        val = asis_dict.get(est_id, "P") if est_id is not None else "P"
+                        est_idx = int(est_id) % 100 if str(est_id).isdigit() else est_id
+                        val = asis_dict.get(est_idx, "P") if est_idx is not None else "P"
                         if val in ["P", "T"]:
                             presentes += 1
                     asistencia = (presentes / total) * 100 if total > 0 else 100
@@ -962,7 +963,7 @@ class GraficosFrame(ctk.CTkFrame):
         win = ctk.CTkToplevel(self)
         win.title("Guía de Uso de Gráficos Académicos")
         win.geometry("750x650")
-        win.configure(fg_color="#0A1628")
+        win.configure(fg_color=self.C["fondo"])
         win.transient(self)
         win.grab_set()
         
@@ -973,14 +974,14 @@ class GraficosFrame(ctk.CTkFrame):
             win,
             text="📘 Guía de Interpretación de Gráficos",
             font=("Segoe UI", 20, "bold"),
-            text_color="#00DDEB"
+            text_color=self.C["cian"]
         ).pack(pady=(20, 10))
         
         sf = ctk.CTkScrollableFrame(
             win,
-            fg_color="#0D1F35",
-            scrollbar_button_color="#00DDEB",
-            scrollbar_fg_color="#0D1F35"
+            fg_color=self.C["card_alt"],
+            scrollbar_button_color=self.C["cian"],
+            scrollbar_fg_color=self.C["card_alt"]
         )
         sf.pack(fill="both", expand=True, padx=20, pady=(10, 20))
         
@@ -1003,21 +1004,21 @@ class GraficosFrame(ctk.CTkFrame):
         ]
         
         for titulo, desc in guias:
-            card = ctk.CTkFrame(sf, fg_color="#0F2744", border_width=1, border_color="#00DDEB", corner_radius=8)
+            card = ctk.CTkFrame(sf, fg_color=self.C["card"], border_width=1, border_color=self.C["cian"], corner_radius=8)
             card.pack(fill="x", padx=10, pady=8)
             
             ctk.CTkLabel(
                 card, 
                 text=titulo, 
                 font=("Segoe UI", 14, "bold"), 
-                text_color="#00DDEB"
+                text_color=self.C["cian"]
             ).pack(anchor="w", padx=15, pady=(10, 5))
             
             ctk.CTkLabel(
                 card, 
                 text=desc, 
                 font=("Segoe UI", 12), 
-                text_color="#E2E8F0",
+                text_color=self.C["texto"],
                 justify="left",
                 wraplength=640
             ).pack(anchor="w", padx=15, pady=(0, 10))
@@ -1025,9 +1026,9 @@ class GraficosFrame(ctk.CTkFrame):
         ctk.CTkButton(
             win,
             text="Entendido",
-            fg_color="#00DDEB",
-            text_color="#0A1628",
-            hover_color="#00C0CD",
+            fg_color=self.C["cian"],
+            text_color=self.C["fondo"],
+            hover_color=self.C["hover"],
             font=("Segoe UI", 12, "bold"),
             command=win.destroy
         ).pack(pady=(10, 15))

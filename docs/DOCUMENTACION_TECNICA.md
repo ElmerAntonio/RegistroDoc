@@ -12,6 +12,10 @@ Para cumplir con la **Eficiencia de Rendimiento (ISO/IEC 25010)**, RegistroDoc P
 
 ### 📊 Diagrama de Relaciones de la Base de Datos
 
+Se ha diseñado un esquema relacional optimizado para SQLite. A continuación se muestra la representación lógica y la arquitectura visual del esquema:
+
+![Diagrama de Relaciones de la Base de Datos](esquema_base_datos.png)
+
 ```
 +------------------+         +------------------+         +------------------+
 |  CONFIGURACION   |         |     GRADOS       |         |    ESTUDIANTES   |
@@ -108,8 +112,9 @@ Control de ausencias y tardanzas.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
 *   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
 *   **`fecha`** (TEXT, NOT NULL): Fecha registrada en formato "YYYY-MM-DD".
-*   **`estado`** (TEXT, CHECK: `estado IN ('P', 'A', 'T', 'E')`): Estado de la asistencia (Presente, Ausente, Tardanza, Excusa).
+*   **`estado`** (TEXT, CHECK: `estado IN ('.', '-', 'T', 'E')`): Estado de la asistencia en base a la simbología oficial (. = Presente, - = Ausente, T = Tardanza, E = Excusa).
 *   **`motivo`** (TEXT): Detalle o justificación de la ausencia/tardanza.
+*   **`trimestre`** (TEXT, CHECK: `trimestre IN ('Trimestre 1', 'Trimestre 2', 'Trimestre 3')`): Trimestre escolar correspondiente a la toma de asistencia.
 
 #### 8. Tabla: `observaciones`
 Registro de bitácoras de conducta y méritos.
@@ -125,8 +130,9 @@ Evaluación periódica de hábitos de estudio y actitudes personales.
 *   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
 *   **`trimestre`** (INTEGER, CHECK: `trimestre IN (1, 2, 3)`): Trimestre académico.
 *   **`criterio`** (TEXT, NOT NULL): Nombre completo del criterio de hábitos evaluado.
-*   **`frecuencia`** (TEXT, CHECK: `frecuencia IN ('Diario', 'Semanal', 'Mensual')`): Frecuencia elegida.
-*   **`valor`** (TEXT, CHECK: `valor IN ('S', 'R', 'X')`): Evaluación final (Satisfactorio, Regular, No Satisface).
+*   **`frecuencia`** (TEXT, CHECK: `frecuencia IN ('Diario', 'Semanal', 'Mensual')`): Frecuencia de la evaluación de hábitos.
+*   **`periodo`** (TEXT, NOT NULL): Identificador del período de evaluación correspondiente a la frecuencia (ej: "Día 1", "Semana 3", "Mes 2").
+*   **`valor`** (TEXT, CHECK: `valor IN ('S', 'R', 'X')`): Evaluación final (S = Satisfactorio, R = Regular, X = No Satisface).
 *   **`fecha`** (TEXT, NOT NULL): Fecha de registro en formato "YYYY-MM-DD".
 
 #### 10. Tabla: `tareas`

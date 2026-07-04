@@ -6,6 +6,7 @@ import json
 import threading
 import datetime
 from rdsecurity import cargar_config_segura, guardar_config_segura
+from theme import C
 
 
 class ConfigFrame(ctk.CTkFrame):
@@ -37,7 +38,7 @@ class ConfigFrame(ctk.CTkFrame):
         self.scroll_gen = ctk.CTkScrollableFrame(self.tab_gen, fg_color="transparent")
         self.scroll_gen.pack(fill="both", expand=True)
 
-        f1 = ctk.CTkFrame(self.scroll_gen, fg_color="#1E2D42", corner_radius=10)
+        f1 = ctk.CTkFrame(self.scroll_gen, fg_color=C["card_alt"], corner_radius=10)
         f1.pack(fill="x", padx=10, pady=10, ipadx=10, ipady=10)
         ctk.CTkLabel(f1, text="Modalidad Activa:", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(10, 5))
 
@@ -78,7 +79,7 @@ class ConfigFrame(ctk.CTkFrame):
         )
         self.combo_tema.pack(side="left", padx=40)
 
-        f2 = ctk.CTkFrame(self.scroll_gen, fg_color="#1A2638", corner_radius=10)
+        f2 = ctk.CTkFrame(self.scroll_gen, fg_color=C["card"], corner_radius=10)
         f2.pack(fill="both", expand=True, padx=10, pady=10, ipadx=10, ipady=10)
 
         # Doble columna real: (label, entry) x 2
@@ -234,7 +235,7 @@ class ConfigFrame(ctk.CTkFrame):
         horario_data = self.engine.obtener_horario()
         
         # Calculadora
-        f_calc = ctk.CTkFrame(self.tab_hor, fg_color="#1E2D42", corner_radius=10)
+        f_calc = ctk.CTkFrame(self.tab_hor, fg_color=C["card_alt"], corner_radius=10)
         f_calc.pack(fill="x", padx=10, pady=(10,0))
         ctk.CTkLabel(f_calc, text="⏱️ Calculadora de Tiempos", font=("Segoe UI", 16, "bold"), text_color="#10B981").grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(5,5))
         
@@ -251,7 +252,7 @@ class ConfigFrame(ctk.CTkFrame):
         ctk.CTkButton(f_calc, text="⚡ Generar Horas", fg_color="#3B82F6", command=self.calcular_horas_automaticas).grid(row=1, column=4, rowspan=2, padx=20, sticky="ew")
 
         # Tabla de Horario
-        f_table = ctk.CTkFrame(self.tab_hor, fg_color="#1A2638", corner_radius=10)
+        f_table = ctk.CTkFrame(self.tab_hor, fg_color=C["card"], corner_radius=10)
         f_table.pack(fill="both", expand=True, padx=10, pady=10)
         
         f_table.grid_columnconfigure((2,3,4,5,6), weight=1)
@@ -260,7 +261,7 @@ class ConfigFrame(ctk.CTkFrame):
         
         headers = ["Per.", "Horas", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
         for col, text in enumerate(headers):
-            ctk.CTkLabel(f_table, text=text, font=("Segoe UI", 12, "bold"), fg_color="#253650", corner_radius=5).grid(row=0, column=col, sticky="ew", padx=2, pady=5)
+            ctk.CTkLabel(f_table, text=text, font=("Segoe UI", 12, "bold"), fg_color=C["badge_bg"], corner_radius=5).grid(row=0, column=col, sticky="ew", padx=2, pady=5)
 
         self.entradas_horario = []
         self.receso_hora_var = ctk.StringVar(value="-- : --")
@@ -286,7 +287,7 @@ class ConfigFrame(ctk.CTkFrame):
 
                 # ⏱️ 2. CASILLA HORAS (Columna 1): Cuadro de hora independiente y enmarcado.
                 # Usamos un Frame gris claro independiente para que parezca una "casilla" separada.
-                f_rec_time = ctk.CTkFrame(f_table, fg_color="#2D75AD", corner_radius=5, height=altura_receso) 
+                f_rec_time = ctk.CTkFrame(f_table, fg_color=C["badge_bg"], corner_radius=5, height=altura_receso) 
                 f_rec_time.grid(row=current_row, column=1, sticky="nsew", padx=2, pady=margen_v)
                 
                 # Evita que el contenido estire el frame
@@ -294,12 +295,12 @@ class ConfigFrame(ctk.CTkFrame):
 
                 # Label interno CENTRADO ABSOLUTAMENTE en su propia casilla gris (como pediste)
                 # sticky="w" (oeste/izquierda) con padx=20 para separarlo del borde interno.
-                ctk.CTkLabel(f_rec_time, textvariable=self.receso_hora_var, font=("Segoe UI", 12, "bold"), text_color="#E7E9EB").place(relx=0.5, rely=0.5, anchor="center")
+                ctk.CTkLabel(f_rec_time, textvariable=self.receso_hora_var, font=("Segoe UI", 12, "bold"), text_color=C["texto"]).place(relx=0.5, rely=0.5, anchor="center")
 
 
                 # 📖 3. CASILLA TEXTO (Columnas 2-6): Bloque azul continuo, grande y centrado.
                 # Abarca desde la columna 2 hasta la 6 (columnspan=5), creando la franja azul que dibujaste.
-                f_rec_text = ctk.CTkFrame(f_table, fg_color="#2563EB", corner_radius=5, height=altura_receso) 
+                f_rec_text = ctk.CTkFrame(f_table, fg_color=C["acento2"], corner_radius=5, height=altura_receso) 
                 f_rec_text.grid(row=current_row, column=2, columnspan=5, sticky="nsew", padx=2, pady=margen_v)
                 
                 # Evita que el contenido estire el frame
@@ -308,7 +309,7 @@ class ConfigFrame(ctk.CTkFrame):
                 # Label central abarcando de la columna 2 a la 6 (Días de la semana).
                 # Texto cambiado de "R E C E S O   A C A D É M I C O" a "RECESO ESCOLAR" como pediste.
                 # Font Bold Prominente (como indica tu dibujo rojo grande)
-                lbl_receso = ctk.CTkLabel(f_rec_text, text="RECESO ESCOLAR", font=("Segoe UI", 12, "bold"), text_color="white")
+                lbl_receso = ctk.CTkLabel(f_rec_text, text="RECESO ESCOLAR", font=("Segoe UI", 12, "bold"), text_color=C["fondo"])
                 
                 # Centrado horizontal y verticalmente en el CENTRO ABSOLUTO de su propia casilla azul (como pediste)
                 lbl_receso.place(relx=0.5, rely=0.5, anchor="center")
@@ -485,7 +486,7 @@ class ConfigFrame(ctk.CTkFrame):
 
     # ================= PESTAÑA 3: GRADOS =================
     def crear_panel_grados(self):
-        f1 = ctk.CTkFrame(self.tab_gra, fg_color="#1E2D42", corner_radius=10)
+        f1 = ctk.CTkFrame(self.tab_gra, fg_color=C["card_alt"], corner_radius=10)
         f1.pack(fill="x", padx=20, pady=10, ipadx=10, ipady=10)
 
         ctk.CTkLabel(f1, text="➕ Agregar Nuevo Grado o Grupo (Ej. 10° o 8°B)", font=("Segoe UI", 16, "bold"), text_color="#10B981").pack(anchor="w", padx=20, pady=10)
@@ -494,7 +495,7 @@ class ConfigFrame(ctk.CTkFrame):
         self.entry_cons_grado = ctk.CTkEntry(row1, placeholder_text="Prof. Consejero", width=200); self.entry_cons_grado.pack(side="left", padx=5)
         self.btn_crear_grado = ctk.CTkButton(row1, text="Crear Grado", command=self.agregar_grado); self.btn_crear_grado.pack(side="left", padx=20)
 
-        f2 = ctk.CTkFrame(self.tab_gra, fg_color="#1A2638", corner_radius=10)
+        f2 = ctk.CTkFrame(self.tab_gra, fg_color=C["card"], corner_radius=10)
         f2.pack(fill="both", expand=True, padx=20, pady=10, ipadx=10, ipady=10)
         
         ctk.CTkLabel(f2, text="🗑️ Eliminar Grado Completo", font=("Segoe UI", 16, "bold"), text_color="#EF4444").pack(anchor="w", padx=20, pady=10)
@@ -527,7 +528,7 @@ class ConfigFrame(ctk.CTkFrame):
 
     def actualizar_consejero(self):
         g = self.combo_grado_cons.get(); c = self.entry_nuevo_cons.get().strip()
-        if not g or not c: return messagebox.showwarning("Atención", "Escriba el nombre del nuevo consejero.")
+        if not g or not c: return messagebox.showwarning("Atención", "Escriba el nombre del new consejero.")
         self.btn_act_cons.configure(text="Actualizando...", state="disabled"); self.update()
         if self.engine.actualizar_consejero(g, c): messagebox.showinfo("Éxito", "Consejero actualizado.")
         else: messagebox.showerror("Error", "No se pudo actualizar.")
@@ -543,7 +544,7 @@ class ConfigFrame(ctk.CTkFrame):
 
     # ================= PESTAÑA 4: MATERIAS =================
     def crear_panel_materias(self):
-        f1 = ctk.CTkFrame(self.tab_mat, fg_color="#1E2D42", corner_radius=10)
+        f1 = ctk.CTkFrame(self.tab_mat, fg_color=C["card_alt"], corner_radius=10)
         f1.pack(fill="x", padx=20, pady=10, ipadx=10, ipady=10)
 
         ctk.CTkLabel(f1, text="➕ Agregar Materia a un Grado", font=("Segoe UI", 16, "bold"), text_color="#10B981").pack(anchor="w", padx=20, pady=10)
@@ -558,7 +559,7 @@ class ConfigFrame(ctk.CTkFrame):
         self.combo_jornada_mat = ctk.CTkOptionMenu(row2, values=["Matutina", "Vespertina", "Nocturna"], width=120); self.combo_jornada_mat.pack(side="left", padx=5)
         self.btn_crear_mat = ctk.CTkButton(row2, text="Crear Materia", command=self.clonar_materia); self.btn_crear_mat.pack(side="left", padx=20)
 
-        f2 = ctk.CTkFrame(self.tab_mat, fg_color="#1A2638", corner_radius=10)
+        f2 = ctk.CTkFrame(self.tab_mat, fg_color=C["card"], corner_radius=10)
         f2.pack(fill="both", expand=True, padx=20, pady=10, ipadx=10, ipady=10)
 
         ctk.CTkLabel(f2, text="🗑️ Eliminar Materia", font=("Segoe UI", 16, "bold"), text_color="#EF4444").pack(anchor="w", padx=20, pady=10)

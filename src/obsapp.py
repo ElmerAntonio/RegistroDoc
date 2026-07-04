@@ -6,6 +6,7 @@ import threading
 import json
 from config import BASE_DIR
 from utils.spellchecker import SpellcheckTextbox
+from theme import C
 try:
     from docx import Document
     from docx.shared import Pt, RGBColor
@@ -37,7 +38,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.al_cambiar_grado(self.combo_grado.get())
 
     def crear_panel_izquierdo(self):
-        frame_izq = ctk.CTkFrame(self, fg_color="#1A2638", corner_radius=10)
+        frame_izq = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=10)
         frame_izq.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
         # Controles
@@ -72,7 +73,7 @@ class ObservacionesFrame(ctk.CTkFrame):
 
     def crear_panel_derecho(self):
         self.frame_der = ctk.CTkFrame(
-            self, fg_color="#1E2D42", corner_radius=10)
+            self, fg_color=C["card_alt"], corner_radius=10)
         self.frame_der.grid(row=0, column=1, sticky="nsew")
 
         ctk.CTkLabel(
@@ -94,7 +95,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.lbl_alumno_sel.pack(pady=10)
 
         # Controles de observación
-        panel_obs = ctk.CTkFrame(self.frame_der, fg_color="#1A2638")
+        panel_obs = ctk.CTkFrame(self.frame_der, fg_color=C["card"])
         panel_obs.pack(fill="both", expand=True, padx=30, pady=10)
 
         ctk.CTkLabel(
@@ -230,7 +231,7 @@ class ObservacionesFrame(ctk.CTkFrame):
 
         for est in lista:
             btn = ctk.CTkButton(self.scroll_estudiantes, text=est['nombre'], fg_color="transparent",
-                                anchor="w", text_color="white", hover_color="#3B82F6",
+                                anchor="w", text_color=C["texto"], hover_color=C["hover"],
                                 command=lambda e=est: self.seleccionar_estudiante(e))
             btn.pack(fill="x", pady=2)
 

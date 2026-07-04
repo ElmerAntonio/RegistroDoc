@@ -639,10 +639,62 @@ def activar_licencia_completa(cedula: str, codigo: str) -> tuple[bool, str]:
 #  CONFIG CIFRADA — Ley 81/2019 Panamá (datos personales)
 # ══════════════════════════════════════════════════════════════
 
+def obtener_dir_datos_usuario() -> str:
+    """Devuelve la ruta absoluta del directorio de datos del usuario (coherente con rdsql)."""
+    import platform
+    if platform.system() == "Windows":
+        base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+    else:
+        base = os.path.expanduser("~/.local/share")
+    ruta = os.path.join(base, "RegistroDoc")
+    return ruta
+
 def guardar_config_segura(cfg: dict) -> None:
     """Cifra y guarda la configuración. Datos personales protegidos."""
     guardar_cifrado(CONFIG_FILE, cfg)
     registrar_auditoria("CONFIG", "GUARDADO", "Configuración actualizada")
+    
+    # También sincronizar con la tabla configuracion de SQLite
+    try:
+        user_dir = obtener_dir_datos_usuario()
+        temp_db = os.path.join(user_dir, "temp", "sqlite_temp.db")
+        
+        import sqlite3
+        if os.path.exists(temp_db):
+            # Si el archivo temporal existe, escribimos directamente en la base temporal activa
+            # WAL mode permite escrituras concurrentes aunque SQLDatabaseManager ya tenga la BD abierta
+            conn = sqlite3.connect(temp_db, timeout=30.0)
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                cursor = conn.cursor()
+                for k, v in cfg.items():
+                    if isinstance(v, (list, dict)):
+                        v_str = json.dumps(v, ensure_ascii=False)
+                    else:
+                        v_str = str(v)
+                    cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", (k, v_str))
+                conn.commit()
+            finally:
+                conn.close()
+
+        else:
+            # Si no está corriendo, usamos SQLDatabaseManager para el ciclo completo
+            from rdsql import SQLDatabaseManager
+            db = SQLDatabaseManager()
+            conn = db.conectar()
+            try:
+                cursor = conn.cursor()
+                for k, v in cfg.items():
+                    if isinstance(v, (list, dict)):
+                        v_str = json.dumps(v, ensure_ascii=False)
+                    else:
+                        v_str = str(v)
+                    cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", (k, v_str))
+                conn.commit()
+            finally:
+                db.cerrar()
+    except Exception as e:
+        logger.error(f"Error al sincronizar configuración en SQLite: {e}")
 
 def cargar_config_segura(default: dict) -> dict:
     """Carga configuración cifrada. Retorna default si no existe."""
@@ -660,6 +712,91 @@ def cargar_config_segura(default: dict) -> dict:
             logger.debug(f"Error migrando perfil.json: {e}")
 
     datos = cargar_cifrado(CONFIG_FILE)
+    
+    # Fallback: intentar recuperar de SQLite si config.enc no existe o no tiene datos
+    if not datos:
+        try:
+            user_dir = obtener_dir_datos_usuario()
+            temp_db = os.path.join(user_dir, "temp", "sqlite_temp.db")
+            db_enc = os.path.join(user_dir, "data", "registro.db.enc")
+            
+            import sqlite3
+            # Caso A: Si el programa está corriendo y el temp_db existe
+            if os.path.exists(temp_db):
+                conn = sqlite3.connect(temp_db, timeout=10.0)
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT clave, valor FROM configuracion;")
+                    rows = cursor.fetchall()
+                    if rows:
+                        datos = {}
+                        for k, v in rows:
+                            if (v.startswith("[") and v.endswith("]")) or (v.startswith("{") and v.endswith("}")):
+                                try:
+                                    datos[k] = json.loads(v)
+                                except Exception:
+                                    datos[k] = v
+                            else:
+                                datos[k] = v
+                finally:
+                    conn.close()
+            # Caso B: Si no está corriendo pero existe el archivo cifrado
+            elif os.path.exists(db_enc):
+                import hashlib
+                hw_key = _hw_fingerprint()
+                cedula = ""
+                try:
+                    token_data = _leer_cedula_token()
+                    cedula = token_data.get("hint", "").strip()
+                except Exception:
+                    pass
+                
+                if cedula:
+                    key = hashlib.sha256(hw_key + cedula.encode("utf-8")).digest()
+                else:
+                    key = hw_key
+                
+                with open(db_enc, "rb") as f:
+                    cifrado = f.read()
+                
+                descifrado = None
+                try:
+                    descifrado = descifrar(cifrado, key)
+                except Exception:
+                    try:
+                        descifrado = descifrar(cifrado, hw_key)
+                    except Exception:
+                        pass
+                
+                if descifrado:
+                    import tempfile
+                    fd, temp_path = tempfile.mkstemp()
+                    try:
+                        os.write(fd, descifrado)
+                        os.close(fd)
+                        conn = sqlite3.connect(temp_path)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT clave, valor FROM configuracion;")
+                        rows = cursor.fetchall()
+                        if rows:
+                            datos = {}
+                            for k, v in rows:
+                                if (v.startswith("[") and v.endswith("]")) or (v.startswith("{") and v.endswith("}")):
+                                    try:
+                                        datos[k] = json.loads(v)
+                                    except Exception:
+                                        datos[k] = v
+                                else:
+                                    datos[k] = v
+                        conn.close()
+                    finally:
+                        try:
+                            os.remove(temp_path)
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.debug(f"Error en fallback de configuración desde SQLite: {e}")
+
     if not datos:
         return dict(default)
     cfg = dict(default)

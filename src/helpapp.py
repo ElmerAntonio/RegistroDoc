@@ -11,35 +11,36 @@ from theme import C, FONT_TITLE, FONT_BODY, FONT_SIZES
 
 # ─── DATOS OFFLINE ──────────────────────────────────────────────
 TIPS_DIA = [
-    "💡 Use Ctrl+S en cualquier pantalla para guardar rápido.",
-    "💡 Marque 'Todos Presentes' y luego corrija solo las excepciones.",
-    "💡 El botón 🧠 Sugerencia de IA en Hábitos analiza notas y asistencia automáticamente.",
-    "💡 Guarde un respaldo en USB cada viernes — su trabajo es valioso.",
-    "💡 Si el Excel está abierto en otro programa, ciérrelo antes de guardar aquí.",
-    "💡 Use la pestaña 'Modificar' para corregir notas o asistencia ya guardadas.",
-    "💡 Las Excusas (E) no restan puntos de asistencia al alumno.",
-    "💡 Use Ctrl+1 a Ctrl+9 para navegar rápido entre secciones.",
-    "💡 El Dashboard muestra alertas de alumnos en riesgo automáticamente.",
-    "💡 Puede buscar alumnos en el Dashboard escribiendo su nombre.",
-    "💡 Las observaciones se guardan automáticamente en Word por alumno.",
-    "💡 En Hábitos, la frecuencia se bloquea después del primer guardado del trimestre.",
+    "💡 RegistroDoc Pro v5.0 trabaja 100% en SQLite — sus datos se leen y guardan en milisegundos.",
+    "💡 Use Ctrl+S en cualquier pantalla para guardar rapidamente.",
+    "💡 Use el boton 📊 Exportar en el Dashboard para volcar sus datos al Excel oficial MEDUCA.",
+    "💡 La lista de estudiantes muestra 1, 2, 3... — los IDs internos de la base de datos son invisibles.",
+    "💡 Cambiar entre modulos es instantaneo — el programa los mantiene en memoria sin recargar.",
+    "💡 En el Registro Completo, la fecha de cada tarea aparece debajo de su titulo en la cuadricula.",
+    "💡 Al modificar notas, la fecha es no editable para mantener el historial oficial intacto.",
+    "💡 Los simbolos de asistencia MEDUCA son: P (Presente), A (Ausente), T (Tardanza) y E (Excusa).",
+    "💡 Las Excusas (E) son inasistencias justificadas que NO restan puntaje al estudiante.",
+    "💡 Use el boton Sugerencia de IA en Habitos para calcular la nota recomendada automaticamente.",
+    "💡 Guarde un respaldo en USB regularmente — el programa hace respaldos automaticos cada 30 minutos.",
+    "💡 En Habitos, la frecuencia (Diario, Semanal o Mensual) se bloquea al primer guardado del trimestre.",
+    "💡 Presione 'Todos Presentes' en Asistencia y corrija solo las excepciones — ahorra mucho tiempo.",
+    "💡 El programa funciona 100% sin internet — perfecto para areas rurales y comarcas.",
+    "💡 Cada observacion de conducta se guarda en SQLite Y genera un documento Word del expediente.",
 ]
 
 GLOSARIO = [
-    ("S (Satisfactorio)", "El alumno cumple bien con el criterio evaluado. Color verde."),
+    ("S (Satisfactorio)", "El alumno cumple bien con el criterio de hábitos evaluado. Color verde."),
     ("R (Regular)", "El alumno cumple parcialmente. Necesita mejorar. Color amarillo."),
     ("X (No Satisface)", "El alumno no cumple con el criterio. Requiere atención. Color rojo."),
     ("Parcial / Diaria", "Nota de tareas, talleres o actividades de clase. Valor: 1.0 a 5.0."),
     ("Apreciación", "Nota de cuadernos, participación o proyectos. Valor: 1.0 a 5.0."),
     ("Examen", "Prueba trimestral oficial. La descripción se genera automáticamente."),
-    ("P (Presente)", "El alumno asistió a clase. Se guarda como '.' en Excel."),
-    ("A (Ausente)", "El alumno faltó sin justificación. Se guarda como '-' en Excel."),
-    ("T (Tardanza)", "El alumno llegó tarde. Se guarda como 'T' en Excel."),
-    ("E (Excusa)", "Falta justificada con certificado. NO resta puntos de asistencia."),
-    ("Trimestre", "Período académico (3 por año). Cada uno tiene sus propias notas."),
-    ("Expediente", "Documento Word individual por alumno con su historial completo."),
-    ("Sincronizar", "Copiar los datos de configuración a todas las hojas del Excel."),
-    ("Consejero", "Profesor encargado de un grupo/grado específico."),
+    (". (Presente)", "El alumno asistió a clase. Se guarda exactamente como '.' en SQLite y Excel."),
+    ("- (Ausente)", "El alumno faltó a clase. Se guarda exactamente como '-' en SQLite y Excel."),
+    ("T (Tardanza)", "El alumno llegó tarde. Se guarda exactamente como 'T' en SQLite y Excel."),
+    ("E (Excusa)", "Falta justificada con certificado. Se guarda como 'E' y no resta puntos."),
+    ("Base de Datos SQLite", "Almacenamiento rápido en disco que centraliza toda la información del docente."),
+    ("Exportación Excel", "Operación bajo demanda que vuelca todos los datos de SQLite a una copia de la libreta oficial."),
 ]
 
 ATAJOS = [
@@ -77,9 +78,9 @@ GUIAS = [
             "Presione 'Asistencia' en el menú izquierdo (o Ctrl+4)",
             "Seleccione el Grado y Trimestre",
             "Escriba la fecha de hoy (DD-MM)",
-            "Por defecto todos están en P (Presente)",
-            "Cambie a A, T o E solo los que faltaron/llegaron tarde",
-            "Escriba el motivo de la ausencia o tardanza",
+            "Por defecto todos están en P (Presente, representado por '.')",
+            "Cambie a A ('-'), T ('T') o E ('E') según corresponda",
+            "Escriba el motivo de la ausencia o tardanza si lo requiere",
             "Presione 💾 GUARDAR ASISTENCIA",
         ]
     },
@@ -136,7 +137,7 @@ GUIAS = [
         "pasos": [
             "Presione 'Registro Completo' en el menú izquierdo",
             "Seleccione el Grado, Trimestre y Materia a visualizar",
-            "Pestaña Calificaciones: Vea métricas y cuadrícula de notas de todo el salón",
+            "Pestaña Calificaciones: Vea la cuadrícula de notas (fechas de tareas bajo el título)",
             "Pestaña Asistencia: Vea la matriz completa de asistencia por fechas del trimestre",
         ]
     },
@@ -153,30 +154,28 @@ GUIAS = [
 ]
 
 FAQS = [
-    ("¿Por qué no puedo cambiar la frecuencia de Hábitos?",
-     "Una vez que guarda la primera calificación en el trimestre, la frecuencia se bloquea para mantener los datos ordenados. Debe terminar el trimestre o borrar las evaluaciones para cambiarla."),
-    ("¿Qué significa 'E' en la asistencia?",
-     "'E' es una Falta Justificada (Excusa). A diferencia de la falta '-', las fórmulas de MEDUCA NO la restarán, por lo que el alumno no perderá puntaje."),
-    ("¿Dónde se guardan los expedientes de conducta?",
-     "En la carpeta 'Expedientes_Estudiantes' como archivos Word (.docx). Hay uno por alumno con todo su historial."),
-    ("¿Cómo corrijo una nota ya guardada?",
-     "En la pantalla de Notas, cambie a la pestaña 'Modificar', seleccione la descripción del trabajo, haga los cambios y presione 'ACTUALIZAR EXCEL'."),
-    ("¿Cómo cambio una Ausencia a Excusa?",
-     "En Asistencia → pestaña 'Modificar' → seleccione la fecha → cambie A por E → escriba la justificación → ACTUALIZAR EXCEL."),
-    ("El programa da error al guardar, ¿qué hago?",
-     "Asegúrese de que el archivo Excel NO esté abierto en Microsoft Excel. Ciérrelo completamente e intente de nuevo."),
-    ("¿Cómo hago un respaldo de seguridad?",
-     "En el Dashboard hay un botón '💾 Respaldo'. También puede copiar manualmente el archivo Excel y la carpeta Expedientes a un USB."),
-    ("¿Qué son las notas vacías que menciona el sistema?",
-     "Son celdas donde se creó una tarea pero no se le puso nota al alumno. El sistema las cuenta como 'no entregadas' para las sugerencias."),
-    ("¿Puedo usar el programa sin internet?",
-     "¡Sí! RegistroDoc Pro funciona 100% offline. No necesita conexión a internet para nada."),
-    ("¿Cómo agrego una materia nueva a un grado?",
-     "En Configuración → pestaña 'Gestión de Materias' → seleccione el grado, escriba el nombre y presione 'Crear Materia'."),
-    ("¿Qué pasa si elimino un grado por error?",
-     "La eliminación es permanente. Por eso siempre haga respaldos antes de eliminar. Puede restaurar desde un respaldo anterior."),
-    ("¿Cómo sincronizo los datos de portada?",
-     "En Configuración → pestaña 'Datos de Portada' → llene todos los campos → presione 'SINCRONIZAR Y SOBREESCRIBIR EXCEL'."),
+    ("¿Por que no puedo cambiar la frecuencia de Habitos?",
+     "Una vez que guarda la primera calificacion del trimestre, la frecuencia se bloquea para mantener los datos ordenados. Debe terminar el trimestre o borrar las evaluaciones para cambiarla."),
+    ("¿Que significan los simbolos de asistencia?",
+     "El sistema usa P para Presente, A para Ausente, T para Tardanza y E para Excusa. Las Excusas no restan puntaje de asistencia. Internamente se guardan como '.', '-', 'T' y 'E' en SQLite."),
+    ("¿Donde se guardan los expedientes de conducta?",
+     "En la carpeta 'Expedientes_Estudiantes' como archivos Word (.docx), uno por alumno con todo su historial. Tambien se guardan en la base de datos SQLite."),
+    ("¿Como corrijo una nota ya guardada?",
+     "En Notas, cambie a la pestana 'Modificar', seleccione la descripcion del trabajo, haga los cambios y presione 'ACTUALIZAR NOTAS'. La fecha no se puede cambiar para proteger el historial."),
+    ("¿Como cambio una Ausencia a Excusa?",
+     "En Asistencia → pestana 'Modificar' → seleccione la fecha → cambie A por E → escriba la justificacion y guarde."),
+    ("¿El programa funciona sin internet?",
+     "Si, RegistroDoc Pro funciona 100% offline en SQLite local. No necesita internet para ninguna funcion del programa."),
+    ("¿Como exporto mis calificaciones a Excel?",
+     "En el Dashboard (Ctrl+1), use el panel 'Exportar Calificaciones' en el pie de pagina. Seleccione el trimestre y presione Excel. Todos los datos de SQLite se vuelcan al archivo oficial."),
+    ("¿Como hago un respaldo de seguridad?",
+     "En el Dashboard, presione el boton 'Respaldo' para crear una copia local instantanea en 'Respaldos_Locales'. El programa tambien hace respaldos automaticos cada 30 minutos en 'Respaldos_Auto'."),
+    ("¿Por que veo letras y numeros raros en los nombres?",
+     "Eso indica un problema de descifrado — los datos estan protegidos con AES-256. Si ocurre, cierre el programa, verifique que no hay otro proceso usando la BD, y vuelva a abrir."),
+    ("¿La lista de estudiantes muestra numeros como 201, 301...?",
+     "No. Desde v5.0, la lista muestra siempre 1, 2, 3... Los IDs internos de la base de datos estan ocultos para el docente."),
+    ("¿Que debo hacer si el programa no abre?",
+     "Haga clic derecho en el icono y seleccione 'Ejecutar como administrador'. Si sigue fallando, verifique que Python 3.10 o superior este instalado correctamente."),
 ]
 
 
@@ -405,7 +404,7 @@ class HelpFrame(ctk.CTkFrame):
         f_top = ctk.CTkFrame(parent, fg_color="transparent")
         f_top.pack(fill="x", padx=10, pady=(5, 8))
 
-        ctk.CTkLabel(f_top, text="📖 Manual de Usuario Oficial — v3.0",
+        ctk.CTkLabel(f_top, text="📖 Manual de Usuario Oficial — v5.0 (SQL-First)",
                      font=ctk.CTkFont(FONT_TITLE, 14, "bold"),
                      text_color=C["cian"]).pack(side="left", pady=5)
 

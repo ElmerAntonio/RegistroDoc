@@ -28,8 +28,13 @@ def test_obtener_datos_generales_missing_file():
     Test that obtener_datos_generales returns the exact expected default
     dictionary when initialized with a non-existent file path.
     """
+    from unittest.mock import MagicMock
     # Create an instance with a non-existent path
     engine = DataEngine(ruta_excel="ruta_ficticia_inexistente.xlsx")
+    
+    # Mockear db_conn para que no retorne configuración y pruebe el fallback real
+    engine.db_conn = MagicMock()
+    engine.db_conn.cursor().fetchone.return_value = [0]
 
     # Ensure the path really doesn't exist
     assert not os.path.exists(engine.ruta), "El archivo no debe existir para esta prueba"
@@ -192,3 +197,83 @@ def test_parsear_archivo_estudiantes_txt(tmp_path):
     assert estudiantes[2]["nombre"] == "MARIA DE LEON (SIN CEDULA)"
     assert estudiantes[2]["cedula"] == ""
 
+def test_registro_primaria_integration():
+    """Integration test validating that the Primary workbook template can be loaded and synced successfully."""
+    real_path = os.path.join("assets", "templates", "Registro_Primaria.xlsx")
+    if not os.path.exists(real_path):
+        pytest.skip("Registro_Primaria.xlsx not present in assets/templates, skipping integration test")
+        
+    engine = DataEngine(real_path, modalidad="primaria")
+    generales = engine.obtener_datos_generales()
+    
+    assert isinstance(generales, dict)
+    assert engine.modalidad == "primaria"
+    assert engine.fila_desc == 39 # Fila de descripción de hábitos para primaria
+
+
+def test_obtener_fechas_asistencia_excel(tmp_path):
+    import openpyxl
+    file_path = str(tmp_path / "test_asis.xlsx")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Asistencia (7 A)"
+    ws.cell(row=2, column=3, value="10-10")
+    ws.cell(row=2, column=4, value="11-10")
+    wb.save(file_path)
+    wb.close()
+
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    fechas = engine.obtener_fechas_asistencia(f"7\u00b0 A", "Trimestre 1")
+    assert "10-10" in fechas
+    assert "11-10" in fechas
+    assert len(fechas) == 2
+
+
+def test_sincronizar_excel_a_sql_self_healing(tmp_path):
+    import openpyxl
+    from rdsql import obtener_dir_datos_usuario
+    
+    file_path = str(tmp_path / "Registro_Premedia.xlsx")
+    
+    # Eliminar cualquier archivo temporal previo para evitar conflictos de caché
+    temp_file = os.path.join(obtener_dir_datos_usuario(), "temp", "Registro_Premedia.xlsx")
+    if os.path.exists(temp_file):
+        try:
+            os.remove(temp_file)
+        except Exception:
+            pass
+            
+    wb = openpyxl.Workbook()
+    
+    ws_gen = wb.active
+    ws_gen.title = "DASHBOARD"
+    
+    ws_asis = wb.create_sheet("Asistencia (7 A)")
+    ws_asis.cell(row=2, column=3, value="15-05")
+    ws_asis.cell(row=4, column=1, value="RAMOS, Elmer")
+    ws_asis.cell(row=4, column=3, value="P")
+    
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    cursor = engine.db_conn.cursor()
+    cursor.execute(f"INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES ('7\u00b0 A', 'A', 'premedia');")
+    cursor.execute(f"SELECT id FROM grados WHERE nombre = '7\u00b0 A';")
+    g_id = cursor.fetchone()[0]
+    
+    nombre_cifrado = engine.db_manager.encriptar_campo("RAMOS, Elmer")
+    cursor.execute("INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, '', 'M', ?, 'Activo');", (f"{g_id}02", nombre_cifrado, g_id))
+    
+    # Asegurar que no hay asistencia para forzar la autocuración
+    cursor.execute("DELETE FROM asistencia;")
+    engine.db_conn.commit()
+    
+    engine.sincronizar_excel_a_sql()
+    
+    cursor.execute("SELECT COUNT(*) FROM asistencia;")
+    assert cursor.fetchone()[0] > 0

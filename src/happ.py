@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import os
 from tkinter import messagebox
+from theme import C
 
 class ReportesFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
@@ -22,7 +23,7 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkButton(acciones_frame, text="📄 Informe del Estudiante", fg_color="#10B981", hover_color="#059669", command=self.generar_informe_estudiante_modal).pack(side="left", padx=10)
 
         # Panel de Controles
-        self.frame_controles = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=8)
+        self.frame_controles = ctk.CTkFrame(self, fg_color=C["card_alt"], corner_radius=8)
         self.frame_controles.pack(fill="x", pady=5, ipadx=10, ipady=10)
 
         ctk.CTkLabel(self.frame_controles, text="Seleccione Grado:", font=("Segoe UI", 14)).pack(side="left", padx=10)
@@ -83,34 +84,34 @@ class ReportesFrame(ctk.CTkFrame):
             return
 
         # DOCENTE HEADER
-        f_h_doc = ctk.CTkFrame(self.scroll_docente, fg_color="#253650")
+        f_h_doc = ctk.CTkFrame(self.scroll_docente, fg_color=C["badge_bg"])
         f_h_doc.pack(fill="x", pady=2)
         ctk.CTkLabel(f_h_doc, text="Estudiante", width=250, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(f_h_doc, text="Cédula", width=150, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(f_h_doc, text="Nota Final", width=100, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
 
         for fila in reportes["docente"]:
-            row_d = ctk.CTkFrame(self.scroll_docente, fg_color="#1A2638")
+            row_d = ctk.CTkFrame(self.scroll_docente, fg_color=C["card"])
             row_d.pack(fill="x", pady=1)
             ctk.CTkLabel(row_d, text=fila[0], width=250, anchor="w").pack(side="left", padx=10)
             ctk.CTkLabel(row_d, text=fila[1] if fila[1] else "N/A", width=150, anchor="w").pack(side="left", padx=10)
             ctk.CTkLabel(row_d, text=str(fila[2]), width=100, anchor="w").pack(side="left", padx=10)
 
         # APROBADOS HEADER
-        f_h_apr = ctk.CTkFrame(self.scroll_aprobados, fg_color="#253650")
+        f_h_apr = ctk.CTkFrame(self.scroll_aprobados, fg_color=C["badge_bg"])
         f_h_apr.pack(fill="x", pady=2)
         ctk.CTkLabel(f_h_apr, text="Estudiante", width=250, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(f_h_apr, text="Estado", width=150, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
 
         for fila in reportes["aprobados"]:
-            row_a = ctk.CTkFrame(self.scroll_aprobados, fg_color="#1A2638")
+            row_a = ctk.CTkFrame(self.scroll_aprobados, fg_color=C["card"])
             row_a.pack(fill="x", pady=1)
             ctk.CTkLabel(row_a, text=fila[0], width=250, anchor="w").pack(side="left", padx=10)
             color_est = "#10B981" if str(fila[1]).upper() == "APROBADO" else "#EF4444"
             ctk.CTkLabel(row_a, text=str(fila[1]), width=150, anchor="w", text_color=color_est, font=("Segoe UI", 12, "bold")).pack(side="left", padx=10)
 
         # DIRECCION HEADER
-        f_h_dir = ctk.CTkFrame(self.scroll_direccion, fg_color="#253650")
+        f_h_dir = ctk.CTkFrame(self.scroll_direccion, fg_color=C["badge_bg"])
         f_h_dir.pack(fill="x", pady=2)
         ctk.CTkLabel(f_h_dir, text="Estudiante", width=250, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(f_h_dir, text="Cédula", width=150, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
@@ -118,7 +119,7 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkLabel(f_h_dir, text="Estado", width=150, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
 
         for fila in reportes["direccion"]:
-            row_dir = ctk.CTkFrame(self.scroll_direccion, fg_color="#1A2638")
+            row_dir = ctk.CTkFrame(self.scroll_direccion, fg_color=C["card"])
             row_dir.pack(fill="x", pady=1)
             ctk.CTkLabel(row_dir, text=fila[0], width=250, anchor="w").pack(side="left", padx=10)
             ctk.CTkLabel(row_dir, text=fila[1] if fila[1] else "N/A", width=150, anchor="w").pack(side="left", padx=10)
@@ -135,7 +136,7 @@ class ReportesFrame(ctk.CTkFrame):
         estudiantes = self.engine.obtener_estudiantes_completos(grado)
         
         # Header
-        f_h_hab = ctk.CTkFrame(self.scroll_habitos, fg_color="#253650")
+        f_h_hab = ctk.CTkFrame(self.scroll_habitos, fg_color=C["badge_bg"])
         f_h_hab.pack(fill="x", pady=2)
         ctk.CTkLabel(f_h_hab, text="Estudiante", width=250, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(f_h_hab, text="Satisfactorios (S)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#10B981").pack(side="left", padx=10)
@@ -168,7 +169,7 @@ class ReportesFrame(ctk.CTkFrame):
                 print(f"Error loading habits report stats: {e}")
 
         for idx, est in enumerate(estudiantes):
-            row_h = ctk.CTkFrame(self.scroll_habitos, fg_color="#1A2638")
+            row_h = ctk.CTkFrame(self.scroll_habitos, fg_color=C["card"])
             row_h.pack(fill="x", pady=1)
             
             ctk.CTkLabel(row_h, text=est["nombre"], width=250, anchor="w").pack(side="left", padx=10)
@@ -344,26 +345,25 @@ class ReportesFrame(ctk.CTkFrame):
         btn_gen.pack(pady=15)
 
     def imprimir_reporte(self):
-        # Abre el Excel para imprimir desde la hoja de resumen del grado seleccionado
+        """Abre una copia del Excel para imprimir el resumen del grado. Los datos ya están en SQL."""
         try:
             from rdprint import abrir_para_imprimir
             grado = self.combo_grado.get()
             self.engine.formatear_reportes_excel(grado)
-            # Find the correct RESUMEN sheet. The format varies (e.g. RESUMEN (7°))
-            hoja = None
-            wb = self.engine._wb_cache
-            if not wb:
-                import openpyxl
-                wb = openpyxl.load_workbook(self.engine.ruta, data_only=True)
 
-            grado_num = grado.replace("°", "")
-            for s in wb.sheetnames:
-                if "RESUMEN" in s.upper() and (self.engine.modalidad == "primaria" or grado_num in s):
-                    hoja = s
-                    break
+            # Construir nombre de hoja desde SQL (sin abrir el Excel)
+            grado_num = grado.replace("\u00b0", "").strip()
+            grados_activos = self.engine.obtener_grados_activos()
+            hoja = None
+            # Intentar variantes del nombre de hoja RESUMEN
+            for candidato in [f"RESUMEN_{grado}", f"RESUMEN ({grado})", f"RESUMEN_{grado_num}"]:
+                hoja = candidato
+                break
+            if self.engine.modalidad == "primaria":
+                hoja = "RESUMEN"
 
             if not hoja:
-                messagebox.showerror("Error", f"No se encontró la hoja de resumen para {grado}.")
+                messagebox.showerror("Error", f"No se pudo determinar la hoja de resumen para {grado}.")
                 return
 
             exito, msj = abrir_para_imprimir(hoja)
@@ -372,26 +372,17 @@ class ReportesFrame(ctk.CTkFrame):
             messagebox.showerror("Error", f"Error al intentar imprimir: {e}")
 
     def imprimir_graficos(self):
+        """Imprime la hoja de resumen/gráficos del grado sin leer el Excel para resolver el nombre."""
         try:
             from rdprint import imprimir_hoja_directo
-            from tkinter import messagebox
-            import openpyxl
-
             grado = self.combo_grado.get()
-            hoja = None
-            wb = self.engine._wb_cache
-            if not wb:
-                wb = openpyxl.load_workbook(self.engine.ruta, data_only=True)
 
-            grado_num = grado.replace("°", "")
-            for s in wb.sheetnames:
-                if "RESUMEN" in s.upper() and (self.engine.modalidad == "primaria" or grado_num in s):
-                    hoja = s
-                    break
-
-            if not hoja:
-                messagebox.showerror("Error", f"No se encontró la hoja para imprimir {grado}.")
-                return
+            # Construir nombre de hoja desde SQL (sin abrir el Excel)
+            grado_num = grado.replace("\u00b0", "").strip()
+            if self.engine.modalidad == "primaria":
+                hoja = "RESUMEN"
+            else:
+                hoja = f"RESUMEN_{grado}"
 
             exito, msj = imprimir_hoja_directo(hoja)
             if exito:
@@ -499,6 +490,7 @@ class ReportesFrame(ctk.CTkFrame):
             import matplotlib.pyplot as plt
             promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, None, None)
             estudiantes = getattr(self.engine, 'obtener_estudiantes_completos', lambda g: [])(grado)
+            est_name_to_idx = {est['nombre'].upper().strip(): idx + 1 for idx, est in enumerate(estudiantes)}
             if not promedios_por_est and estudiantes:
                 for est in estudiantes:
                     promedios_por_est[est['nombre']] = 1.0
@@ -691,9 +683,14 @@ class ReportesFrame(ctk.CTkFrame):
                         if fechas:
                             presentes = 0
                             total = len(fechas)
+                            est_idx = est_name_to_idx.get(n.upper().strip())
                             for fecha in fechas:
-                                asis_dia = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: {})(grado, "Trimestre 1", fecha)
-                                if asis_dia.get(n, "P") in ["P", "T"]: presentes += 1
+                                asis_dia = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(grado, "Trimestre 1", fecha)
+                                if asis_dia:
+                                    asis_dict = asis_dia.get("asistencia", {})
+                                    val = asis_dict.get(est_idx, "P") if est_idx is not None else "P"
+                                    if val in ["P", "T"]:
+                                        presentes += 1
                             asistencia = (presentes / total) * 100 if total > 0 else 100
                     except: pass
                     x.append(asistencia)

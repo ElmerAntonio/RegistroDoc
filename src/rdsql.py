@@ -12,6 +12,7 @@ import sqlite3
 import shutil
 import platform
 import logging
+import threading
 from rdsecurity import cifrar, descifrar, _hw_fingerprint
 
 logger = logging.getLogger("rdsql")
@@ -38,33 +39,156 @@ def obtener_dir_datos_usuario() -> str:
     os.makedirs(os.path.join(ruta, "backups"), exist_ok=True)
     return ruta
 
+class ThreadSafeConnection:
+    def __init__(self, conn, lock):
+        self._conn = conn
+        self._lock = lock
+
+    def cursor(self):
+        with self._lock:
+            return ThreadSafeCursor(self._conn.cursor(), self._lock)
+
+    def commit(self):
+        with self._lock:
+            return self._conn.commit()
+
+    def rollback(self):
+        with self._lock:
+            return self._conn.rollback()
+
+    def close(self):
+        with self._lock:
+            return self._conn.close()
+
+    def execute(self, *args, **kwargs):
+        with self._lock:
+            return self._conn.execute(*args, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        with self._lock:
+            return self._conn.executemany(*args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        with self._lock:
+            return self._conn.executescript(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+class ThreadSafeCursor:
+    def __init__(self, cursor, lock):
+        self._cursor = cursor
+        self._lock = lock
+
+    def execute(self, *args, **kwargs):
+        with self._lock:
+            self._cursor.execute(*args, **kwargs)
+            return self
+
+    def executemany(self, *args, **kwargs):
+        with self._lock:
+            self._cursor.executemany(*args, **kwargs)
+            return self
+
+    def executescript(self, *args, **kwargs):
+        with self._lock:
+            self._cursor.executescript(*args, **kwargs)
+            return self
+
+    def fetchone(self):
+        with self._lock:
+            return self._cursor.fetchone()
+
+    def fetchall(self):
+        with self._lock:
+            return self._cursor.fetchall()
+
+    def fetchmany(self, *args, **kwargs):
+        with self._lock:
+            return self._cursor.fetchmany(*args, **kwargs)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self._lock:
+            return next(self._cursor)
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
 class SQLDatabaseManager:
     """
     Controlador de ciclo de vida de la Base de Datos SQLite.
     Descifra el archivo al iniciar y lo mantiene sincronizado/cifrado.
     """
     def __init__(self, key: bytes = None):
+        self.db_lock = threading.RLock()
+        self._save_in_progress = False  # Previene ejecuciones simultáneas de guardar_cifrado
+        self._save_lock = threading.Lock()  # Lock no-reentrante para guardar_cifrado
         self.user_dir = obtener_dir_datos_usuario()
         self.db_enc_path = os.path.join(self.user_dir, "data", "registro.db.enc")
         self.db_temp_path = os.path.join(self.user_dir, "temp", "sqlite_temp.db")
-        
+
         # Derivación dinámica de la clave: Hardware Fingerprint + Docente Cédula
         import hashlib
         self.raw_hw_key = key if key else _hw_fingerprint()
-        
-        cedula = ""
+
+        # ── Estrategia de recuperación multi-fuente para la cédula ──────────
+        # Fuente 1: rd_token.bin (preferida, creado en activación)
+        # Fuente 2: config.enc   (fallback robusto, siempre disponible)
+        # Fuente 3: hw solo      (último recurso para bases nuevas/sin cédula)
+        cedula_token = ""
+        cedula_config = ""
+
         try:
-            from rdsecurity import cargar_config_segura
-            cfg = cargar_config_segura({})
-            cedula = cfg.get("docente_cedula", "").strip()
+            from rdsecurity import _leer_cedula_token
+            token_data = _leer_cedula_token()
+            cedula_token = token_data.get("hint", "").strip()
         except Exception:
             pass
 
-        if cedula:
-            self.key = hashlib.sha256(self.raw_hw_key + cedula.encode("utf-8")).digest()
+        try:
+            from rdsecurity import cargar_config_segura, _guardar_cedula_token
+            cfg = cargar_config_segura({})
+            cedula_config = cfg.get("docente_cedula", "").strip()
+            # Si el token faltaba pero config.enc tiene la cédula → recrear token automáticamente
+            if not cedula_token and cedula_config:
+                try:
+                    _guardar_cedula_token(cedula_config)
+                    cedula_token = cedula_config
+                    logger.info("SQLDatabaseManager: rd_token.bin recreado automáticamente desde config.enc")
+                except Exception as e:
+                    logger.warning(f"SQLDatabaseManager: No se pudo recrear rd_token.bin: {e}")
+        except Exception:
+            pass
+
+        # Cédula efectiva: token tiene prioridad, luego config
+        cedula_efectiva = cedula_token or cedula_config
+
+        if cedula_efectiva:
+            self.key = hashlib.sha256(self.raw_hw_key + cedula_efectiva.encode("utf-8")).digest()
         else:
             self.key = self.raw_hw_key
-            
+
+        # ── Claves candidatas para auto-healing ─────────────────────────────
+        self.claves_candidatas = [self.key]
+        # Añadir hw+cedula_config si difiere de la clave principal (ej. token y config divergen)
+        if cedula_config and cedula_config != cedula_efectiva:
+            alt_key = hashlib.sha256(self.raw_hw_key + cedula_config.encode("utf-8")).digest()
+            if alt_key not in self.claves_candidatas:
+                self.claves_candidatas.append(alt_key)
+        # Añadir hw+cedula_token si difiere
+        if cedula_token and cedula_token != cedula_efectiva:
+            tok_key = hashlib.sha256(self.raw_hw_key + cedula_token.encode("utf-8")).digest()
+            if tok_key not in self.claves_candidatas:
+                self.claves_candidatas.append(tok_key)
+        # Añadir hw solo como último recurso
+        if self.raw_hw_key not in self.claves_candidatas:
+            self.claves_candidatas.append(self.raw_hw_key)
+
         self.conn = None
 
     def _validar_proceso_ejecutor(self) -> bool:
@@ -102,29 +226,43 @@ class SQLDatabaseManager:
             return texto
 
     def desencriptar_campo(self, cifrado_hex: str) -> str:
-        """Descifra un valor a nivel de columna usando AES-256-GCM con soporte retrocompatible."""
+        """Descifra un valor a nivel de columna usando AES-256-GCM con soporte retrocompatible y fallback de llaves."""
         if not cifrado_hex:
             return ""
-        try:
-            import hashlib
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            col_key = hashlib.sha256(self.key + b"columna_datos_sensibles").digest()
-            blob = bytes.fromhex(cifrado_hex)
+        
+        claves_a_probar = []
+        if hasattr(self, "key") and self.key:
+            claves_a_probar.append(self.key)
+        if hasattr(self, "claves_candidatas") and self.claves_candidatas:
+            for k in self.claves_candidatas:
+                if k not in claves_a_probar:
+                    claves_a_probar.append(k)
+        if hasattr(self, "raw_hw_key") and self.raw_hw_key and self.raw_hw_key not in claves_a_probar:
+            claves_a_probar.append(self.raw_hw_key)
             
-            # Soporte retrocompatible para formato lento anterior (comienza con magic bytes RD26)
-            if len(blob) >= 4 and blob[:4] == b"RD26":
-                descifrado = descifrar(blob, col_key)
-                return descifrado.decode("utf-8")
+        for candidate_key in claves_a_probar:
+            try:
+                import hashlib
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                col_key = hashlib.sha256(candidate_key + b"columna_datos_sensibles").digest()
+                blob = bytes.fromhex(cifrado_hex)
                 
-            if len(blob) < 12:
-                return cifrado_hex
-            nonce = blob[:12]
-            cifrado = blob[12:]
-            aesgcm = AESGCM(col_key)
-            descifrado = aesgcm.decrypt(nonce, cifrado, None)
-            return descifrado.decode("utf-8")
-        except Exception:
-            return cifrado_hex
+                # Soporte retrocompatible para formato lento anterior (comienza con magic bytes RD26)
+                if len(blob) >= 4 and blob[:4] == b"RD26":
+                    descifrado = descifrar(blob, col_key)
+                    return descifrado.decode("utf-8")
+                    
+                if len(blob) < 12:
+                    continue
+                nonce = blob[:12]
+                cifrado = blob[12:]
+                aesgcm = AESGCM(col_key)
+                descifrado = aesgcm.decrypt(nonce, cifrado, None)
+                return descifrado.decode("utf-8")
+            except Exception:
+                continue
+                
+        return cifrado_hex
 
     def inicializar_tablas(self, conn: sqlite3.Connection):
         """Crea la estructura de tablas, relaciones, triggers e índices."""
@@ -158,9 +296,26 @@ class SQLDatabaseManager:
             sexo TEXT,
             grado_id INTEGER NOT NULL,
             estado TEXT CHECK(estado IN ('Activo', 'Retirado')) DEFAULT 'Activo',
+            fecha_retiro TEXT,
+            motivo_retiro TEXT,
+            nombre_acudiente TEXT,
             FOREIGN KEY (grado_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE RESTRICT
         );
         """)
+
+        # Migración automática: agregar columnas de retiro a BDs existentes
+        columnas_existentes = {row[1] for row in cursor.execute('PRAGMA table_info(estudiantes);').fetchall()}
+        migraciones_retiro = [
+            ('fecha_retiro',     'ALTER TABLE estudiantes ADD COLUMN fecha_retiro TEXT;'),
+            ('motivo_retiro',    'ALTER TABLE estudiantes ADD COLUMN motivo_retiro TEXT;'),
+            ('nombre_acudiente', 'ALTER TABLE estudiantes ADD COLUMN nombre_acudiente TEXT;'),
+        ]
+        for col_name, sql in migraciones_retiro:
+            if col_name not in columnas_existentes:
+                try:
+                    cursor.execute(sql)
+                except Exception:
+                    pass
 
         # 4. Tabla de materias
         cursor.execute("""
@@ -176,14 +331,28 @@ class SQLDatabaseManager:
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS horario (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bloque_orden INTEGER NOT NULL DEFAULT 0,
             dia TEXT CHECK(dia IN ('lunes', 'martes', 'miercoles', 'jueves', 'viernes')) NOT NULL,
             bloque_hora TEXT NOT NULL,
+            materia_texto TEXT DEFAULT '',
             materia_id INTEGER,
             grado_id INTEGER,
             FOREIGN KEY (materia_id) REFERENCES materias(id) ON UPDATE CASCADE ON DELETE SET NULL,
             FOREIGN KEY (grado_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE SET NULL
         );
         """)
+
+        # Migración automática: agregar columnas faltantes a horario
+        cols_horario = {row[1] for row in cursor.execute('PRAGMA table_info(horario);').fetchall()}
+        for col_name, col_sql in [
+            ('materia_texto', 'ALTER TABLE horario ADD COLUMN materia_texto TEXT DEFAULT \'\';'),
+            ('bloque_orden',  'ALTER TABLE horario ADD COLUMN bloque_orden INTEGER NOT NULL DEFAULT 0;'),
+        ]:
+            if col_name not in cols_horario:
+                try:
+                    cursor.execute(col_sql)
+                except Exception:
+                    pass
 
         # 6. Tabla de calificaciones (notas)
         cursor.execute("""
@@ -209,7 +378,8 @@ class SQLDatabaseManager:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             estudiante_id TEXT NOT NULL,
             fecha TEXT NOT NULL,
-            estado TEXT CHECK(estado IN ('A', 'F', 'FJ')) NOT NULL,
+            estado TEXT CHECK(estado IN ('.', '-', 'T', 'E')) NOT NULL,
+            trimestre INTEGER,
             motivo TEXT,
             FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE
         );
@@ -234,6 +404,8 @@ class SQLDatabaseManager:
             trimestre INTEGER CHECK(trimestre IN (1, 2, 3)) NOT NULL,
             criterio_codigo TEXT NOT NULL,
             nota TEXT CHECK(nota IN ('S', 'R', 'X', '-')) NOT NULL,
+            frecuencia TEXT DEFAULT 'Trimestral',
+            periodo TEXT DEFAULT '',
             FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE
         );
         """)
@@ -284,6 +456,107 @@ class SQLDatabaseManager:
                 except Exception as ex:
                     logger.error(f"Error al agregar columna 'sexo': {ex}")
 
+        # 14. Migración de la restricción CHECK de la tabla asistencia
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='asistencia';")
+        asistencia_sql_row = cursor.fetchone()
+        if asistencia_sql_row:
+            asistencia_sql = asistencia_sql_row[0]
+            if "'.'" not in asistencia_sql or "'A'" in asistencia_sql:
+                try:
+                    logger.info("Migración: Actualizando la tabla asistencia para admitir únicamente '.', '-', 'T', 'E'...")
+                    
+                    # 1. Check if old temp table exists, drop it
+                    cursor.execute("DROP TABLE IF EXISTS asistencia_old;")
+                    
+                    # 2. Rename current table
+                    cursor.execute("ALTER TABLE asistencia RENAME TO asistencia_old;")
+                    
+                    # 3. Create clean table
+                    cursor.execute("""
+                    CREATE TABLE asistencia (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        estudiante_id TEXT NOT NULL,
+                        fecha TEXT NOT NULL,
+                        estado TEXT CHECK(estado IN ('.', '-', 'T', 'E')) NOT NULL,
+                        trimestre INTEGER,
+                        motivo TEXT,
+                        FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE
+                    );
+                    """)
+                    
+                    # 4. Migrate and clean old records
+                    # Check if old table has trimestre column
+                    cursor.execute("PRAGMA table_info(asistencia_old);")
+                    old_cols = [r[1] for r in cursor.fetchall()]
+                    has_trim = "trimestre" in old_cols
+                    
+                    if has_trim:
+                        cursor.execute("SELECT id, estudiante_id, fecha, estado, trimestre, motivo FROM asistencia_old;")
+                        filas = cursor.fetchall()
+                    else:
+                        cursor.execute("SELECT id, estudiante_id, fecha, estado, motivo FROM asistencia_old;")
+                        filas = [r + (None,) for r in cursor.fetchall()] # append None for trim
+                        
+                    for f in filas:
+                        if has_trim:
+                            old_id, est_id, fecha, estado, trim, motivo = f
+                        else:
+                            old_id, est_id, fecha, estado, motivo, trim = f
+                            
+                        if estado == 'A':
+                            estado_nuevo = '.'
+                        elif estado in ('F', 'FJ'):
+                            estado_nuevo = '-'
+                        elif estado in ('.', '-', 'T', 'E'):
+                            estado_nuevo = estado
+                        else:
+                            estado_nuevo = '.'
+                        
+                        cursor.execute("""
+                        INSERT INTO asistencia (id, estudiante_id, fecha, estado, trimestre, motivo)
+                        VALUES (?, ?, ?, ?, ?, ?);
+                        """, (old_id, est_id, fecha, estado_nuevo, trim, motivo))
+                    
+                    # 5. Clean up old table
+                    cursor.execute("DROP TABLE asistencia_old;")
+                    cursor.execute("DROP INDEX IF EXISTS idx_asistencia_est_fecha;")
+                    cursor.execute("CREATE INDEX idx_asistencia_est_fecha ON asistencia(estudiante_id, fecha);")
+                    logger.info("Migración: Tabla asistencia migrada exitosamente a la restricción limpia de MEDUCA.")
+                except Exception as ex:
+                    logger.error(f"Error al migrar la tabla asistencia: {ex}")
+                    try: cursor.execute("DROP TABLE IF EXISTS asistencia;")
+                    except: pass
+                    try: cursor.execute("ALTER TABLE asistencia_old RENAME TO asistencia;")
+                    except: pass
+
+        # Migración de columna trimestre en la tabla asistencia
+        cursor.execute("PRAGMA table_info(asistencia);")
+        asistencia_cols = [row[1] for row in cursor.fetchall()]
+        if asistencia_cols:
+            if "trimestre" not in asistencia_cols:
+                try:
+                    cursor.execute("ALTER TABLE asistencia ADD COLUMN trimestre INTEGER;")
+                    logger.info("Migración: Columna 'trimestre' agregada exitosamente a la tabla asistencia.")
+                except Exception as ex:
+                    logger.error(f"Error al agregar columna 'trimestre': {ex}")
+
+        # 15. Migración de columnas frecuencia y periodo en la tabla habitos
+        cursor.execute("PRAGMA table_info(habitos);")
+        habitos_cols = [row[1] for row in cursor.fetchall()]
+        if habitos_cols:
+            if "frecuencia" not in habitos_cols:
+                try:
+                    cursor.execute("ALTER TABLE habitos ADD COLUMN frecuencia TEXT DEFAULT 'Trimestral';")
+                    logger.info("Migración: Columna 'frecuencia' agregada exitosamente a la tabla habitos.")
+                except Exception as ex:
+                    logger.error(f"Error al agregar columna 'frecuencia': {ex}")
+            if "periodo" not in habitos_cols:
+                try:
+                    cursor.execute("ALTER TABLE habitos ADD COLUMN periodo TEXT DEFAULT '';")
+                    logger.info("Migración: Columna 'periodo' agregada exitosamente a la tabla habitos.")
+                except Exception as ex:
+                    logger.error(f"Error al agregar columna 'periodo': {ex}")
+
         conn.commit()
 
     def conectar(self) -> sqlite3.Connection:
@@ -309,28 +582,32 @@ class SQLDatabaseManager:
         # 2. Descifrar si existe la base cifrada
         descifrado_ok = False
         rekey_needed = False
-        
-        if os.path.exists(self.db_enc_path):
-            # Recopilar claves candidatas para self-healing
-            import hashlib
-            claves_candidatas = [self.key]
-            
-            # Candidata 2: Clave pura de hardware (sin cédula)
-            if self.raw_hw_key not in claves_candidatas:
-                claves_candidatas.append(self.raw_hw_key)
-                
-            # Candidata 3: Clave combinada con la cédula del token seguro si existe
-            try:
-                from rdsecurity import _leer_cedula_token
-                token_data = _leer_cedula_token()
-                token_cedula = token_data.get("hint", "").strip()
-                if token_cedula:
-                    token_key = hashlib.sha256(self.raw_hw_key + token_cedula.encode("utf-8")).digest()
-                    if token_key not in claves_candidatas:
-                        claves_candidatas.append(token_key)
-            except Exception:
-                pass
 
+        # Las claves candidatas ya fueron construidas robustamente en __init__
+        # Inicialización defensiva para mocks/tests que reemplazan __init__
+        import hashlib
+        if not hasattr(self, 'raw_hw_key'):
+            self.raw_hw_key = self.key if hasattr(self, 'key') else b''
+        if not hasattr(self, 'claves_candidatas'):
+            self.claves_candidatas = [self.key] if hasattr(self, 'key') else []
+
+        claves_candidatas = list(self.claves_candidatas)
+
+        # Candidata extra: re-leer el token en tiempo de conexión por si fue recreado
+        try:
+            from rdsecurity import _leer_cedula_token
+            token_data = _leer_cedula_token()
+            token_cedula = token_data.get("hint", "").strip()
+            if token_cedula and self.raw_hw_key:
+                token_key = hashlib.sha256(self.raw_hw_key + token_cedula.encode("utf-8")).digest()
+                if token_key not in claves_candidatas:
+                    claves_candidatas.insert(0, token_key)  # Prioridad máxima
+        except Exception:
+            pass
+
+        self.claves_candidatas = claves_candidatas
+
+        if os.path.exists(self.db_enc_path):
             # Intentar descifrar con cada una
             for candidate in claves_candidatas:
                 try:
@@ -403,56 +680,60 @@ class SQLDatabaseManager:
         if not os.path.exists(self.db_enc_path) or rekey_needed:
             self.guardar_cifrado()
             
-        return self.conn
+        return ThreadSafeConnection(self.conn, self.db_lock)
 
     def guardar_cifrado(self):
-        """Lee el archivo temporal SQLite activo, lo cifra y guarda en disco."""
-        if not os.path.exists(self.db_temp_path):
-            return
-            
-        try:
-            # Asegurar volcado de transacciones pendientes a disco
-            if self.conn:
-                self.conn.commit()
-                # Pequeño checkpoint de SQLite para sincronizar el WAL/journal a disco
-                self.conn.execute("PRAGMA wal_checkpoint(FULL);")
+        """Lee el archivo temporal SQLite activo, lo cifra y guarda en disco.
+        Llamar directamente solo al cerrar la app. En ejecucion normal, usar _schedule_save() en DataEngine.
+        """
+        with self.db_lock:  # RLock garantiza exclusion mutua
+            if not os.path.exists(self.db_temp_path):
+                return
                 
-            # Leer bytes del SQLite temporal y cifrarlos
-            with open(self.db_temp_path, "rb") as f:
-                datos = f.read()
-            cifrado = cifrar(datos, self.key)
-            
-            # Guardar de forma atómica para evitar corrupción si se corta la corriente
-            db_enc_tmp = self.db_enc_path + ".tmp"
-            with open(db_enc_tmp, "wb") as f:
-                f.write(cifrado)
-            shutil.move(db_enc_tmp, self.db_enc_path)
-        except Exception as e:
-            logger.error(f"Error guardando base cifrada: {e}")
+            try:
+                # Asegurar volcado de transacciones pendientes a disco
+                if self.conn:
+                    self.conn.commit()
+                    # Pequeño checkpoint de SQLite para sincronizar el WAL/journal a disco
+                    self.conn.execute("PRAGMA wal_checkpoint(FULL);")
+                    
+                # Leer bytes del SQLite temporal y cifrarlos
+                with open(self.db_temp_path, "rb") as f:
+                    datos = f.read()
+                cifrado = cifrar(datos, self.key)
+                
+                # Guardar de forma atómica para evitar corrupción si se corta la corriente
+                db_enc_tmp = self.db_enc_path + ".tmp"
+                with open(db_enc_tmp, "wb") as f:
+                    f.write(cifrado)
+                shutil.move(db_enc_tmp, self.db_enc_path)
+            except Exception as e:
+                logger.error(f"Error guardando base cifrada: {e}")
 
     def cerrar(self):
         """Cierra la conexión, realiza el guardado cifrado final y limpia el archivo temporal."""
-        if self.conn:
-            try:
-                self.conn.close()
-            except Exception:
-                pass
-            self.conn = None
-
-        if os.path.exists(self.db_temp_path):
-            self.guardar_cifrado()
-            # Destruir archivo temporal de forma segura (wiping antes de eliminar)
-            try:
-                tamanio = os.path.getsize(self.db_temp_path)
-                with open(self.db_temp_path, "wb") as f:
-                    f.write(os.urandom(tamanio))
-                os.remove(self.db_temp_path)
-            except Exception:
-                # Fallback simple
+        with self.db_lock:
+            if self.conn:
                 try:
-                    os.remove(self.db_temp_path)
+                    self.conn.close()
                 except Exception:
                     pass
+                self.conn = None
+
+            if os.path.exists(self.db_temp_path):
+                self.guardar_cifrado()
+                # Destruir archivo temporal de forma segura (wiping antes de eliminar)
+                try:
+                    tamanio = os.path.getsize(self.db_temp_path)
+                    with open(self.db_temp_path, "wb") as f:
+                        f.write(os.urandom(tamanio))
+                    os.remove(self.db_temp_path)
+                except Exception:
+                    # Fallback simple
+                    try:
+                        os.remove(self.db_temp_path)
+                    except Exception:
+                        pass
 
     def registrar_auditoria(self, accion: str, detalle: str):
         """Registra un evento de auditoría interna de forma rápida."""

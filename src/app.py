@@ -525,30 +525,43 @@ class RegistroDocApp(ctk.CTk):
         self.after(4000, _cerrar)
 
     def _mostrar_frame(self, frame_class, *args, **kwargs):
+        class_name = frame_class.__name__
+        ya_activo   = (getattr(self, "_frame_activo", None) == class_name)
+
         # Ocultar todos los frames en la caché
         for f in self._frames.values():
             try:
                 f.pack_forget()
             except Exception:
                 pass
-            
+
         # Si el frame no está en la caché, crearlo
-        class_name = frame_class.__name__
         if class_name not in self._frames:
             f = frame_class(self.main_app.main_content_frame, self.engine, *args, **kwargs)
             self._frames[class_name] = f
-            
+
         # Mostrar el frame activo
         active_frame = self._frames[class_name]
         active_frame.pack(fill="both", expand=True)
-        
-        # Invocar actualizar_vista si existe
-        if hasattr(active_frame, "actualizar_vista"):
+        self._frame_activo = class_name
+
+        # Solo llamar actualizar_vista si cambiamos de frame (ya_activo es False)
+        # Y además la versión de datos cambió desde la última actualización del frame.
+        version_actual = 0
+        if hasattr(self.engine, "db_manager") and self.engine.db_manager and self.engine.db_manager.conn:
+            try:
+                version_actual = self.engine.db_manager.conn.total_changes
+            except Exception:
+                pass
+
+        last_ver = getattr(active_frame, "last_updated_version", -1)
+        if not ya_activo and (last_ver != version_actual or not hasattr(active_frame, "last_updated_version")) and hasattr(active_frame, "actualizar_vista"):
             try:
                 active_frame.actualizar_vista()
+                active_frame.last_updated_version = version_actual
             except Exception as e:
                 print(f"[!] Error actualizando vista {class_name}: {e}")
-                
+
         return active_frame
 
     def _actualizar_breadcrumb(self, seccion):
@@ -838,6 +851,12 @@ class RegistroDocApp(ctk.CTk):
         try:
             if hasattr(self, "main_app"):
                 self.main_app._destroyed = True
+        except Exception:
+            pass
+        # Forzar guardado cifrado final antes de cerrar (flush del debounce pendiente)
+        try:
+            if hasattr(self, "engine") and hasattr(self.engine, "flush_save_sync"):
+                self.engine.flush_save_sync()
         except Exception:
             pass
         try:

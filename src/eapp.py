@@ -3,6 +3,7 @@ from tkinter import messagebox
 import datetime
 import threading
 from rdsecurity import validar_nota_meduca
+from theme import C
 
 
 class NotasFrame(ctk.CTkFrame):
@@ -24,7 +25,7 @@ class NotasFrame(ctk.CTkFrame):
         self.al_cambiar_grado(self.combo_grado.get())
 
     def crear_panel_izquierdo(self):
-        frame_izq = ctk.CTkFrame(self, fg_color="#1A2638", corner_radius=10)
+        frame_izq = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=10)
         frame_izq.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
         top = ctk.CTkFrame(frame_izq, fg_color="transparent")
@@ -86,7 +87,7 @@ class NotasFrame(ctk.CTkFrame):
                                      padx=15, pady=10)
 
     def crear_panel_derecho(self):
-        frame_der = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=10)
+        frame_der = ctk.CTkFrame(self, fg_color=C["card_alt"], corner_radius=10)
         frame_der.grid(row=0, column=1, sticky="nsew")
 
         ctk.CTkLabel(frame_der, text="Gestión de Notas", font=(
@@ -207,6 +208,11 @@ class NotasFrame(ctk.CTkFrame):
             tab_mod, values=["Seleccione parámetros arriba..."])
         self.combo_desc_mod.pack(fill="x", padx=10, pady=5)
 
+        ctk.CTkLabel(tab_mod, text="Fecha de guardado:", font=(
+            "Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 0))
+        self.entry_fecha_guardado = ctk.CTkEntry(tab_mod, state="readonly", placeholder_text="No cargada", justify="center")
+        self.entry_fecha_guardado.pack(fill="x", padx=10, pady=5)
+
         ctk.CTkButton(
             tab_mod,
             text="🔍 CARGAR A LA LISTA",
@@ -324,11 +330,68 @@ class NotasFrame(ctk.CTkFrame):
             self.combo_materia.set("No hay materias")
         self.cargar_descripciones()
 
+    def _limpiar_scroll(self):
+        pool_frames = set()
+        if hasattr(self, "_pool_filas"):
+            for f_row, _ in self._pool_filas:
+                pool_frames.add(f_row)
+                f_row.pack_forget()
+        for w in self.scroll_estudiantes.winfo_children():
+            if w not in pool_frames:
+                w.destroy()
+
+    def _obtener_fila_reciclada(self, index):
+        if not hasattr(self, "_pool_filas"):
+            self._pool_filas = []
+        if index < len(self._pool_filas):
+            f_row, widgets = self._pool_filas[index]
+            f_row.pack(fill="x", pady=2)
+            widgets["btn_inf"].pack(side="right", padx=5)
+            widgets["entry"].pack(side="right", padx=10)
+            return f_row, widgets
+        
+        f_row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
+        f_row.pack(fill="x", pady=2)
+        
+        num_lbl = ctk.CTkLabel(f_row, text="", width=30)
+        num_lbl.pack(side="left")
+        
+        nombre_lbl = ctk.CTkLabel(f_row, text="", anchor="w")
+        nombre_lbl.pack(side="left", fill="x", expand=True, padx=(10, 10))
+        
+        btn_inf = ctk.CTkButton(
+            f_row, text="📄 Boletín", width=78, height=24,
+            fg_color="transparent", hover_color="#2A3B50",
+            text_color="#10B981", font=("Segoe UI", 11, "bold")
+        )
+        btn_inf.pack(side="right", padx=5)
+        
+        entry = ctk.CTkEntry(f_row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
+        entry.pack(side="right", padx=10)
+        
+        entry_pts = ctk.CTkEntry(f_row, width=60, height=25, justify="center", placeholder_text="Pts", font=("Segoe UI", 11))
+        
+        widgets = {
+            "num": num_lbl,
+            "nombre": nombre_lbl,
+            "btn_inf": btn_inf,
+            "entry": entry,
+            "entry_pts": entry_pts
+        }
+        self._pool_filas.append((f_row, widgets))
+        return f_row, widgets
+
+    def _limpiar_filas_excedentes(self, num_requeridos):
+        if not hasattr(self, "_pool_filas"):
+            return
+        for idx in range(num_requeridos, len(self._pool_filas)):
+            f_row, _ = self._pool_filas[idx]
+            f_row.pack_forget()
+
     def cargar_estudiantes(self, grado=None):
         if grado is None:
             grado = self.combo_grado.get()
-        for w in self.scroll_estudiantes.winfo_children():
-            w.destroy()
+        self._limpiar_scroll()
         self.entradas_notas.clear()
         self.pills_notas.clear()
         self.estudiantes_notas.clear()
@@ -345,47 +408,39 @@ class NotasFrame(ctk.CTkFrame):
             ctk.CTkLabel(header_row, text="Puntos", width=60, anchor="center", font=("Segoe UI", 12, "bold")).pack(side="right", padx=10)
 
         ests = self.engine.obtener_estudiantes_completos(grado)
-        for est in ests:
-            row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
-            row.pack(fill="x", pady=2)
-            ctk.CTkLabel(row, text=f"{est['id']}.", width=30).pack(side="left")
-            ctk.CTkLabel(row, text=est['nombre'], anchor="w").pack(side="left", fill="x", expand=True, padx=(10, 10))
+        num_requeridos = len(ests)
+        for i, est in enumerate(ests):
+            f_row, widgets = self._obtener_fila_reciclada(i)
             
-            # Botón de informe individual (boletín)
-            btn_inf = ctk.CTkButton(
-                row, text="📄 Boletín", width=78, height=24,
-                fg_color="transparent", hover_color="#2A3B50",
-                text_color="#10B981", font=("Segoe UI", 11, "bold"),
-                command=lambda e=est: self.generar_informe_estudiante(e)
-            )
-            btn_inf.pack(side="right", padx=5)
-
-            entry = ctk.CTkEntry(row, width=80, height=25, justify="center", placeholder_text="-", font=("Segoe UI", 11))
-            entry.pack(side="right", padx=10)
+            widgets["num"].configure(text=f"{i+1}.")
+            widgets["nombre"].configure(text=est['nombre'])
+            widgets["btn_inf"].configure(command=lambda e=est: self.generar_informe_estudiante(e))
+            
+            widgets["entry"].delete(0, "end")
+            widgets["entry"].configure(placeholder_text="-")
+            widgets["entry_pts"].delete(0, "end")
+            widgets["entry_pts"].configure(placeholder_text="Pts")
             
             if self.var_usar_puntos.get():
-                entry_pts = ctk.CTkEntry(row, width=60, height=25, justify="center", placeholder_text="Pts", font=("Segoe UI", 11))
-                entry_pts.pack(side="right", padx=10)
+                widgets["entry_pts"].pack(side="right", padx=10)
+                widgets["entry_pts"].bind("<KeyRelease>", lambda e, eid=est['id']: self.al_cambiar_puntos_estudiante(eid))
+                widgets["entry_pts"].bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+                widgets["entry_pts"].bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+                widgets["entry_pts"].bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
                 
-                # Evento key release para calcular la nota por puntos en tiempo real
-                entry_pts.bind("<KeyRelease>", lambda e, eid=est['id']: self.al_cambiar_puntos_estudiante(eid))
-                
-                # Keyboard navigation
-                entry_pts.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
-                entry_pts.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
-                entry_pts.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
-                
-                self.entradas_notas[est['id']] = [entry, entry_pts]
+                self.entradas_notas[est['id']] = [widgets["entry"], widgets["entry_pts"]]
             else:
-                # Keyboard navigation
-                entry.bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
-                entry.bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
-                entry.bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
+                widgets["entry_pts"].pack_forget()
+                widgets["entry"].bind("<Return>", lambda e, idx=est['id']: self.al_presionar_enter(idx))
+                widgets["entry"].bind("<Down>", lambda e, idx=est['id']: self.al_presionar_abajo(idx))
+                widgets["entry"].bind("<Up>", lambda e, idx=est['id']: self.al_presionar_arriba(idx))
                 
-                self.entradas_notas[est['id']] = [entry]
+                self.entradas_notas[est['id']] = [widgets["entry"]]
                 
             self.pills_notas[est['id']] = None
             self.estudiantes_notas[est['id']] = est
+            
+        self._limpiar_filas_excedentes(num_requeridos)
 
     def cargar_descripciones(self, *args):
         grado = self.combo_grado.get()
@@ -476,7 +531,7 @@ class NotasFrame(ctk.CTkFrame):
                 
                 card = ctk.CTkFrame(
                     self.scroll_tareas_tab,
-                    fg_color="#1E293B",
+                    fg_color=C["card_alt"],
                     border_width=1,
                     border_color=color_b,
                     corner_radius=8
@@ -603,9 +658,9 @@ class NotasFrame(ctk.CTkFrame):
             for t in completadas[-5:]:
                 card = ctk.CTkFrame(
                     self.scroll_tareas_tab,
-                    fg_color="#0F172A",
+                    fg_color=C["card"],
                     border_width=1,
-                    border_color="#334155",
+                    border_color=C["borde"],
                     corner_radius=8
                 )
                 card.pack(fill="x", pady=4, padx=2)
@@ -745,11 +800,17 @@ class NotasFrame(ctk.CTkFrame):
 
         if not resultado:
             messagebox.showerror(
-                "Error", "No se encontraron las notas en el archivo.")
+                "Error", "No se encontraron las notas en la base de datos.")
             return
 
         self.col_a_modificar = resultado["columna"]
         notas_existentes = resultado["notas"]
+
+        fecha_val = resultado.get("fecha", "Desconocida")
+        self.entry_fecha_guardado.configure(state="normal")
+        self.entry_fecha_guardado.delete(0, 'end')
+        self.entry_fecha_guardado.insert(0, fecha_val)
+        self.entry_fecha_guardado.configure(state="readonly")
 
         for id_est, entries_list in self.entradas_notas.items():
             for entry in entries_list:

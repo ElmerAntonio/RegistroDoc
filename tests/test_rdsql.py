@@ -42,7 +42,8 @@ def test_database_initialization_and_table_creation(clean_db_manager):
     manager = clean_db_manager
     conn = manager.conectar()
     
-    assert isinstance(conn, sqlite3.Connection)
+    from rdsql import ThreadSafeConnection
+    assert isinstance(conn, (sqlite3.Connection, ThreadSafeConnection))
     
     # Verificar que las tablas existen
     cursor = conn.cursor()

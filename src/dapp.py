@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import tkinter.messagebox as messagebox
+import tkinter as tk
+from theme import C, FONT_TITLE, FONT_BODY
 
 class EstudiantesFrame(ctk.CTkFrame):
     def __init__(self, master, engine, **kwargs):
@@ -7,117 +9,313 @@ class EstudiantesFrame(ctk.CTkFrame):
         self.engine = engine
         self.entradas_estudiantes = {}
 
-        ctk.CTkLabel(self, text="Gestión de Estudiantes", font=("Segoe UI", 24, "bold")).pack(anchor="w", pady=(0, 10))
+        ctk.CTkLabel(self, text="Gestión de Estudiantes",
+                     font=(FONT_TITLE, 24, "bold")).pack(anchor="w", pady=(0, 10))
 
-        # --- PANEL NUEVO: AGREGAR ESTUDIANTE (Verde) ---
-        self.frame_agregar = ctk.CTkFrame(self, fg_color="#10B981", corner_radius=8)
-        self.frame_agregar.pack(fill="x", pady=5, ipadx=10, ipady=10)
-        
-        ctk.CTkLabel(self.frame_agregar, text="➕ Agregar Alumno:", font=("Segoe UI", 14, "bold"), text_color="white").pack(side="left", padx=10)
-        
-        self.entry_nuevo_nombre = ctk.CTkEntry(self.frame_agregar, width=250, placeholder_text="APELLIDO, Nombre (Requerido)")
+        # ── PANEL AGREGAR ──────────────────────────────────────────────────
+        frame_agregar = ctk.CTkFrame(self, fg_color=C["success"], corner_radius=8)
+        frame_agregar.pack(fill="x", pady=5, ipadx=10, ipady=10)
+
+        ctk.CTkLabel(frame_agregar, text="➕ Agregar Alumno:",
+                     font=(FONT_TITLE, 14, "bold"),
+                     text_color=C["fondo"]).pack(side="left", padx=10)
+
+        self.entry_nuevo_nombre = ctk.CTkEntry(frame_agregar, width=250,
+                                               placeholder_text="APELLIDO, Nombre (Requerido)")
         self.entry_nuevo_nombre.pack(side="left", padx=10)
-        
-        self.entry_nueva_cedula = ctk.CTkEntry(self.frame_agregar, width=120, placeholder_text="Cédula (Opcional)")
+
+        self.entry_nueva_cedula = ctk.CTkEntry(frame_agregar, width=120,
+                                               placeholder_text="Cédula (Opcional)")
         self.entry_nueva_cedula.pack(side="left", padx=10)
         self.entry_nueva_cedula.bind("<FocusOut>", lambda e: self._formatear_nueva_cedula())
-        
-        ctk.CTkLabel(self.frame_agregar, text="Sexo:", font=("Segoe UI", 12), text_color="white").pack(side="left", padx=(5, 2))
-        self.combo_nuevo_sexo = ctk.CTkOptionMenu(self.frame_agregar, values=["M", "F"], width=60)
+
+        ctk.CTkLabel(frame_agregar, text="Sexo:", font=(FONT_BODY, 12),
+                     text_color=C["fondo"]).pack(side="left", padx=(5, 2))
+        self.combo_nuevo_sexo = ctk.CTkOptionMenu(frame_agregar, values=["M", "F"], width=60)
         self.combo_nuevo_sexo.set("M")
         self.combo_nuevo_sexo.pack(side="left", padx=10)
-        
-        ctk.CTkButton(self.frame_agregar, text="Guardar Nuevo", fg_color="#059669", hover_color="#047857", command=self.agregar_nuevo).pack(side="left", padx=10)
 
-        # --- PANEL DE CONTROLES (Filtro por grado) ---
-        self.frame_controles = ctk.CTkFrame(self, fg_color="#1E2D42", corner_radius=8)
-        self.frame_controles.pack(fill="x", pady=10, ipadx=10, ipady=10)
+        ctk.CTkButton(frame_agregar, text="Guardar Nuevo",
+                      fg_color=C["esmeralda"], hover_color=C["verde"],
+                      text_color=C["fondo"],
+                      command=self.agregar_nuevo).pack(side="left", padx=10)
 
-        ctk.CTkLabel(self.frame_controles, text="Seleccione Grado:", font=("Segoe UI", 14)).pack(side="left", padx=10)
-        
+        # ── SELECTOR DE GRADO ──────────────────────────────────────────────
+        frame_controles = ctk.CTkFrame(self, fg_color=C["card_alt"], corner_radius=8)
+        frame_controles.pack(fill="x", pady=10, ipadx=10, ipady=10)
+
+        ctk.CTkLabel(frame_controles, text="Seleccione Grado:",
+                     font=(FONT_BODY, 14)).pack(side="left", padx=10)
+
         opciones_grado = self.engine.obtener_grados_activos() or ["Sin datos"]
-        self.combo_grado = ctk.CTkOptionMenu(self.frame_controles, values=opciones_grado, command=self.cargar_lista)
+        self.combo_grado = ctk.CTkOptionMenu(frame_controles, values=opciones_grado,
+                                             command=self._al_cambiar_grado)
         self.combo_grado.pack(side="left", padx=10)
 
-        self.btn_lista = ctk.CTkButton(
-            self.frame_controles,
-            text="🖨️ Lista de Clase",
-            fg_color="#6366F1",
-            hover_color="#4F46E5",
-            font=("Segoe UI", 12, "bold"),
-            height=32,
-            command=self.imprimir_lista_clase
+        ctk.CTkButton(frame_controles, text="🖨️ Lista de Clase",
+                      fg_color="#6366F1", hover_color="#4F46E5",
+                      font=(FONT_BODY, 12, "bold"), height=32,
+                      command=self.imprimir_lista_clase).pack(side="right", padx=15)
+
+        # ── TABS: Activos / Retirados ───────────────────────────────────────
+        self.tabs = ctk.CTkTabview(self, corner_radius=8)
+        self.tabs.pack(fill="both", expand=True, pady=5)
+        self.tab_activos   = self.tabs.add("👥 Activos")
+        self.tab_retirados = self.tabs.add("🚪 Retirados")
+        self.tabs.set("👥 Activos")
+
+        # ── Tab Activos ────────────────────────────────────────────────────
+        frame_enc = ctk.CTkFrame(self.tab_activos, fg_color=C["badge_bg"], corner_radius=5)
+        frame_enc.pack(fill="x", pady=(5, 0), ipady=5)
+        ctk.CTkLabel(frame_enc, text="N°",   width=40, font=(FONT_BODY, 13, "bold")).pack(side="left", padx=6)
+        ctk.CTkLabel(frame_enc, text="APELLIDO, NOMBRE", width=320, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=6)
+        ctk.CTkLabel(frame_enc, text="CÉDULA", width=130, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=6)
+        ctk.CTkLabel(frame_enc, text="SEXO", width=70, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=6)
+        ctk.CTkLabel(frame_enc, text="ACCIÓN", width=100, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=6)
+
+        self.scroll_activos = ctk.CTkScrollableFrame(self.tab_activos, fg_color="transparent")
+        self.scroll_activos.pack(fill="both", expand=True, pady=3)
+
+        self.btn_guardar = ctk.CTkButton(
+            self.tab_activos,
+            text="💾 GUARDAR MODIFICACIONES DE LA LISTA",
+            fg_color="#3B82F6", hover_color="#2563EB",
+            font=(FONT_BODY, 14, "bold"), height=38,
+            command=self.guardar_cambios
         )
-        self.btn_lista.pack(side="right", padx=15)
+        self.btn_guardar.pack(pady=8)
 
-        # --- ENCABEZADOS DE LA LISTA ---
-        self.frame_encabezados = ctk.CTkFrame(self, fg_color="#253650", corner_radius=5)
-        self.frame_encabezados.pack(fill="x", pady=(10, 0), ipady=5)
-        
-        ctk.CTkLabel(self.frame_encabezados, text="N°", width=40, font=("Segoe UI", 14, "bold")).pack(side="left", padx=10)
-        ctk.CTkLabel(self.frame_encabezados, text="APELLIDO, NOMBRE (Editable)", width=350, anchor="w", font=("Segoe UI", 14, "bold")).pack(side="left", padx=10)
-        ctk.CTkLabel(self.frame_encabezados, text="CÉDULA (Editable)", width=150, anchor="w", font=("Segoe UI", 14, "bold")).pack(side="left", padx=10)
-        ctk.CTkLabel(self.frame_encabezados, text="SEXO (Editable)", width=80, anchor="w", font=("Segoe UI", 14, "bold")).pack(side="left", padx=10)
+        # ── Tab Retirados ──────────────────────────────────────────────────
+        frame_enc_r = ctk.CTkFrame(self.tab_retirados, fg_color=C["badge_bg"], corner_radius=5)
+        frame_enc_r.pack(fill="x", pady=(5, 0), ipady=5)
+        ctk.CTkLabel(frame_enc_r, text="N°",      width=35,  font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(frame_enc_r, text="NOMBRE",  width=250, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(frame_enc_r, text="GRADO",   width=60,  anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(frame_enc_r, text="FECHA",   width=90,  anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(frame_enc_r, text="MOTIVO",  width=180, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(frame_enc_r, text="ACCIÓN",  width=110, anchor="w",
+                     font=(FONT_BODY, 13, "bold")).pack(side="left", padx=5)
 
-        self.scroll_lista = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.scroll_lista.pack(fill="both", expand=True, pady=5)
+        self.scroll_retirados = ctk.CTkScrollableFrame(self.tab_retirados, fg_color="transparent")
+        self.scroll_retirados.pack(fill="both", expand=True, pady=3)
 
-        # Botón Guardar Cambios Masivos
-        self.btn_guardar = ctk.CTkButton(self, text="💾 GUARDAR MODIFICACIONES DE LA LISTA", fg_color="#3B82F6", hover_color="#2563EB", 
-                                         font=("Segoe UI", 15, "bold"), height=40, command=self.guardar_cambios)
-        self.btn_guardar.pack(pady=10)
-
+        # Cargar datos iniciales
         self.cargar_lista(self.combo_grado.get())
+        self.cargar_retirados(self.combo_grado.get())
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Navegación y carga
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _al_cambiar_grado(self, grado):
+        self.cargar_lista(grado)
+        self.cargar_retirados(grado)
 
     def cargar_lista(self, grado):
-        for w in self.scroll_lista.winfo_children(): w.destroy()
+        for w in self.scroll_activos.winfo_children():
+            w.destroy()
         self.entradas_estudiantes.clear()
-        
+
         estudiantes = self.engine.obtener_estudiantes_completos(grado)
 
         if not estudiantes:
-            ctk.CTkLabel(self.scroll_lista, text=f"La lista de {grado} está vacía. ¡Agrega un alumno arriba ☝️!", text_color="#94A3B8").pack(pady=20)
+            ctk.CTkLabel(self.scroll_activos,
+                         text=f"La lista de {grado} está vacía. ¡Agrega un alumno arriba ☝️!",
+                         text_color="#94A3B8").pack(pady=20)
             return
 
-        for est in estudiantes:
-            fila = ctk.CTkFrame(self.scroll_lista, fg_color="#1A2638", corner_radius=5)
+        for i, est in enumerate(estudiantes):
+            fila = ctk.CTkFrame(self.scroll_activos, fg_color=C["card"], corner_radius=5)
             fila.pack(fill="x", pady=2)
 
-            ctk.CTkLabel(fila, text=str(est["id"]), width=40).pack(side="left", padx=10)
-            
-            # Nombre ahora es Editable
-            entry_nom = ctk.CTkEntry(fila, width=350, fg_color="#0F1923")
-            entry_nom.insert(0, est["nombre"])
-            entry_nom.pack(side="left", padx=10)
+            ctk.CTkLabel(fila, text=str(i + 1), width=40).pack(side="left", padx=6)
 
-            # Cédula Editable
-            entry_ced = ctk.CTkEntry(fila, width=150, fg_color="#0F1923", placeholder_text="Ej: 4-123-456")
-            if est["cedula"]: entry_ced.insert(0, est["cedula"])
-            entry_ced.pack(side="left", padx=10)
+            entry_nom = ctk.CTkEntry(fila, width=320, fg_color=C["input"])
+            entry_nom.insert(0, est["nombre"])
+            entry_nom.pack(side="left", padx=6)
+
+            entry_ced = ctk.CTkEntry(fila, width=130, fg_color=C["input"],
+                                     placeholder_text="Ej: 4-123-456")
+            if est["cedula"]:
+                entry_ced.insert(0, est["cedula"])
+            entry_ced.pack(side="left", padx=6)
             entry_ced.bind("<FocusOut>", lambda e, ent=entry_ced: self._formatear_cedula_existente(ent))
-            
-            # Sexo Editable
+
             combo_sex = ctk.CTkOptionMenu(fila, values=["M", "F"], width=70)
             combo_sex.set(est.get("sexo", "M") if est.get("sexo") in ["M", "F"] else "M")
-            combo_sex.pack(side="left", padx=10)
-            
-            self.entradas_estudiantes[est["id"]] = {"nombre": entry_nom, "cedula": entry_ced, "sexo": combo_sex}
+            combo_sex.pack(side="left", padx=6)
+
+            # Botón Retirar (naranja)
+            ctk.CTkButton(
+                fila, text="🚪 Retirar",
+                width=95, height=26,
+                fg_color="#F97316", hover_color="#EA580C",
+                font=(FONT_BODY, 11, "bold"),
+                command=lambda eid=est["id"], enom=est["nombre"]: self._iniciar_retiro(eid, enom)
+            ).pack(side="left", padx=6)
+
+            self.entradas_estudiantes[est["id"]] = {
+                "nombre": entry_nom, "cedula": entry_ced, "sexo": combo_sex
+            }
+
+    def cargar_retirados(self, grado):
+        for w in self.scroll_retirados.winfo_children():
+            w.destroy()
+
+        retirados = self.engine.obtener_estudiantes_retirados(grado)
+
+        if not retirados:
+            ctk.CTkLabel(self.scroll_retirados,
+                         text="No hay estudiantes retirados en este grado.",
+                         text_color="#94A3B8").pack(pady=20)
+            return
+
+        for i, est in enumerate(retirados):
+            fila = ctk.CTkFrame(self.scroll_retirados,
+                                fg_color="#3B1F1F" if i % 2 == 0 else "#2D1A1A",
+                                corner_radius=5)
+            fila.pack(fill="x", pady=2)
+
+            ctk.CTkLabel(fila, text=str(i + 1), width=35, text_color="#F87171").pack(side="left", padx=5)
+            ctk.CTkLabel(fila, text=est["nombre"],       width=250, anchor="w",
+                         text_color="#FCA5A5").pack(side="left", padx=5)
+            ctk.CTkLabel(fila, text=est["grado"],        width=60,  anchor="w",
+                         text_color="#94A3B8").pack(side="left", padx=5)
+            ctk.CTkLabel(fila, text=est["fecha_retiro"], width=90,  anchor="w",
+                         text_color="#94A3B8").pack(side="left", padx=5)
+            ctk.CTkLabel(fila, text=est["motivo_retiro"][:30] + "…"
+                         if len(est["motivo_retiro"]) > 30 else est["motivo_retiro"],
+                         width=180, anchor="w",
+                         text_color="#94A3B8").pack(side="left", padx=5)
+
+            ctk.CTkButton(
+                fila, text="✅ Reactivar",
+                width=105, height=26,
+                fg_color="#16A34A", hover_color="#15803D",
+                font=(FONT_BODY, 11, "bold"),
+                command=lambda eid=est["id"], enom=est["nombre"]: self._reactivar(eid, enom)
+            ).pack(side="left", padx=5)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Retiro y reactivación
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _iniciar_retiro(self, est_id, nombre):
+        """Muestra el diálogo de retiro y ejecuta el proceso si se confirma."""
+        dialogo = _DialogoRetiro(self.winfo_toplevel(), nombre)
+        self.wait_window(dialogo)
+
+        if not dialogo.confirmado:
+            return
+
+        motivo     = dialogo.motivo
+        acudiente  = dialogo.acudiente
+
+        exito, resultado = self.engine.retirar_estudiante(est_id, motivo, acudiente)
+        root = self.winfo_toplevel()
+
+        if exito:
+            # Generar expediente de retiro
+            try:
+                self._generar_expediente_retiro(est_id, nombre, motivo, acudiente)
+            except Exception:
+                pass
+
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(
+                    f"🚪 {resultado} retirado. Expediente actualizado.",
+                    color="#F97316"
+                )
+            self.cargar_lista(self.combo_grado.get())
+            self.cargar_retirados(self.combo_grado.get())
+        else:
+            messagebox.showerror("Error", f"No se pudo retirar al estudiante.\n{resultado}")
+
+    def _reactivar(self, est_id, nombre):
+        if not messagebox.askyesno(
+            "Reactivar Estudiante",
+            f"¿Desea reactivar a {nombre}?\n\nEl estudiante volverá a aparecer en todas las listas activas."
+        ):
+            return
+
+        exito, resultado = self.engine.reactivar_estudiante(est_id)
+        root = self.winfo_toplevel()
+
+        if exito:
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✅ {resultado} reactivado.", color="#10B981")
+            self.cargar_lista(self.combo_grado.get())
+            self.cargar_retirados(self.combo_grado.get())
+        else:
+            messagebox.showerror("Error", f"No se pudo reactivar.\n{resultado}")
+
+    def _generar_expediente_retiro(self, est_id, nombre, motivo, acudiente):
+        """Genera el expediente Word de retiro (delega a documentos_maestro)."""
+        try:
+            from rdsecurity import cargar_config_segura
+            from documentos_maestro import generar_expediente_retiro
+            cfg = cargar_config_segura({})
+            grado = self.combo_grado.get()
+
+            # Obtener resumen de asistencia y notas del estudiante
+            asis = self.engine.obtener_estadisticas_asistencia(grado, "Todos", est_id)
+            notas_t1 = self.engine.obtener_notas_estudiante(nombre, grado, "Trimestre 1")
+            notas_t2 = self.engine.obtener_notas_estudiante(nombre, grado, "Trimestre 2")
+            notas_t3 = self.engine.obtener_notas_estudiante(nombre, grado, "Trimestre 3")
+
+            datos = {
+                "nombre":           nombre,
+                "grado":            grado,
+                "motivo":           motivo,
+                "acudiente":        acudiente,
+                "docente_nombre":   cfg.get("docente_nombre", ""),
+                "escuela_nombre":   cfg.get("escuela_nombre", ""),
+                "ano_lectivo":      cfg.get("ano_lectivo", "2026"),
+                "asistencia":       asis,
+                "notas_t1":         notas_t1,
+                "notas_t2":         notas_t2,
+                "notas_t3":         notas_t3,
+            }
+            # Obtener cédula del estudiante
+            cursor = self.engine.db_conn.cursor()
+            cursor.execute("SELECT cedula FROM estudiantes WHERE id = ?;", (str(est_id),))
+            r = cursor.fetchone()
+            datos["cedula"] = self.engine.db_manager.desencriptar_campo(r[0]) if r and r[0] else ""
+
+            generar_expediente_retiro(datos)
+        except Exception as e:
+            print(f"[dapp] No se pudo generar expediente de retiro: {e}")
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Agregar / Guardar
+    # ──────────────────────────────────────────────────────────────────────
 
     def agregar_nuevo(self):
-        grado = self.combo_grado.get()
+        grado  = self.combo_grado.get()
         nombre = self.entry_nuevo_nombre.get().strip().upper()
         cedula = self.formatear_cedula_panamena(self.entry_nueva_cedula.get().strip())
-        sexo = self.combo_nuevo_sexo.get()
+        sexo   = self.combo_nuevo_sexo.get()
 
         if not nombre:
             messagebox.showwarning("Faltan datos", "El Apellido y Nombre son obligatorios.")
             return
 
-        # Friendly Limit Warning
-        max_estudiantes = 34 if self.engine.modalidad == "primaria" else 36
+        max_est = 34 if self.engine.modalidad == "primaria" else 36
         actuales = self.engine.obtener_estudiantes_completos(grado)
-        if len(actuales) >= max_estudiantes:
-            messagebox.showwarning("Límite Alcanzado", f"El grado {grado} ha alcanzado el límite máximo de {max_estudiantes} estudiantes permitido para {self.engine.modalidad.capitalize()}.")
+        if len(actuales) >= max_est:
+            messagebox.showwarning(
+                "Límite Alcanzado",
+                f"El grado {grado} ha alcanzado el límite máximo de {max_est} estudiantes "
+                f"permitido para {self.engine.modalidad.capitalize()}."
+            )
             return
 
         exito = self.engine.agregar_estudiante(grado, nombre, cedula, sexo)
@@ -125,38 +323,41 @@ class EstudiantesFrame(ctk.CTkFrame):
             root = self.winfo_toplevel()
             if hasattr(root, "mostrar_toast"):
                 root.mostrar_toast(f"✓ {nombre} agregado con éxito", color="#10B981")
-            self.entry_nuevo_nombre.delete(0, 'end')
-            self.entry_nueva_cedula.delete(0, 'end')
-            self.cargar_lista(grado) # Recargar la lista para que aparezca
+            self.entry_nuevo_nombre.delete(0, "end")
+            self.entry_nueva_cedula.delete(0, "end")
+            self.cargar_lista(grado)
         else:
-            messagebox.showerror("Error", f"No se pudo agregar. La lista podría estar llena (Máx. {max_estudiantes} alumnos).")
+            messagebox.showerror(
+                "Error",
+                f"No se pudo agregar. La lista podría estar llena (Máx. {max_est} alumnos)."
+            )
 
     def guardar_cambios(self):
         grado = self.combo_grado.get()
         datos_modificados = {}
-        
+
         for id_est, entries in self.entradas_estudiantes.items():
             nom = entries["nombre"].get().strip().upper()
             ced = self.formatear_cedula_panamena(entries["cedula"].get().strip())
             sex = entries["sexo"].get()
-            
-            if nom: # Solo guarda si el nombre no está en blanco
+            if nom:
                 datos_modificados[id_est] = {"nombre": nom, "cedula": ced, "sexo": sex}
 
         if self.engine.guardar_cambios_estudiantes(grado, datos_modificados):
             root = self.winfo_toplevel()
             if hasattr(root, "mostrar_toast"):
-                root.mostrar_toast("✓ Cambios guardados con éxito en Excel", color="#10B981")
+                root.mostrar_toast("✓ Cambios guardados con éxito", color="#10B981")
             self.cargar_lista(grado)
         else:
             messagebox.showerror("Error", "Hubo un problema al guardar los cambios.")
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Utilidades de cédula
+    # ──────────────────────────────────────────────────────────────────────
+
     def formatear_cedula_panamena(self, val):
         val = val.strip().upper()
-        # Filtrar caracteres permitidos
         val = "".join([c for c in val if c.isalnum() or c == "-"])
-        
-        # Si contiene guiones pero no sigue el patrón panameño, respetarlo
         if "-" in val:
             partes = val.split("-")
             if len(partes) == 3:
@@ -167,93 +368,164 @@ class EstudiantesFrame(ctk.CTkFrame):
                     return val
             else:
                 return val
-
         clean = val.replace("-", "")
         if not clean:
             return ""
-        
-        prefix = ""
-        rest = clean
+        prefix, rest = "", clean
         for p in ["PE", "PI", "E", "N"]:
             if clean.startswith(p):
-                prefix = p
-                rest = clean[len(p):]
+                prefix, rest = p, clean[len(p):]
                 break
-        
         if not prefix:
             if len(clean) >= 2 and clean[:2].isdigit():
                 prov = int(clean[:2])
                 if 1 <= prov <= 13:
-                    prefix = clean[:2]
-                    rest = clean[2:]
+                    prefix, rest = clean[:2], clean[2:]
                 elif clean[0].isdigit():
-                    prefix = clean[0]
-                    rest = clean[1:]
+                    prefix, rest = clean[0], clean[1:]
             elif clean and clean[0].isdigit():
-                prefix = clean[0]
-                rest = clean[1:]
-        
+                prefix, rest = clean[0], clean[1:]
         if prefix:
             if len(rest) > 3:
                 split_idx = max(1, len(rest) - 4)
                 if len(rest) <= 6:
                     split_idx = min(3, len(rest) - 3)
-                    if split_idx < 1: split_idx = 1
+                    if split_idx < 1:
+                        split_idx = 1
                 return f"{prefix}-{rest[:split_idx]}-{rest[split_idx:]}"
             elif len(rest) > 0:
                 return f"{prefix}-{rest}"
-            else:
-                return prefix
+            return prefix
         return val
 
     def _formatear_nueva_cedula(self):
         val = self.entry_nueva_cedula.get()
         fmt = self.formatear_cedula_panamena(val)
-        self.entry_nueva_cedula.delete(0, 'end')
+        self.entry_nueva_cedula.delete(0, "end")
         self.entry_nueva_cedula.insert(0, fmt)
 
     def _formatear_cedula_existente(self, ent):
         val = ent.get()
         fmt = self.formatear_cedula_panamena(val)
-        ent.delete(0, 'end')
+        ent.delete(0, "end")
         ent.insert(0, fmt)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Imprimir lista / Actualizar
+    # ──────────────────────────────────────────────────────────────────────
 
     def imprimir_lista_clase(self):
         from rdsecurity import cargar_config_segura
         from documentos_maestro import generar_lista_clase
         from utils.footer_utils import abrir_documento
-        
+
         grado = self.combo_grado.get()
         if grado == "Sin datos":
             messagebox.showwarning("Atención", "No hay un grado válido seleccionado.")
             return
-            
+
         estudiantes = self.engine.obtener_estudiantes_completos(grado)
         if not estudiantes:
             messagebox.showwarning("Atención", "No hay estudiantes en este grado.")
             return
-            
+
         cfg = cargar_config_segura({})
         datos = {
-            "grado": grado,
+            "grado":         grado,
             "docente_nombre": cfg.get("docente_nombre", ""),
             "escuela_nombre": cfg.get("escuela_nombre", ""),
-            "ano_lectivo": cfg.get("ano_lectivo", "2026"),
-            "estudiantes": estudiantes
+            "ano_lectivo":   cfg.get("ano_lectivo", "2026"),
+            "estudiantes":   estudiantes,
         }
-        
+
         ruta = generar_lista_clase(datos)
         if ruta:
             abrir_documento(ruta)
-            messagebox.showinfo("✓ Lista Generada", f"Lista de clase en Word generada exitosamente:\n{ruta}")
+            messagebox.showinfo("✓ Lista Generada",
+                                f"Lista de clase en Word generada exitosamente:\n{ruta}")
 
     def actualizar_vista(self):
         """Recarga la lista de grados activos y refresca la vista."""
         opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
-        old_sel = self.combo_grado.get()
+        old_sel  = self.combo_grado.get()
         self.combo_grado.configure(values=opciones)
         if old_sel in opciones:
             self.combo_grado.set(old_sel)
         else:
             self.combo_grado.set(opciones[0])
-        self.cargar_lista(self.combo_grado.get())
+        grado = self.combo_grado.get()
+        self.cargar_lista(grado)
+        self.cargar_retirados(grado)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Diálogo de Retiro
+# ══════════════════════════════════════════════════════════════════════════════
+
+class _DialogoRetiro(ctk.CTkToplevel):
+    """Diálogo modal que pide el motivo y el nombre del acudiente al retirar un alumno."""
+
+    def __init__(self, parent, nombre_alumno: str):
+        super().__init__(parent)
+        self.title("🚪 Registrar Retiro de Alumno")
+        self.geometry("480x300")
+        self.resizable(False, False)
+        self.grab_set()
+        self.lift()
+        self.focus_force()
+
+        self.confirmado = False
+        self.motivo     = ""
+        self.acudiente  = ""
+
+        # Encabezado
+        ctk.CTkLabel(self, text="🚪 Registrar Retiro",
+                     font=(FONT_TITLE, 18, "bold")).pack(pady=(18, 4))
+        ctk.CTkLabel(self,
+                     text=f"Alumno: {nombre_alumno}",
+                     font=(FONT_BODY, 13),
+                     text_color="#FCA5A5").pack(pady=(0, 12))
+
+        # Motivo
+        ctk.CTkLabel(self, text="Motivo del retiro *",
+                     font=(FONT_BODY, 12, "bold"),
+                     anchor="w").pack(fill="x", padx=30)
+        self.entry_motivo = ctk.CTkEntry(self, width=420,
+                                         placeholder_text="Ej: Traslado a otra escuela")
+        self.entry_motivo.pack(padx=30, pady=(2, 10))
+        self.entry_motivo.focus_set()
+
+        # Nombre del acudiente
+        ctk.CTkLabel(self, text="Nombre del acudiente (opcional)",
+                     font=(FONT_BODY, 12, "bold"),
+                     anchor="w").pack(fill="x", padx=30)
+        self.entry_acudiente = ctk.CTkEntry(self, width=420,
+                                             placeholder_text="Ej: María González")
+        self.entry_acudiente.pack(padx=30, pady=(2, 16))
+
+        # Botones
+        f_btns = ctk.CTkFrame(self, fg_color="transparent")
+        f_btns.pack()
+        ctk.CTkButton(f_btns, text="✅ Confirmar Retiro",
+                      fg_color="#F97316", hover_color="#EA580C",
+                      width=180, font=(FONT_BODY, 13, "bold"),
+                      command=self._confirmar).pack(side="left", padx=10)
+        ctk.CTkButton(f_btns, text="Cancelar",
+                      fg_color="#374151", hover_color="#4B5563",
+                      width=120,
+                      command=self.destroy).pack(side="left", padx=10)
+
+        self.bind("<Return>",  lambda e: self._confirmar())
+        self.bind("<Escape>",  lambda e: self.destroy())
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+    def _confirmar(self):
+        motivo = self.entry_motivo.get().strip()
+        if not motivo:
+            self.entry_motivo.configure(border_color="#EF4444")
+            self.entry_motivo.focus_set()
+            return
+        self.motivo    = motivo
+        self.acudiente = self.entry_acudiente.get().strip()
+        self.confirmado = True
+        self.destroy()

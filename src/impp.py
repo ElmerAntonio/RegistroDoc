@@ -12,6 +12,7 @@ except ImportError:
     DOCX_DISPONIBLE = False
 
 from rdprint import abrir_para_imprimir, imprimir_hoja_directo
+from theme import C
 
 def parsear_archivo_estudiantes(ruta_archivo) -> list[dict]:
     """
@@ -138,14 +139,9 @@ class ImpresionFrame(ctk.CTkFrame):
         self.engine = engine
 
         # Paleta de colores
-        self.C = {
-            "azul_osc": "#1E293B",
-            "azul_med": "#3B82F6",
-            "verde": "#10B981",
-            "card_bg": "#FFFFFF" if ctk.get_appearance_mode() == "Light" else "#1E293B",
-            "texto": "#0F172A" if ctk.get_appearance_mode() == "Light" else "#F8FAFC",
-            "texto_sec": "#64748B" if ctk.get_appearance_mode() == "Light" else "#94A3B8"
-        }
+        self.C = C.copy()
+        self.C["card_bg"] = C["card"]
+        self.C["azul_osc"] = C["badge_bg"]
 
         # Tabview principal
         self.tabview = ctk.CTkTabview(self)
@@ -181,14 +177,14 @@ class ImpresionFrame(ctk.CTkFrame):
         # Panel Izquierdo: Configuración
         config_card = ctk.CTkFrame(
             grid_frame, fg_color=self.C["card_bg"], corner_radius=15, 
-            border_width=1, border_color="#E2E8F0" if ctk.get_appearance_mode() == "Light" else "#334155"
+            border_width=1, border_color=self.C["borde"]
         )
         config_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=10)
 
         # Panel Derecho: Acciones y Resumen
         actions_card = ctk.CTkFrame(
             grid_frame, fg_color=self.C["card_bg"], corner_radius=15, 
-            border_width=1, border_color="#E2E8F0" if ctk.get_appearance_mode() == "Light" else "#334155"
+            border_width=1, border_color=self.C["borde"]
         )
         actions_card.grid(row=0, column=1, sticky="nsew", padx=(10, 0), pady=10)
 
@@ -267,14 +263,14 @@ class ImpresionFrame(ctk.CTkFrame):
 
         # Info Box
         info_frame = ctk.CTkFrame(
-            actions_card, fg_color="#EFF6FF" if ctk.get_appearance_mode() == "Light" else "#1E293B", 
+            actions_card, fg_color=("#EFF6FF", "#1E293B"), 
             corner_radius=10
         )
         info_frame.pack(fill="x", padx=25, pady=(0, 25))
         
         self.info_lbl = ctk.CTkLabel(
             info_frame, text="Se enviará a imprimir la hoja correspondiente al reporte seleccionado.",
-            font=("Inter", 12), text_color="#1E40AF" if ctk.get_appearance_mode() == "Light" else "#93C5FD",
+            font=("Inter", 12), text_color=("#1E40AF", "#93C5FD"),
             wraplength=250, justify="left"
         )
         self.info_lbl.pack(padx=15, pady=15)
@@ -569,6 +565,7 @@ class ImpresionFrame(ctk.CTkFrame):
         self.info_lbl.configure(text=msg)
 
     def _resolver_nombre_hoja(self):
+        """Construye el nombre de la hoja a imprimir directamente desde los parámetros (sin abrir el Excel)."""
         tipo = self.report_type_var.get()
         if tipo in ["Portada", "Caratula", "Horarios"]:
             return tipo
@@ -577,16 +574,21 @@ class ImpresionFrame(ctk.CTkFrame):
             return None
 
         grado = self.grado_menu.get()
-        materia = self.materia_menu.get() if tipo == "Planilla" else None
-        
-        if not os.path.exists(self.engine.ruta):
-            return None
-        
-        wb = openpyxl.load_workbook(self.engine.ruta, read_only=True)
-        from rdprint import encontrar_hoja_impresion
-        nombre_hoja = encontrar_hoja_impresion(wb, tipo, grado, materia)
-        wb.close()
-        return nombre_hoja
+        grado_num = grado.replace("\u00b0", "").strip()
+        modalidad = getattr(self.engine, 'modalidad', 'premedia')
+
+        if tipo == "Planilla":
+            materia = self.materia_menu.get()
+            # Convencion: "Planilla (Materia Grado)"
+            return f"Planilla ({materia} {grado})"
+        elif tipo == "Asistencia":
+            # Convencion: "Asistencia (7\u00b0)"
+            return f"Asistencia ({grado})"
+        elif tipo == "Resumen":
+            if modalidad == "primaria":
+                return "RESUMEN"
+            return f"RESUMEN_{grado}"
+        return None
 
     def _abrir_excel(self):
         tipo = self.report_type_var.get()

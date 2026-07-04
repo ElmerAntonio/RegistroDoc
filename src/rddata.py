@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+import threading
 from rdsecurity import validar_nota_meduca, sanitizar_entrada
 import openpyxl
 from openpyxl.styles import Alignment, Font
@@ -72,16 +73,64 @@ class DataEngine:
         from rdsql import SQLDatabaseManager
         self.db_manager = SQLDatabaseManager()
         self.db_conn = self.db_manager.conectar()
+
+        # --- Debounce de guardado cifrado ---
+        # El commit() a SQLite es INMEDIATO (datos nunca se pierden en memoria).
+        # El cifrado al .enc ocurre máximo cada 5 segundos en un hilo de fondo,
+        # evitando congelar la UI cuando el docente guarda rápidamente.
+        self._save_timer = None
+        self._save_timer_lock = threading.Lock()
+        self._SAVE_DEBOUNCE_SECS = 5.0
         
         self._cargar_en_memoria()
         self.sincronizar_excel_a_sql()
 
-    def sincronizar_excel_a_sql(self):
+    # ─── Guardado diferido (debounce) ────────────────────────────────────────
+    def _schedule_save(self):
+        """Programa un guardado cifrado en background con debounce de 5 segundos.
+        El commit a SQLite ya ocurrió; esto solo persiste el .enc en disco.
+        Si se llama varias veces seguidas, solo ejecuta UNA escritura al final.
+        """
+        with self._save_timer_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()  # Cancelar el timer anterior
+            self._save_timer = threading.Timer(self._SAVE_DEBOUNCE_SECS, self._flush_save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def _flush_save(self):
+        """Ejecuta el guardado cifrado real en el hilo del timer (fondo)."""
+        with self._save_timer_lock:
+            self._save_timer = None
+        try:
+            self.db_manager.guardar_cifrado()
+        except Exception as e:
+            logger.warning(f"[debounce] Error en guardado cifrado: {e}")
+
+    def flush_save_sync(self):
+        """Fuerza un guardado cifrado inmediato y sincrono (usar solo al cerrar la app)."""
+        with self._save_timer_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+        self.db_manager.guardar_cifrado()
+
+
+    def sincronizar_excel_a_sql(self, force_sync=False):
         """Migra de forma unidireccional y robusta los datos desde Excel a SQLite."""
         if not os.path.exists(self.ruta) and not self._wb_cache:
             return
 
         cursor = self.db_conn.cursor()
+
+        # Eliminar registros huérfanos del bug de colisión de IDs (IDs menores a 100)
+        try:
+            cursor.execute("DELETE FROM notas WHERE CAST(estudiante_id AS INTEGER) < 100;")
+            cursor.execute("DELETE FROM asistencia WHERE CAST(estudiante_id AS INTEGER) < 100;")
+            cursor.execute("DELETE FROM estudiantes WHERE CAST(id AS INTEGER) < 100;")
+            self.db_conn.commit()
+        except Exception as e:
+            logger.error(f"Error limpiando IDs de estudiantes inválidos: {e}")
 
         # Asegurar carga
         if not self._wb_cache:
@@ -99,33 +148,109 @@ class DataEngine:
                     (k, str(v))
                 )
 
-        # 2. Obtener grados activos
+        # Sincronizar metadatos extra
+        try:
+            # Sincronizar ruta_excel
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('ruta_excel', ?);", (self.ruta,))
+            
+            # Sincronizar trimestre_activo
+            from utils.date_helpers import obtener_trimestre_actual
+            trimestre = obtener_trimestre_actual()
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('trimestre_activo', ?);", (trimestre,))
+            
+            # Sincronizar otros desde config.enc
+            from rdsecurity import cargar_config_segura
+            cfg = cargar_config_segura({})
+            for k in ["modalidad", "tema", "logo_escuela_path"]:
+                if k in cfg:
+                    cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", (k, str(cfg[k])))
+                elif k == "modalidad":
+                    cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('modalidad', ?);", (self.modalidad,))
+            self.db_conn.commit()
+        except Exception as e:
+            logger.error(f"Error guardando metadatos extra en SQLite: {e}")
+
+        # 2. Obtener grados del archivo Excel para limpieza y sincronización
+        grados_excel = []
+        wb_check = self._wb_cache
+        should_close_check = False
+        if not wb_check:
+            try:
+                import openpyxl
+                wb_check = openpyxl.load_workbook(self.ruta, read_only=True)
+                should_close_check = True
+            except Exception:
+                pass
+        if wb_check:
+            for s in wb_check.sheetnames:
+                if s.upper().startswith("RESUMEN_"):
+                    grados_excel.append(s.split("_", 1)[1].strip())
+            if should_close_check:
+                wb_check.close()
+
+        # Limpiar grados obsoletos solo si la BD está completamente vacía (primera sincronización)
+        # Cuando ya hay datos, SQL es la fuente de verdad y no eliminamos grados basados en el Excel
+        cursor.execute("SELECT COUNT(*) FROM notas;")
+        bd_vacia = cursor.fetchone()[0] == 0
+        if grados_excel and bd_vacia:
+            try:
+                placeholders = ",".join("?" for _ in grados_excel)
+                cursor.execute(f"SELECT id FROM grados WHERE modalidad = ? AND nombre NOT IN ({placeholders});", (self.modalidad, *grados_excel))
+                obsolete_ids = [r[0] for r in cursor.fetchall()]
+                if obsolete_ids:
+                    for obs_id in obsolete_ids:
+                        cursor.execute("DELETE FROM estudiantes WHERE grado_id = ?;", (obs_id,))
+                        cursor.execute("DELETE FROM materias WHERE grado_id = ?;", (obs_id,))
+                        cursor.execute("DELETE FROM grados WHERE id = ?;", (obs_id,))
+                    self.db_conn.commit()
+            except Exception as e:
+                logger.error(f"Error limpiando grados obsoletos de SQLite: {e}")
+
+
+        # Registrar los nuevos grados de Excel en SQLite antes de consultar
+        if grados_excel:
+            try:
+                for g in grados_excel:
+                    cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, 'A', ?);", (g, self.modalidad))
+                self.db_conn.commit()
+            except Exception as e:
+                logger.error(f"Error registrando grados iniciales: {e}")
+
+        # Ahora sí, obtener la lista final de grados activos de SQLite
         grados = self.obtener_grados_activos()
 
-        # Verificar si ya está poblado
+        # Verificar si ya está poblado con estudiantes, notas y asistencia
         cursor.execute("SELECT COUNT(*) FROM estudiantes;")
         ya_poblado = cursor.fetchone()[0] > 0
 
-        if ya_poblado:
-            # Sincronización parcial en cada inicio: actualiza y cifra nombres, cédulas y sexos de estudiantes
+        cursor.execute("SELECT COUNT(*) FROM notas;")
+        tiene_notas = cursor.fetchone()[0] > 0
+
+        cursor.execute("SELECT COUNT(*) FROM asistencia;")
+        tiene_asistencia = cursor.fetchone()[0] > 0
+
+        if ya_poblado and not force_sync:
+            # Sincronización parcial en cada inicio: actualiza nombres, cédulas y sexos.
+            # NO borra notas ni asistencia (SQL es la fuente de verdad post-primera-sync).
             for g in grados:
-                cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, 'A', ?);", (g, self.modalidad))
-                self.db_conn.commit()
                 cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (g, self.modalidad))
                 grado_row = cursor.fetchone()
                 if grado_row:
                     grado_id = grado_row[0]
                     estudiantes = self._obtener_estudiantes_desde_excel(g, wb=self._wb_cache)
                     active_ids = {str(est["id"]) for est in estudiantes}
-                    
+
                     # Cargar IDs de estudiantes registrados en la DB para este grado
                     cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? AND estado = 'Activo';", (grado_id,))
                     db_ids = {row[0] for row in cursor.fetchall()}
-                    
-                    # Desactivar estudiantes retirados
-                    for old_id in db_ids - active_ids:
-                        cursor.execute("UPDATE estudiantes SET estado = 'Retirado' WHERE id = ? AND grado_id = ?;", (old_id, grado_id))
-                    
+
+                    # Solo marcar como Retirado si el Excel TÍene datos para este grado
+                    # y el alumno no aparece en él. Si Excel está vacío para el grado,
+                    # SQL es la fuente de verdad — no tocamos el estado.
+                    if active_ids:  # Excel sí tiene alumnos para este grado
+                        for old_id in db_ids - active_ids:
+                            cursor.execute("UPDATE estudiantes SET estado = 'Retirado' WHERE id = ? AND grado_id = ?;", (old_id, grado_id))
+
                     for est in estudiantes:
                         nombre_cifrado = self.db_manager.encriptar_campo(est["nombre"])
                         cedula_cifrada = self.db_manager.encriptar_campo(est["cedula"])
@@ -134,11 +259,68 @@ class DataEngine:
                             "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
                             (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
                         )
+
+                    # Si no tiene asistencia en la BD, importar asistencia desde Excel para este grado (Autocuración)
+                    if not tiene_asistencia:
+                        for trim in (1, 2, 3):
+                            trim_str = f"Trimestre {trim}"
+                            fechas = self.obtener_fechas_asistencia(g, trim_str, wb=self._wb_cache)
+                            for f_val in fechas:
+                                asistencia_col = self.buscar_asistencia_existente(g, trim_str, f_val, wb=self._wb_cache)
+                                if asistencia_col:
+                                    cursor.execute("SELECT id, nombre FROM estudiantes WHERE grado_id = ?;", (grado_id,))
+                                    est_map = {}
+                                    for r_est in cursor.fetchall():
+                                        dec_name = self.db_manager.desencriptar_campo(r_est[1]).strip().lower()
+                                        est_map[dec_name] = r_est[0]
+                                    
+                                    valid_student_ids = set(est_map.values())
+                                    dict_asis = asistencia_col.get("asistencia", asistencia_col) if isinstance(asistencia_col, dict) and "asistencia" in asistencia_col else asistencia_col
+                                    if isinstance(dict_asis, dict):
+                                        for est_key, estado in dict_asis.items():
+                                            est_id = None
+                                            if str(est_key).isdigit():
+                                                est_id = str(grado_id * 100 + int(est_key))
+                                            else:
+                                                est_nom_clean = str(est_key).strip().lower()
+                                                est_id = est_map.get(est_nom_clean)
+                                                
+                                            if est_id and est_id in valid_student_ids:
+                                                est_status = str(estado).strip()
+                                                if est_status not in ('.', '-', 'T', 'E'):
+                                                    if est_status.lower() in ('p', 'asiste', 'presente', '1', '✓'):
+                                                        est_status = '.'
+                                                    elif est_status.lower() in ('f', 'falta', 'ausente', '0', 'x'):
+                                                        est_status = '-'
+                                                    elif est_status.lower() in ('t', 'tardanza', 'tarde'):
+                                                        est_status = 'T'
+                                                    elif est_status.lower() in ('e', 'excusa', 'justificado'):
+                                                        est_status = 'E'
+                                                    else:
+                                                        est_status = '.'
+                                                
+                                                cursor.execute(
+                                                    """INSERT OR REPLACE INTO asistencia 
+                                                    (estudiante_id, fecha, estado, trimestre) VALUES (?, ?, ?, ?);""",
+                                                    (est_id, f_val, est_status, trim)
+                                                )
             self.db_conn.commit()
-            self.db_manager.guardar_cifrado()
+            self._schedule_save()
             return
 
-        # Sincronización completa (primera ejecución / base de datos vacía)
+
+        # Sincronización completa: solo cuando no hay estudiantes en la BD (primera ejecución).
+        # IMPORTANTE: NO borrar notas ni asistencia si ya_poblado es True pero tiene_notas es False.
+        # Esto evita el ciclo vicioso donde la sync borra notas recién guardadas.
+        if not bd_vacia and ya_poblado:
+            # Hay estudiantes pero no hay notas: sincronizar metadatos y estudiantes sin tocar datos.
+            pass
+        elif not ya_poblado:
+            # BD realmente vacía: sincronizar todo desde Excel.
+            cursor.execute("DELETE FROM notas;")
+            cursor.execute("DELETE FROM asistencia;")
+            cursor.execute("DELETE FROM horario;")
+            self.db_conn.commit()
         for g in grados:
             # Encontrar modalidad activa
             cursor.execute(
@@ -166,8 +348,10 @@ class DataEngine:
                 )
             
             # 4. Materias
-            materias = self.obtener_materias_por_grado(g)
+            materias = self.obtener_materias_por_grado(g, wb=self._wb_cache)
             for mat in materias:
+                if mat == "Sin materias registradas":
+                    continue
                 cursor.execute(
                     "INSERT OR IGNORE INTO materias (nombre, grado_id) VALUES (?, ?);",
                     (mat, grado_id)
@@ -185,7 +369,7 @@ class DataEngine:
                 for trim in (1, 2, 3):
                     trim_str = f"Trimestre {trim}"
                     for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
-                        descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo)
+                        descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo, wb=self._wb_cache)
                         if not descripciones:
                             continue
                         
@@ -209,7 +393,7 @@ class DataEngine:
                             desc_limpia = str(val_desc).replace('\n', ' ').strip()
                             
                             for est in estudiantes:
-                                fila_excel = 4 + int(est["id"])
+                                fila_excel = 4 + (int(est["id"]) % 100)
                                 val_nota = ws.cell(row=fila_excel, column=c).value
                                 if val_nota is not None:
                                     try:
@@ -225,46 +409,69 @@ class DataEngine:
             # 6. Asistencia
             for trim in (1, 2, 3):
                 trim_str = f"Trimestre {trim}"
-                fechas = self.obtener_fechas_asistencia(g, trim_str)
+                fechas = self.obtener_fechas_asistencia(g, trim_str, wb=self._wb_cache)
                 for f_val in fechas:
-                    
-                    asistencia_col = self.buscar_asistencia_existente(g, trim_str, f_val)
+                    asistencia_col = self.buscar_asistencia_existente(g, trim_str, f_val, wb=self._wb_cache)
                     if asistencia_col:
                         cursor.execute("SELECT id, nombre FROM estudiantes WHERE grado_id = ?;", (grado_id,))
                         est_map = {}
                         for r_est in cursor.fetchall():
                             dec_name = self.db_manager.desencriptar_campo(r_est[1]).strip().lower()
                             est_map[dec_name] = r_est[0]
+                        
+                        valid_student_ids = set(est_map.values())
 
-                        for est_nom, estado in asistencia_col.items():
-                            est_nom_clean = str(est_nom).strip().lower()
-                            est_id = est_map.get(est_nom_clean)
-                            if est_id:
-                                cursor.execute(
-                                    """INSERT OR REPLACE INTO asistencia 
-                                    (estudiante_id, fecha, estado) VALUES (?, ?, ?);""",
-                                    (est_id, f_val, estado)
-                                )
+                        # Manejar formato de Excel (diccionario con clave 'asistencia') o formato SQLite (dict directo)
+                        dict_asis = asistencia_col.get("asistencia", asistencia_col) if isinstance(asistencia_col, dict) and "asistencia" in asistencia_col else asistencia_col
+                        if isinstance(dict_asis, dict):
+                            for est_key, estado in dict_asis.items():
+                                est_id = None
+                                if str(est_key).isdigit():
+                                    est_id = str(grado_id * 100 + int(est_key))
+                                else:
+                                    est_nom_clean = str(est_key).strip().lower()
+                                    est_id = est_map.get(est_nom_clean)
+                                    
+                                if est_id and est_id in valid_student_ids:
+                                    est_status = str(estado).strip()
+                                    if est_status not in ('.', '-', 'T', 'E'):
+                                        if est_status.lower() in ('p', 'asiste', 'presente', '1', '✓'):
+                                            est_status = '.'
+                                        elif est_status.lower() in ('f', 'falta', 'ausente', '0', 'x'):
+                                            est_status = '-'
+                                        elif est_status.lower() in ('t', 'tardanza', 'tarde'):
+                                            est_status = 'T'
+                                        elif est_status.lower() in ('e', 'excusa', 'justificado'):
+                                            est_status = 'E'
+                                        else:
+                                            est_status = '.'
+                                    
+                                    cursor.execute(
+                                        """INSERT OR REPLACE INTO asistencia 
+                                        (estudiante_id, fecha, estado, trimestre) VALUES (?, ?, ?, ?);""",
+                                        (est_id, f_val, est_status, trim)
+                                    )
         
-        # 7. Horario
+        # 7. Horario — sincronizar Excel → SQL guardando texto libre por día/bloque
         try:
-            horario_excel = self.obtener_horario()
-            if horario_excel:
-                for h_slot in horario_excel:
-                    bloque = h_slot.get("hora", "")
-                    for dia in ('lunes', 'martes', 'miercoles', 'jueves', 'viernes'):
-                        val_dia = h_slot.get(dia, "")
-                        if val_dia:
-                            cursor.execute(
-                                """INSERT INTO horario (dia, bloque_hora, materia_id, grado_id) 
-                                VALUES (?, ?, NULL, NULL);""",
-                                (dia, bloque)
-                            )
-        except Exception:
-            pass
+            horario_excel = self.obtener_horario_desde_excel()  # Siempre lee del Excel
+            if any(any(v for k, v in s.items() if k != "horas") for s in horario_excel):
+                # Solo reemplazar si el Excel tiene datos reales
+                cursor.execute("DELETE FROM horario;")
+                for idx, slot in enumerate(horario_excel):
+                    bloque_hora = slot.get("horas", f"Período {idx+1}")
+                    for dia in ("lunes", "martes", "miercoles", "jueves", "viernes"):
+                        texto = slot.get(dia, "").strip()
+                        cursor.execute(
+                            """INSERT INTO horario (bloque_orden, dia, bloque_hora, materia_texto)
+                               VALUES (?, ?, ?, ?);""",
+                            (idx, dia, bloque_hora, texto)
+                        )
+        except Exception as e:
+            logger.warning(f"[sync] Error sincronizando horario: {e}")
 
         self.db_conn.commit()
-        self.db_manager.guardar_cifrado()
+        self._schedule_save()
 
 
 
@@ -667,8 +874,6 @@ class DataEngine:
 
     # --- LECTOR EXACTO DE CELDAS ---
     def obtener_datos_generales(self, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
         datos = {
             "docente_nombre": "", "docente_cedula": "", "seguro_social": "", "numero_posicion": "",
             "condicion_nombramiento": "", "escuela_nombre": "", "escuela_region": "", "distrito": "",
@@ -676,45 +881,78 @@ class DataEngine:
             "coordinador_nombre": "", "telefono": "", "correo": "", "ano_lectivo": "2026",
             "jornada": "", "fecha_t1": "", "fecha_t2": "", "fecha_t3": ""
         }
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return datos
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
         
-        # 1. EXTRACCIÓN EN "PORTADA"
-        if "Portada" in wb.sheetnames:
-            ws = wb["Portada"]
-            datos["docente_nombre"] = str(ws["P14"].value or ws["Q14"].value or ws["R14"].value or "").strip()
-            datos["docente_cedula"] = str(ws["H16"].value or "").strip()
-            datos["seguro_social"] = str(ws["AA16"].value or "").strip()
-            datos["numero_posicion"] = str(ws["AQ16"].value or "").strip()
-            datos["condicion_nombramiento"] = str(ws["U18"].value or "").strip()
-            datos["jornada"] = str(ws["H20"].value or "").strip()
-            datos["director_nombre"] = str(ws["S22"].value or "").strip()
-            datos["subdirector_nombre"] = str(ws["T24"].value or "").strip()
-            datos["coordinador_nombre"] = str(ws["O26"].value or "").strip()
-            datos["escuela_nombre"] = str(ws["Q28"].value or "").strip()
-            datos["telefono"] = str(ws["F30"].value or "").strip()
-            datos["correo"] = str(ws["AF30"].value or "").strip()
-            datos["escuela_region"] = str(ws["M32"].value or "").strip()
-            datos["distrito"] = str(ws["L34"].value or "").strip()
-            datos["corregimiento"] = str(ws["Q36"].value or "").strip()
-            datos["zona_escolar"] = str(ws["O38"].value or "").strip()
-            datos["ano_lectivo"] = str(ws["P8"].value or "2026").strip()
+        # Intentar cargar desde SQLite primero
+        has_sqlite = False
+        if hasattr(self, "db_conn") and self.db_conn is not None:
+            try:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='configuracion';")
+                if cursor.fetchone()[0] > 0:
+                    cursor.execute("SELECT clave, valor FROM configuracion;")
+                    rows = cursor.fetchall()
+                    if rows:
+                        has_sqlite = True
+                        for k, v in rows:
+                            if k in datos:
+                                datos[k] = str(v)
+            except Exception as e:
+                logger.error(f"Error cargando generales desde SQLite: {e}")
 
-        # 2. EXTRACCIÓN DE FECHAS PURAS (C1, C44, C87) Limpiando guiones
-        for sheet in wb.sheetnames:
-            if "ASISTENCIA" in sheet.upper():
-                ws = wb[sheet]
-                def extraer_fecha(celda):
-                    return DataEngine._procesar_texto_asistencia(ws[celda].value)
-                
-                datos["fecha_t1"] = extraer_fecha("C1")
-                datos["fecha_t2"] = extraer_fecha("C44")
-                datos["fecha_t3"] = extraer_fecha("C87")
-                break
-                
-        if should_close: wb.close()
+        # Fallback a Excel si SQLite no tiene datos de docente
+        if not datos["docente_nombre"] and not datos["docente_cedula"]:
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return datos
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            
+            # 1. EXTRACCIÓN EN "PORTADA"
+            if "Portada" in wb.sheetnames:
+                ws = wb["Portada"]
+                datos["docente_nombre"] = str(ws["P14"].value or ws["Q14"].value or ws["R14"].value or "").strip()
+                datos["docente_cedula"] = str(ws["H16"].value or "").strip()
+                datos["seguro_social"] = str(ws["AA16"].value or "").strip()
+                datos["numero_posicion"] = str(ws["AQ16"].value or "").strip()
+                datos["condicion_nombramiento"] = str(ws["U18"].value or "").strip()
+                datos["jornada"] = str(ws["H20"].value or "").strip()
+                datos["director_nombre"] = str(ws["S22"].value or "").strip()
+                datos["subdirector_nombre"] = str(ws["T24"].value or "").strip()
+                datos["coordinador_nombre"] = str(ws["O26"].value or "").strip()
+                datos["escuela_nombre"] = str(ws["Q28"].value or "").strip()
+                datos["telefono"] = str(ws["F30"].value or "").strip()
+                datos["correo"] = str(ws["AF30"].value or "").strip()
+                datos["escuela_region"] = str(ws["M32"].value or "").strip()
+                datos["distrito"] = str(ws["L34"].value or "").strip()
+                datos["corregimiento"] = str(ws["Q36"].value or "").strip()
+                datos["zona_escolar"] = str(ws["O38"].value or "").strip()
+                datos["ano_lectivo"] = str(ws["P8"].value or "2026").strip()
+
+            # 2. EXTRACCIÓN DE FECHAS PURAS (C1, C44, C87) Limpiando guiones
+            for sheet in wb.sheetnames:
+                if "ASISTENCIA" in sheet.upper():
+                    ws = wb[sheet]
+                    def extraer_fecha(celda):
+                        return DataEngine._procesar_texto_asistencia(ws[celda].value)
+                    
+                    datos["fecha_t1"] = extraer_fecha("C1")
+                    datos["fecha_t2"] = extraer_fecha("C44")
+                    datos["fecha_t3"] = extraer_fecha("C87")
+                    break
+                    
+            if should_close: wb.close()
+            
+            # Si leímos de Excel, guardar estos en la base de datos SQLite de forma inmediata si es posible
+            if hasattr(self, "db_conn") and self.db_conn is not None:
+                try:
+                    cursor = self.db_conn.cursor()
+                    for k, v in datos.items():
+                        cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", (k, str(v)))
+                    self.db_conn.commit()
+                except Exception as e:
+                    logger.error(f"Error persistiendo fallback de config a SQLite: {e}")
+
         return datos
 
     @staticmethod
@@ -730,93 +968,187 @@ class DataEngine:
         return ""
 
     def obtener_horario(self, wb=None):
+        """Retorna el horario. Lee SQL primero; si está vacío, cae a Excel y sincroniza."""
+        # 1. Intentar desde SQL
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("""
+                SELECT bloque_orden, dia, bloque_hora, materia_texto
+                FROM horario
+                ORDER BY bloque_orden, dia;
+            """)
+            rows = cursor.fetchall()
+
+            if rows:
+                # Reconstruir la estructura de 8 slots
+                horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "",
+                            "jueves": "", "viernes": ""} for _ in range(8)]
+                for bloque_orden, dia, bloque_hora, materia_texto in rows:
+                    idx = int(bloque_orden) if bloque_orden is not None else 0
+                    if 0 <= idx < 8:
+                        horario[idx]["horas"] = bloque_hora or ""
+                        if dia in horario[idx]:
+                            horario[idx][dia] = materia_texto or ""
+                # Solo devolver SQL si tiene al menos un dato útil
+                if any(any(v for k, v in s.items() if k != "horas") for s in horario):
+                    return horario
+        except Exception as e:
+            logger.warning(f"[horario] Error leyendo SQL: {e}")
+
+        # 2. Fallback al Excel (rescata datos existentes y los sincroniza)
+        horario_excel = self.obtener_horario_desde_excel(wb)
+        tiene_datos = any(any(v for k, v in s.items() if k != "horas") for s in horario_excel)
+        if tiene_datos:
+            # Sincronizar al SQL para que la próxima vez no necesite Excel
+            try:
+                cursor = self.db_conn.cursor()
+                cursor.execute("DELETE FROM horario;")
+                for idx, slot in enumerate(horario_excel):
+                    bloque_hora = slot.get("horas", f"Período {idx+1}")
+                    for dia in ("lunes", "martes", "miercoles", "jueves", "viernes"):
+                        texto = slot.get(dia, "").strip()
+                        cursor.execute(
+                            """INSERT INTO horario (bloque_orden, dia, bloque_hora, materia_texto)
+                               VALUES (?, ?, ?, ?);""",
+                            (idx, dia, bloque_hora, texto)
+                        )
+                self.db_conn.commit()
+                self._schedule_save()
+                logger.info("[horario] Horario rescatado del Excel y guardado en SQL.")
+            except Exception as e:
+                logger.warning(f"[horario] Error al rescatar horario a SQL: {e}")
+        return horario_excel
+
+    def obtener_horario_desde_excel(self, wb=None):
+        """Lee el horario directamente del Excel. Uso interno para sincronización."""
         if wb is None:
             self._verificar_y_recargar_cache()
-        horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "", "jueves": "", "viernes": ""} for _ in range(8)]
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return horario
+        horario = [{"horas": "", "lunes": "", "martes": "", "miercoles": "",
+                    "jueves": "", "viernes": ""} for _ in range(8)]
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return horario
         should_close = not bool(self._wb_cache) if wb is None else False
         if wb is None:
             wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
         hoja_horario = next((s for s in wb.sheetnames if "HORARIO" in s.upper()), None)
-        
+
         if hoja_horario:
             ws = wb[hoja_horario]
             idx = 0
-            
-            # Buscamos en las filas 10 a la 25 para asegurarnos de no fallar
             for r in range(10, 25):
-                if idx >= 8: break
-                
-                # Leemos el inicio de la fila para saber si es Receso
+                if idx >= 8:
+                    break
                 fila_texto = "".join(str(ws.cell(row=r, column=c).value or "").upper() for c in range(1, 10))
-                if "RECESO" in fila_texto: continue
-                
-                # Comprobamos si esta fila tiene un periodo (I, II, III...)
-                es_periodo = False
-                for c in range(1, 8):
-                    if str(ws.cell(row=r, column=c).value or "").strip().upper() in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]:
-                        es_periodo = True
-                        break
-                
+                if "RECESO" in fila_texto:
+                    continue
+                es_periodo = any(
+                    str(ws.cell(row=r, column=c).value or "").strip().upper()
+                    in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
+                    for c in range(1, 8)
+                )
                 if es_periodo:
-                    # Función que atrapa el texto aunque la celda esté combinada mal
                     def atrapar_texto(col_base):
-                        for offset in range(3): # Busca en la columna y 2 más a la derecha
+                        for offset in range(3):
                             v = str(ws.cell(row=r, column=col_base + offset).value or "").strip()
-                            if v and v != "None": return v
+                            if v and v != "None":
+                                return v
                         return ""
-
-                    # Extraemos con las coordenadas base que me diste
-                    horario[idx]["horas"] = atrapar_texto(10)
-                    horario[idx]["lunes"] = atrapar_texto(15)
-                    horario[idx]["martes"] = atrapar_texto(16)
-                    horario[idx]["miercoles"] = atrapar_texto(17)
-                    horario[idx]["jueves"] = atrapar_texto(18)
-                    horario[idx]["viernes"] = atrapar_texto(19)
+                    horario[idx]["horas"]      = atrapar_texto(10)
+                    horario[idx]["lunes"]      = atrapar_texto(15)
+                    horario[idx]["martes"]     = atrapar_texto(16)
+                    horario[idx]["miercoles"]  = atrapar_texto(17)
+                    horario[idx]["jueves"]     = atrapar_texto(18)
+                    horario[idx]["viernes"]    = atrapar_texto(19)
                     idx += 1
-                    
-        if should_close: wb.close()
+
+        if should_close:
+            wb.close()
         return horario
 
     def guardar_horario(self, datos_horario):
-        if not os.path.exists(self.ruta): return False
-        wb = openpyxl.load_workbook(self.ruta)
-        hoja_horario = next((s for s in wb.sheetnames if "HORARIO" in s.upper()), None)
-        
-        if hoja_horario:
-            ws = wb[hoja_horario]
-            idx = 0
-            
-            for r in range(10, 25):
-                if idx >= len(datos_horario): break
-                
-                fila_texto = "".join(str(ws.cell(row=r, column=c).value or "").upper() for c in range(1, 10))
-                if "RECESO" in fila_texto: continue
-                
-                es_periodo = False
-                for c in range(1, 8):
-                    if str(ws.cell(row=r, column=c).value or "").strip().upper() in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]:
-                        es_periodo = True
-                        break
-                
-                if es_periodo:
-                    h = datos_horario[idx]
-                    # Escribimos exactamente en la primera celda de la combinación
-                    mapeo_columnas = {10: "horas", 15: "lunes", 16: "martes", 17: "miercoles", 18: "jueves", 19: "viernes"}
-                    for col, llave in mapeo_columnas.items():
-                        try:
-                            ws.cell(row=r, column=col).value = h[llave]
-                        except Exception as e:
-                            print(f"[!] Error al escribir horario ({llave}) en fila {r}: {e}")
-                    idx += 1
-                    
-            self._save_wb(wb)
-            wb.close()
-            self._cargar_en_memoria()
-            return True
-        return False
+        """Guarda el horario en SQL (fuente de verdad) y dispara guardado cifrado.
+        También actualiza el Excel para mantener compatibilidad visual.
+        """
+        # 1. Guardar en SQL
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute("DELETE FROM horario;")
+            for idx, slot in enumerate(datos_horario):
+                bloque_hora = slot.get("horas", f"Período {idx+1}")
+                for dia in ("lunes", "martes", "miercoles", "jueves", "viernes"):
+                    texto = slot.get(dia, "").strip()
+                    cursor.execute(
+                        """INSERT INTO horario (bloque_orden, dia, bloque_hora, materia_texto)
+                           VALUES (?, ?, ?, ?);""",
+                        (idx, dia, bloque_hora, texto)
+                    )
+            self.db_conn.commit()
+            self._schedule_save()
+            sql_ok = True
+        except Exception as e:
+            logger.error(f"[guardar_horario] Error SQL: {e}")
+            sql_ok = False
+
+        # 2. También actualizar Excel (compatibilidad con reportes Word)
+        if os.path.exists(self.ruta):
+            try:
+                wb = openpyxl.load_workbook(self.ruta)
+                hoja_horario = next((s for s in wb.sheetnames if "HORARIO" in s.upper()), None)
+                if hoja_horario:
+                    ws = wb[hoja_horario]
+                    idx = 0
+                    for r in range(10, 25):
+                        if idx >= len(datos_horario):
+                            break
+                        fila_texto = "".join(str(ws.cell(row=r, column=c).value or "").upper() for c in range(1, 10))
+                        if "RECESO" in fila_texto:
+                            continue
+                        es_periodo = any(
+                            str(ws.cell(row=r, column=c).value or "").strip().upper()
+                            in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
+                            for c in range(1, 8)
+                        )
+                        if es_periodo:
+                            h = datos_horario[idx]
+                            mapeo = {10: "horas", 15: "lunes", 16: "martes",
+                                     17: "miercoles", 18: "jueves", 19: "viernes"}
+                            for col, llave in mapeo.items():
+                                try:
+                                    ws.cell(row=r, column=col).value = h.get(llave, "")
+                                except Exception:
+                                    pass
+                            idx += 1
+                self._save_wb(wb)
+                wb.close()
+                self._cargar_en_memoria()
+            except Exception as e:
+                logger.warning(f"[guardar_horario] No se pudo actualizar Excel: {e}")
+
+        return sql_ok
 
     def sincronizar_plantilla_maestra(self, config):
+        # Guardar en SQLite configuracion
+        try:
+            cursor = self.db_conn.cursor()
+            for k, v in config.items():
+                if isinstance(v, (list, dict)):
+                    v_str = json.dumps(v, ensure_ascii=False)
+                else:
+                    v_str = str(v)
+                cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", (k, v_str))
+            
+            # También persistir ruta_excel, trimestre_activo, modalidad
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('ruta_excel', ?);", (self.ruta,))
+            from utils.date_helpers import obtener_trimestre_actual
+            trimestre = obtener_trimestre_actual()
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('trimestre_activo', ?);", (trimestre,))
+            cursor.execute("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES ('modalidad', ?);", (self.modalidad,))
+            
+            self.db_conn.commit()
+            self._schedule_save()
+        except Exception as e:
+            logger.error(f"Error guardando config en SQLite en sincronizar_plantilla_maestra: {e}")
+
         if not os.path.exists(self.ruta): return False
         wb = openpyxl.load_workbook(self.ruta)
         
@@ -942,41 +1274,78 @@ class DataEngine:
         return True
 
     def obtener_grados_activos(self, wb=None):
+        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+            return []
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT DISTINCT nombre FROM grados WHERE modalidad = ? ORDER BY nombre;", (self.modalidad,))
+        rows = cursor.fetchall()
+        if rows:
+            return [r[0] for r in rows]
+
+        # Si la base de datos está vacía, escanear Excel
+        should_close = False
         if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            if self._wb_cache:
+                wb = self._wb_cache
+            else:
+                try:
+                    import openpyxl
+                    wb = openpyxl.load_workbook(self.ruta, read_only=True)
+                    should_close = True
+                except Exception:
+                    return []
 
         grados = []
-        for sheet in wb.sheetnames:
-            if "Asistencia" in sheet and "(" in sheet and ")" in sheet:
-                g = sheet.split("(")[1].split(")")[0].strip()
-                grados.append(g)
+        for s in wb.sheetnames:
+            if s.upper().startswith("RESUMEN_"):
+                g_name = s.split("_", 1)[1].strip()
+                grados.append(g_name)
 
-        if should_close: wb.close()
-        return sorted(list(set(grados))) if grados else []
+        if should_close:
+            wb.close()
+
+        # Insertar grados iniciales en SQLite
+        try:
+            for g in grados:
+                cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES (?, 'A', ?);", (g, self.modalidad))
+            self.db_conn.commit()
+        except Exception as e:
+            logger.error(f"Error insertando grados escaneados: {e}")
+
+        return sorted(list(set(grados)))
 
     def obtener_materias_por_grado(self, grado, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        materias = []
-        grado_num = grado.replace("°", "")
-        for sheet in wb.sheetnames:
-            if "PROM" in sheet.upper():
-                if self.modalidad == "premedia" and grado_num in sheet:
-                    mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").replace(grado, "").replace(grado_num, "").replace("°", "").strip()
-                    materias.append(mat.title())
-                elif self.modalidad == "primaria":
-                    mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").strip()
-                    materias.append(mat.title())
-        if should_close: wb.close()
-        return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
+        if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+                return []
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            materias = []
+            grado_num = grado.replace("°", "")
+            for sheet in wb.sheetnames:
+                if "PROM" in sheet.upper():
+                    if self.modalidad == "premedia" and grado_num in sheet:
+                        mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").replace(grado, "").replace(grado_num, "").replace("°", "").strip()
+                        materias.append(mat.title())
+                    elif self.modalidad == "primaria":
+                        mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").strip()
+                        materias.append(mat.title())
+            if should_close: wb.close()
+            return sorted(list(set(materias))) if materias else ["Sin materias registradas"]
+
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
+            return ["Sin materias registradas"]
+        grado_id = row_g[0]
+        
+        cursor.execute("SELECT DISTINCT nombre FROM materias WHERE grado_id = ? ORDER BY nombre;", (grado_id,))
+        rows = cursor.fetchall()
+        return [r[0] for r in rows] if rows else ["Sin materias registradas"]
 
     def _obtener_estudiantes_desde_excel(self, grado, wb=None):
         """Extrae la lista de estudiantes directamente del archivo Excel (sin consultar SQL)."""
@@ -998,6 +1367,21 @@ class DataEngine:
                     if "Planilla" in sheet and grado.replace("°", "") in sheet:
                         ws_planilla = wb[sheet]
                         break
+            grado_id = 0
+            try:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+                row_g = cursor.fetchone()
+                if row_g:
+                    grado_id = row_g[0]
+            except Exception:
+                pass
+            if not grado_id:
+                if "7" in grado: grado_id = 2
+                elif "8" in grado: grado_id = 3
+                elif "9" in grado: grado_id = 4
+                else: grado_id = 1
+
             estudiantes = []
             for r in range(5, 46):
                 nom = ws_m.cell(row=r, column=col_nom).value
@@ -1009,7 +1393,7 @@ class DataEngine:
                         fila_plan = 15 + (r - 4)
                         cedula = ws_planilla.cell(row=fila_plan, column=5).value
                     estudiantes.append({
-                        "id": r - 4,
+                        "id": grado_id * 100 + (r - 4),
                         "nombre": str(nom).strip(),
                         "cedula": str(cedula).strip() if cedula else "",
                         "sexo": "M"
@@ -1103,7 +1487,7 @@ class DataEngine:
                     (est_id, nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
                 )
                 self.db_conn.commit()
-                self.db_manager.guardar_cifrado()
+                self._schedule_save()
         except Exception as e:
             logger.error(f"Error guardando estudiante en SQLite: {e}")
 
@@ -1154,7 +1538,7 @@ class DataEngine:
                         (str(id_est), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
                     )
                 self.db_conn.commit()
-                self.db_manager.guardar_cifrado()
+                self._schedule_save()
         except Exception as e:
             logger.error(f"Error actualizando estudiantes en SQLite: {e}")
 
@@ -1169,155 +1553,356 @@ class DataEngine:
             texto = texto.replace(k, v)
         return texto
 
-    def obtener_promedios_reales(self, grado, materia, trimestre, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+    # ─── Retiro de Estudiantes ──────────────────────────────────────────────
 
-        datos = {}
-        grado_num = grado.replace("°", "")
+    def retirar_estudiante(self, est_id, motivo: str, nombre_acudiente: str = "") -> tuple:
+        """Marca un estudiante como Retirado en SQLite y programa el guardado cifrado.
+        Retorna (True, nombre_descifrado) si tuvo éxito, (False, mensaje_error) si falló.
+        """
+        try:
+            cursor = self.db_conn.cursor()
+            # Verificar que el estudiante existe y está activo
+            cursor.execute(
+                "SELECT nombre FROM estudiantes WHERE id = ? AND estado = 'Activo';",
+                (str(est_id),)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False, "Estudiante no encontrado o ya retirado."
 
-        # Normalizar trimestre a variantes
-        if trimestre == "Trimestre 1":
-            col_b_variants = ["T.1", "T1", "T-1"]
-        elif trimestre == "Trimestre 2":
-            col_b_variants = ["T.2", "T2", "T-2"]
-        elif trimestre == "Trimestre 3":
-            col_b_variants = ["T.3", "T3", "T-3"]
-        else:
-            col_b_variants = ["ANUAL", "FINAL", "PROMEDIO"]
+            nombre_cifrado = row[0]
+            nombre = self.db_manager.desencriptar_campo(nombre_cifrado)
 
-        hoja_res = None
-        for s in wb.sheetnames:
-            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
-                hoja_res = s
-                break
+            # Encriptar el nombre del acudiente antes de guardar
+            acudiente_cifrado = self.db_manager.encriptar_campo(nombre_acudiente) if nombre_acudiente else ""
 
-        if hoja_res:
-            ws_res = wb[hoja_res]
-            col_nom = None
-            for c in range(1, 40):
-                val = str(ws_res.cell(row=3, column=c).value or "").upper()
-                if "NOMBRE" in val:
-                    col_nom = c
-                    break
-            if not col_nom:
-                col_nom = 2
+            from datetime import date
+            fecha_retiro = date.today().strftime("%Y-%m-%d")
 
-            col_nota = None
-            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
+            cursor.execute(
+                """UPDATE estudiantes
+                   SET estado = 'Retirado',
+                       fecha_retiro = ?,
+                       motivo_retiro = ?,
+                       nombre_acudiente = ?
+                   WHERE id = ?;""",
+                (fecha_retiro, motivo.strip(), acudiente_cifrado, str(est_id))
+            )
+            self.db_conn.commit()
+            self._schedule_save()
+            logger.info(f"Estudiante id={est_id} retirado. Motivo: {motivo}")
+            return True, nombre
 
-            if materia and materia not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]:
-                # Buscar materia
-                fila_materias = None
-                col_inicio_materia = None
-                for r in range(3, 15):
-                    for c in range(2, 40):
-                        val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                        if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
-                            fila_materias = r
-                            col_inicio_materia = c
-                            break
-                    if col_inicio_materia: break
+        except Exception as e:
+            logger.error(f"Error retirando estudiante id={est_id}: {e}")
+            return False, str(e)
 
-                if col_inicio_materia:
-                    # Encontrar la columna del trimestre debajo de la materia
-                    for c in range(col_inicio_materia, col_inicio_materia + 5):
-                        val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
-                        val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                        if any(variant in val or variant in val2 for variant in col_b_variants):
-                            col_nota = c
-                            break
-                    
-                    if col_nota:
-                        for est in estudiantes:
-                            r = est["id"] + 4
-                            val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
-                            valido, nota, _ = validar_nota_meduca(val)
-                            if valido:
-                                datos[est["nombre"]] = nota
+    def reactivar_estudiante(self, est_id) -> tuple:
+        """Reactiva un estudiante retirado, limpiando sus datos de retiro.
+        Retorna (True, nombre) o (False, error).
+        """
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute(
+                "SELECT nombre FROM estudiantes WHERE id = ? AND estado = 'Retirado';",
+                (str(est_id),)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False, "Estudiante no encontrado o ya está activo."
+
+            nombre = self.db_manager.desencriptar_campo(row[0])
+            cursor.execute(
+                """UPDATE estudiantes
+                   SET estado = 'Activo',
+                       fecha_retiro = NULL,
+                       motivo_retiro = NULL,
+                       nombre_acudiente = NULL
+                   WHERE id = ?;""",
+                (str(est_id),)
+            )
+            self.db_conn.commit()
+            self._schedule_save()
+            logger.info(f"Estudiante id={est_id} reactivado.")
+            return True, nombre
+
+        except Exception as e:
+            logger.error(f"Error reactivando estudiante id={est_id}: {e}")
+            return False, str(e)
+
+    def obtener_estudiantes_retirados(self, grado: str = None) -> list:
+        """Retorna lista de estudiantes retirados, descifrados.
+        Si grado se especifica, filtra por ese grado. Ordenados por fecha_retiro DESC.
+        """
+        try:
+            cursor = self.db_conn.cursor()
+            if grado:
+                cursor.execute(
+                    "SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;",
+                    (grado, self.modalidad)
+                )
+                row_g = cursor.fetchone()
+                if not row_g:
+                    return []
+                grado_id = row_g[0]
+                cursor.execute(
+                    """SELECT e.id, e.nombre, e.cedula, e.sexo, e.fecha_retiro,
+                              e.motivo_retiro, e.nombre_acudiente, g.nombre as grado_nombre
+                       FROM estudiantes e
+                       JOIN grados g ON e.grado_id = g.id
+                       WHERE e.estado = 'Retirado' AND e.grado_id = ?
+                       ORDER BY e.fecha_retiro DESC;""",
+                    (grado_id,)
+                )
             else:
-                # Caso materia general: promedio de todas las materias del trimestre
-                materias_grado = self.obtener_materias_por_grado(grado, wb=wb)
-                materias_limpias = [m for m in materias_grado if m and m not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]]
-                
-                if materias_limpias:
-                    bulk_data = self.obtener_promedios_reales_bulk(grado, materias_limpias, trimestre, wb=wb)
-                    
-                    # Identificar materias de tecnología
-                    tech_mats = []
-                    norm_mats = []
-                    for m in materias_limpias:
-                        m_upper = self.limpiar_acentos(m)
-                        if "HOGAR" in m_upper or "DESARROLLO" in m_upper or "AGRO" in m_upper or "COMERCIO" in m_upper:
-                            tech_mats.append(m)
-                        else:
-                            norm_mats.append(m)
-                            
-                    estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
-                    for est in estudiantes:
-                        nom = est["nombre"]
-                        norm_notas = []
-                        for m in norm_mats:
-                            if m in bulk_data and nom in bulk_data[m] and bulk_data[m][nom] is not None:
-                                norm_notas.append(bulk_data[m][nom])
-                                
-                        tech_notas = []
-                        for m in tech_mats:
-                            if m in bulk_data and nom in bulk_data[m] and bulk_data[m][nom] is not None:
-                                tech_notas.append(bulk_data[m][nom])
-                                
-                        tec_prom = sum(tech_notas) / len(tech_notas) if tech_notas else None
-                        
-                        comb_notas = list(norm_notas)
-                        if tec_prom is not None:
-                            comb_notas.append(tec_prom)
-                            
-                        if comb_notas:
-                            datos[nom] = round(sum(comb_notas) / len(comb_notas), 2)
-                
-                # Fallback a la columna ANUAL/FINAL si no hay materias cargadas o falló
-                if not datos:
-                    col_nota = None
-                    for c in range(1, 40):
-                        val = str(ws_res.cell(row=3, column=c).value or "").upper()
-                        val2 = str(ws_res.cell(row=4, column=c).value or "").upper()
-                        if any(variant in val or variant in val2 for variant in ["ANUAL", "FINAL", "PROMEDIO"]):
-                            col_nota = c
-                            break
-                    if col_nota:
-                        for est in estudiantes:
-                            r = est["id"] + 4
-                            val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
-                            valido, nota, _ = validar_nota_meduca(val)
-                            if valido:
-                                datos[est["nombre"]] = nota
+                cursor.execute(
+                    """SELECT e.id, e.nombre, e.cedula, e.sexo, e.fecha_retiro,
+                              e.motivo_retiro, e.nombre_acudiente, g.nombre as grado_nombre
+                       FROM estudiantes e
+                       JOIN grados g ON e.grado_id = g.id
+                       WHERE e.estado = 'Retirado'
+                       ORDER BY e.fecha_retiro DESC;"""
+                )
 
-        if should_close: wb.close()
-        return datos
+            resultado = []
+            for r in cursor.fetchall():
+                resultado.append({
+                    "id":               r[0],
+                    "nombre":           self.db_manager.desencriptar_campo(r[1]),
+                    "cedula":           self.db_manager.desencriptar_campo(r[2]) if r[2] else "",
+                    "sexo":             self.db_manager.desencriptar_campo(r[3]) if r[3] else "",
+                    "fecha_retiro":     r[4] or "",
+                    "motivo_retiro":    r[5] or "",
+                    "nombre_acudiente": self.db_manager.desencriptar_campo(r[6]) if r[6] else "",
+                    "grado":            r[7] or "",
+                })
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Error obteniendo estudiantes retirados: {e}")
+            return []
+
+    def obtener_distribucion_sexo_estado(self, grado: str = None) -> dict:
+        """Retorna conteo de estudiantes por sexo y estado para gráficos.
+        Resultado: {'masculino': N, 'femenino': N, 'retirados': N, 'total': N}
+        """
+        try:
+            cursor = self.db_conn.cursor()
+            if grado:
+                cursor.execute(
+                    "SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;",
+                    (grado, self.modalidad)
+                )
+                row_g = cursor.fetchone()
+                grado_filter = f"AND e.grado_id = {row_g[0]}" if row_g else ""
+            else:
+                grado_filter = ""
+
+            cursor.execute(f"""
+                SELECT e.sexo, e.estado, COUNT(*) as total
+                FROM estudiantes e
+                WHERE 1=1 {grado_filter}
+                GROUP BY e.sexo, e.estado;
+            """)
+
+            masc = 0
+            fem  = 0
+            retirados = 0
+            for row in cursor.fetchall():
+                sexo_enc = row[0] or ""
+                estado   = row[1] or "Activo"
+                conteo   = row[2]
+                sexo_dec = self.db_manager.desencriptar_campo(sexo_enc).upper() if sexo_enc else ""
+
+                if estado == "Retirado":
+                    retirados += conteo
+                elif sexo_dec in ("F", "FEM", "FEMENINO"):
+                    fem += conteo
+                else:
+                    masc += conteo
+
+            total = masc + fem + retirados
+            return {"masculino": masc, "femenino": fem, "retirados": retirados, "total": total}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo distribucion sexo/estado: {e}")
+            return {"masculino": 0, "femenino": 0, "retirados": 0, "total": 0}
+
+    def _calcular_promedios_sql(self, grado, materia, trimestre):
+        cursor = self.db_conn.cursor()
+        
+        # 1. Obtener los estudiantes del grado
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
+            return {}
+        grado_id = row_g[0]
+        
+        cursor.execute("SELECT id, nombre FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
+        estudiantes = []
+        for r in cursor.fetchall():
+            dec_name = self.db_manager.desencriptar_campo(r[1])
+            estudiantes.append((r[0], dec_name))
+        if not estudiantes:
+            return {}
+            
+        results = {}
+        
+        # 2. Si se pide una materia específica
+        if materia and materia not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]:
+            # Obtener materia_id
+            cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+            row_m = cursor.fetchone()
+            if not row_m:
+                return {}
+            materia_id = row_m[0]
+            
+            # Si el trimestre es "Anual" o "FINAL" o "PROMEDIO"
+            if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+                for est_id, est_nombre in estudiantes:
+                    trim_notas = []
+                    for t in [1, 2, 3]:
+                        prom_t = self._calcular_promedio_trimestre_materia_sql(est_id, materia_id, t)
+                        if prom_t is not None:
+                            trim_notas.append(prom_t)
+                    if trim_notas:
+                        results[est_nombre] = round(sum(trim_notas) / len(trim_notas), 1)
+            else:
+                if isinstance(trimestre, int):
+                    trim_num = trimestre
+                else:
+                    try:
+                        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                    except ValueError:
+                        trim_num = 1
+                for est_id, est_nombre in estudiantes:
+                    prom = self._calcular_promedio_trimestre_materia_sql(est_id, materia_id, trim_num)
+                    if prom is not None:
+                        results[est_nombre] = prom
+        else:
+            # Promedio general de todas las materias del grado
+            cursor.execute("SELECT id, nombre FROM materias WHERE grado_id = ?;", (grado_id,))
+            materias_del_grado = cursor.fetchall()
+            if not materias_del_grado:
+                return {}
+                
+            tech_mats = []
+            norm_mats = []
+            for m_id, m_nom in materias_del_grado:
+                m_upper = self.limpiar_acentos(m_nom).upper()
+                if "HOGAR" in m_upper or "DESARROLLO" in m_upper or "AGRO" in m_upper or "COMERCIO" in m_upper:
+                    tech_mats.append(m_id)
+                else:
+                    norm_mats.append(m_id)
+                    
+            for est_id, est_nombre in estudiantes:
+                norm_notas = []
+                for m_id in norm_mats:
+                    prom_m = None
+                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+                        trim_vals = []
+                        for t in [1, 2, 3]:
+                            p_t = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, t)
+                            if p_t is not None:
+                                trim_vals.append(p_t)
+                        if trim_vals:
+                            prom_m = round(sum(trim_vals) / len(trim_vals), 1)
+                    else:
+                        if isinstance(trimestre, int):
+                            trim_num = trimestre
+                        else:
+                            try:
+                                trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                            except ValueError:
+                                trim_num = 1
+                        prom_m = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, trim_num)
+                    if prom_m is not None:
+                        norm_notas.append(prom_m)
+                        
+                tech_notas = []
+                for m_id in tech_mats:
+                    prom_m = None
+                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+                        trim_vals = []
+                        for t in [1, 2, 3]:
+                            p_t = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, t)
+                            if p_t is not None:
+                                trim_vals.append(p_t)
+                        if trim_vals:
+                            prom_m = round(sum(trim_vals) / len(trim_vals), 1)
+                    else:
+                        if isinstance(trimestre, int):
+                            trim_num = trimestre
+                        else:
+                            try:
+                                trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                            except ValueError:
+                                trim_num = 1
+                        prom_m = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, trim_num)
+                    if prom_m is not None:
+                        tech_notas.append(prom_m)
+                        
+                tec_prom = sum(tech_notas) / len(tech_notas) if tech_notas else None
+                
+                comb_notas = list(norm_notas)
+                if tec_prom is not None:
+                    comb_notas.append(tec_prom)
+                    
+                if comb_notas:
+                    results[est_nombre] = round(sum(comb_notas) / len(comb_notas), 2)
+                    
+        return results
+
+    def _calcular_promedio_trimestre_materia_sql(self, estudiante_id, materia_id, trimestre):
+        cursor = self.db_conn.cursor()
+        cursor.execute("""
+            SELECT tipo, valor 
+            FROM notas 
+            WHERE estudiante_id = ? AND materia_id = ? AND trimestre = ?;
+        """, (estudiante_id, materia_id, trimestre))
+        rows = cursor.fetchall()
+        if not rows:
+            return None
+            
+        diarias = []
+        apreciaciones = []
+        examenes = []
+        
+        for tipo, valor in rows:
+            if valor is None:
+                continue
+            if tipo == "Diaria / Parcial":
+                diarias.append(valor)
+            elif tipo == "Apreciación":
+                apreciaciones.append(valor)
+            elif tipo == "Examen":
+                examenes.append(valor)
+                
+        areas = []
+        if diarias:
+            areas.append(sum(diarias) / len(diarias))
+        if apreciaciones:
+            areas.append(sum(apreciaciones) / len(apreciaciones))
+        if examenes:
+            areas.append(sum(examenes) / len(examenes))
+            
+        if not areas:
+            return None
+            
+        return round(sum(areas) / len(areas), 1)
+
+    def obtener_promedios_reales(self, grado, materia, trimestre, wb=None):
+        return self._calcular_promedios_sql(grado, materia, trimestre)
 
     def obtener_notas_estudiante(self, nombre_estudiante, grado, trimestre, wb=None):
-        """
-        Obtiene las notas finales (promedios) de cada materia para un estudiante en un trimestre.
-        trimestre: int (1, 2, 3) o str ("Trimestre 1", etc.)
-        Retorna: dict {materia_nombre: nota_valor}
-        """
-        if wb is None:
-            self._verificar_y_recargar_cache()
-            
         nombre_est_clean = nombre_estudiante.strip().lower()
         trim_str = f"Trimestre {trimestre}" if isinstance(trimestre, int) else trimestre
-        
-        materias = self.obtener_materias_por_grado(grado, wb=wb)
+        materias = self.obtener_materias_por_grado(grado)
         notas_estudiante = {}
-        
         for mat in materias:
             if mat in ["Sin materias registradas", "Sin materias", "No hay materias", "General"]:
                 continue
-            proms = self.obtener_promedios_reales(grado, mat, trim_str, wb=wb)
+            proms = self.obtener_promedios_reales(grado, mat, trim_str)
             for est_nom, nota in proms.items():
                 if est_nom.strip().lower() == nombre_est_clean:
                     notas_estudiante[mat] = nota
@@ -1325,188 +1910,101 @@ class DataEngine:
         return notas_estudiante
 
     def obtener_promedios_reales_bulk(self, grado, materias, trimestre, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return {}
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-
-        resultados = {m: {} for m in materias}
-        grado_num = grado.replace("°", "")
-
-        if trimestre == "Trimestre 1":
-            col_b_variants = ["T.1", "T1", "T-1"]
-        elif trimestre == "Trimestre 2":
-            col_b_variants = ["T.2", "T2", "T-2"]
-        elif trimestre == "Trimestre 3":
-            col_b_variants = ["T.3", "T3", "T-3"]
-        else:
-            col_b_variants = ["ANUAL", "FINAL", "PROMEDIO"]
-
-        hoja_res = None
-        for s in wb.sheetnames:
-            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
-                hoja_res = s
-                break
-
-        if hoja_res:
-            ws_res = wb[hoja_res]
-            col_nom = None
-            for c in range(1, 40):
-                val = str(ws_res.cell(row=3, column=c).value or "").upper()
-                if "NOMBRE" in val:
-                    col_nom = c
-                    break
-            if not col_nom:
-                col_nom = 2
-
-            materia_to_col = {}
-            for materia in materias:
-                if materia and materia not in ["Sin materias", "No hay materias", "General"]:
-                    fila_materias = None
-                    col_inicio_materia = None
-                    for r in range(3, 15):
-                        for c in range(2, 40):
-                            val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
-                                fila_materias = r
-                                col_inicio_materia = c
-                                break
-                        if col_inicio_materia: break
-
-                    if col_inicio_materia:
-                        for c in range(col_inicio_materia, col_inicio_materia + 5):
-                            val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
-                            val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                            if any(variant in val or variant in val2 for variant in col_b_variants):
-                                materia_to_col[materia] = c
-                                break
-
-            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
-            for est in estudiantes:
-                r = est["id"] + 4
-                for materia, col_nota in materia_to_col.items():
-                    if col_nota:
-                        val = self._resolver_celda(hoja_res, r, col_nota, wb_data=wb, wb_formulas=self._wb_formulas_cache)
-                        valido, nota, _ = validar_nota_meduca(val)
-                        if valido:
-                            resultados[materia][est["nombre"]] = nota
-
-        if should_close: wb.close()
+        resultados = {}
+        for m in materias:
+            resultados[m] = self.obtener_promedios_reales(grado, m, trimestre)
         return resultados
 
     def obtener_historial_real(self, grado, materia, nombre_estudiante, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-
-        historial = []
-        grado_num = grado.replace("°", "")
-
-        hoja_res = None
-        for s in wb.sheetnames:
-            if "RESUMEN" in s.upper() and (self.modalidad == "primaria" or grado_num in s):
-                hoja_res = s
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
+            return [3.0, 3.0]
+        grado_id = row_g[0]
+        
+        cursor.execute("SELECT id, nombre FROM estudiantes WHERE grado_id = ?;", (grado_id,))
+        est_id = None
+        for r in cursor.fetchall():
+            dec_name = self.db_manager.desencriptar_campo(r[1])
+            if dec_name.strip().lower() == nombre_estudiante.strip().lower():
+                est_id = r[0]
                 break
-
-        if hoja_res:
-            ws_res = wb[hoja_res]
-            col_nom = None
-            for c in range(1, 40):
-                val = str(ws_res.cell(row=3, column=c).value or "").upper()
-                if "NOMBRE" in val:
-                    col_nom = c
-                    break
-            if not col_nom:
-                col_nom = 2
-
-            # Encontrar el ID/fila del estudiante a través de obtener_estudiantes_completos
-            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
-            fila_estudiante = None
-            for est in estudiantes:
-                if est["nombre"].upper() == nombre_estudiante.strip().upper():
-                    fila_estudiante = est["id"] + 4
-                    break
-
-            if fila_estudiante:
-                if materia and materia not in ["Sin materias", "No hay materias", "General"]:
-                    col_inicio_materia = None
-                    for r in range(3, 15):
-                        for c in range(2, 40):
-                            val_cell = str(ws_res.cell(row=r, column=c).value or "").upper()
-                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
-                                col_inicio_materia = c
-                                break
-                        if col_inicio_materia: break
-
-                    if col_inicio_materia:
-                        # Buscar columnas de trimestre debajo de la materia
-                        fila_materias = None
-                        for rmat in range(3, 15):
-                            val_cell = str(ws_res.cell(row=rmat, column=col_inicio_materia).value or "").upper()
-                            if self.limpiar_acentos(materia) in self.limpiar_acentos(val_cell):
-                                fila_materias = rmat
-                                break
-                        cols_trimestres = []
-                        for c in range(col_inicio_materia, col_inicio_materia + 5):
-                            val = str(ws_res.cell(row=fila_materias + 1, column=c).value or "").upper()
-                            val2 = str(ws_res.cell(row=fila_materias + 2, column=c).value or "").upper()
-                            if any(v in val or v in val2 for v in ["T.1", "T1", "T-1", "T.2", "T2", "T-2", "T.3", "T3", "T-3"]):
-                                cols_trimestres.append(c)
-                        for c in cols_trimestres:
-                            try:
-                                val = self._resolver_celda(hoja_res, fila_estudiante, c, wb_data=wb, wb_formulas=self._wb_formulas_cache)
-                                valido, nota, _ = validar_nota_meduca(val)
-                                if valido:
-                                    historial.append(nota)
-                            except (ValueError, TypeError): pass
-                else:
-                    cols_promedios = []
-                    for c in range(2, 60):
-                        val = str(ws_res.cell(row=3, column=c).value or "").upper()
-                        val2 = str(ws_res.cell(row=4, column=c).value or "").upper()
-                        if any(v in val or v in val2 for v in ["T.1", "T1", "T-1", "T.2", "T2", "T-2", "T.3", "T3", "T-3", "PROMEDIO", "ANUAL", "FINAL"]):
-                            if c not in cols_promedios:
-                                cols_promedios.append(c)
-
-                    for c in cols_promedios:
-                        try:
-                            val = self._resolver_celda(hoja_res, fila_estudiante, c, wb_data=wb, wb_formulas=self._wb_formulas_cache)
-                            valido, nota, _ = validar_nota_meduca(val)
-                            if valido:
-                                historial.append(nota)
-                        except (ValueError, TypeError): pass
-
-        if should_close: wb.close()
+        if not est_id:
+            return [3.0, 3.0]
+        
+        historial = []
+        if materia and materia not in ["Sin materias", "No hay materias", "General"]:
+            cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+            row_m = cursor.fetchone()
+            if not row_m:
+                return [3.0, 3.0]
+            materia_id = row_m[0]
+            
+            for t in [1, 2, 3]:
+                prom = self._calcular_promedio_trimestre_materia_sql(est_id, materia_id, t)
+                if prom is not None:
+                    historial.append(prom)
+        else:
+            for t in [1, 2, 3]:
+                proms = self.obtener_promedios_reales(grado, "General", f"Trimestre {t}")
+                if nombre_estudiante in proms:
+                    historial.append(proms[nombre_estudiante])
+                    
         return historial if len(historial) >= 2 else [3.0, 3.0] # Fallback to avoid math errors in scipy
 
     def obtener_datos_reportes(self, grado, trimestre="Todos", wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
-            return {"docente": [], "aprobados": [], "direccion": []}
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-
+        """
+        Genera datos de reportes docente/aprobados/dirección EXCLUSIVAMENTE desde SQLite.
+        El parámetro wb se mantiene por compatibilidad de firma pero se ignora.
+        """
         datos = {"docente": [], "aprobados": [], "direccion": []}
         try:
-            estudiantes = self.obtener_estudiantes_completos(grado, wb=wb)
-            periodo = "Anual" if trimestre == "Todos" else trimestre
-            proms = self.obtener_promedios_reales(grado, None, periodo, wb=wb)
-            if not proms and periodo == "Anual":
-                proms = self.obtener_promedios_reales(grado, None, "Trimestre 1", wb=wb)
+            cursor = self.db_conn.cursor()
 
-            for est in estudiantes:
-                nom = est["nombre"]
-                ced = est.get("cedula", "")
-                prom_val = proms.get(nom, None) if proms else None
-                
-                # Format average
+            # Obtener grado_id
+            cursor.execute(
+                "SELECT id FROM grados WHERE nombre = ? AND modalidad = ? LIMIT 1;",
+                (grado, self.modalidad)
+            )
+            row_g = cursor.fetchone()
+            if not row_g:
+                return datos
+            grado_id = row_g[0]
+
+            # Obtener estudiantes activos del grado
+            cursor.execute(
+                "SELECT id, nombre, cedula FROM estudiantes WHERE grado_id = ? AND estado = 'Activo' ORDER BY nombre;",
+                (grado_id,)
+            )
+            estudiantes_raw = cursor.fetchall()
+            if not estudiantes_raw:
+                return datos
+
+            # Determinar trimestres a consultar
+            if trimestre == "Todos":
+                trim_nums = [1, 2, 3]
+            else:
+                try:
+                    trim_nums = [int(trimestre.replace("Trimestre ", ""))]
+                except (ValueError, AttributeError):
+                    trim_nums = [1, 2, 3]
+
+            # Calcular promedio por estudiante consultando notas en SQL
+            for est_id, est_nombre, est_cedula in estudiantes_raw:
+                # Descifrar nombre y cédula
+                nom = self.db_manager.desencriptar_campo(est_nombre) if est_nombre else ""
+                ced = self.db_manager.desencriptar_campo(est_cedula) if est_cedula else ""
+
+                # Promedio de notas en el/los trimestres solicitados
+                placeholders = ",".join("?" for _ in trim_nums)
+                cursor.execute(
+                    f"SELECT AVG(valor) FROM notas WHERE estudiante_id = ? AND trimestre IN ({placeholders}) AND valor IS NOT NULL;",
+                    (str(est_id), *trim_nums)
+                )
+                prom_row = cursor.fetchone()
+                prom_val = prom_row[0] if prom_row and prom_row[0] is not None else None
+
                 if prom_val is not None:
                     prom_str = f"{prom_val:.2f}"
                     estado = "APROBADO" if prom_val >= 3.0 else "REPROBADO"
@@ -1517,121 +2015,81 @@ class DataEngine:
                 datos["docente"].append([nom, ced, prom_str])
                 datos["aprobados"].append([nom, estado])
                 datos["direccion"].append([nom, ced, prom_str, estado])
+
         except Exception as e:
-            print(f"Error generando datos de reportes: {e}")
-        finally:
-            if should_close: wb.close()
+            logger.error(f"Error generando datos de reportes desde SQL: {e}", exc_info=True)
 
         return datos
 
     def obtener_cuadro_honor_general(self, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
-            return []
-
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        """
+        Calcula el cuadro de honor EXCLUSIVAMENTE desde SQLite.
+        El parámetro wb se mantiene por compatibilidad de firma pero se ignora.
+        """
 
         resultados = []
         try:
-            grados = self.obtener_grados_activos(wb=wb)
-            for g in grados:
-                estudiantes = self.obtener_estudiantes_completos(g, wb=wb)
-                if not estudiantes:
+            cursor = self.db_conn.cursor()
+
+            # Una sola query: para cada estudiante activo obtener promedio anual por trimestre
+            # usando las notas almacenadas en SQL.
+            # Estructura: por cada estudiante, promedio de (avg_T1 + avg_T2 + avg_T3) que tengan notas.
+            cursor.execute("""
+                SELECT
+                    e.id,
+                    e.nombre,
+                    g.nombre AS grado,
+                    n.trimestre,
+                    AVG(n.valor) AS prom_trim
+                FROM estudiantes e
+                JOIN grados g ON g.id = e.grado_id
+                JOIN notas n  ON n.estudiante_id = e.id
+                WHERE e.estado = 'Activo'
+                  AND n.valor IS NOT NULL
+                GROUP BY e.id, n.trimestre
+                ORDER BY e.id, n.trimestre;
+            """)
+            rows = cursor.fetchall()
+
+            # Agrupar por estudiante
+            from collections import defaultdict
+            est_trims = defaultdict(lambda: {"nombre": "", "grado": "", "trims": []})
+            for est_id, est_nombre_enc, grado_nombre, trim, prom_trim in rows:
+                nom = self.db_manager.desencriptar_campo(est_nombre_enc) if est_nombre_enc else ""
+                est_trims[est_id]["nombre"] = nom
+                est_trims[est_id]["grado"] = grado_nombre
+                est_trims[est_id]["trims"].append(prom_trim)
+
+            for est_id, info in est_trims.items():
+                trims = [v for v in info["trims"] if v is not None]
+                if not trims:
                     continue
-                materias_grado = self.obtener_materias_por_grado(g, wb=wb)
-                
-                # Materias reales limpias
-                materias_limpias = [m for m in materias_grado if m and m not in ["Sin materias", "No hay materias", "General", "Todas las Materias"]]
-                if not materias_limpias:
-                    continue
-                
-                # Identificar materias de tecnología y materias normales
-                tech_mats = []
-                norm_mats = []
-                for m in materias_limpias:
-                    m_upper = m.upper()
-                    if "HOGAR" in m_upper or "DESARROLLO" in m_upper or "AGRO" in m_upper or "COMERCIO" in m_upper:
-                        tech_mats.append(m)
-                    else:
-                        norm_mats.append(m)
-                
-                # Obtener notas para todas las materias en todos los trimestres
-                notas_por_materia_trimestre = {}
-                for trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
-                    for m in materias_limpias:
-                        proms = self.obtener_promedios_reales(g, m, trim, wb=wb)
-                        if proms:
-                            notas_por_materia_trimestre[(m, trim)] = proms
-                            
-                # Para cada estudiante, calcular promedio general anual
-                for est in estudiantes:
-                    nom = est["nombre"]
-                    
-                    # Para cada trimestre, calcular promedio general
-                    promedios_trimestrales = []
-                    for trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
-                        # Notas de materias normales
-                        norm_notas = []
-                        for m in norm_mats:
-                            proms_dict = notas_por_materia_trimestre.get((m, trim), {})
-                            if nom in proms_dict and proms_dict[nom] is not None:
-                                norm_notas.append(proms_dict[nom])
-                                
-                        # Notas de tecnología
-                        tech_notas = []
-                        for m in tech_mats:
-                            proms_dict = notas_por_materia_trimestre.get((m, trim), {})
-                            if nom in proms_dict and proms_dict[nom] is not None:
-                                tech_notas.append(proms_dict[nom])
-                        
-                        # Promedio de Tecnología
-                        tec_prom = sum(tech_notas) / len(tech_notas) if tech_notas else None
-                        
-                        # Combinar
-                        trim_notas = list(norm_notas)
-                        if tec_prom is not None:
-                            trim_notas.append(tec_prom)
-                            
-                        if trim_notas:
-                            trim_avg = sum(trim_notas) / len(trim_notas)
-                            promedios_trimestrales.append(trim_avg)
-                    
-                    # Promedio general acumulado del año (promedio de los promedios trimestrales con notas)
-                    if promedios_trimestrales:
-                        prom_general = sum(promedios_trimestrales) / len(promedios_trimestrales)
-                        # Redondear a 2 decimales
-                        prom_general = round(prom_general, 2)
-                        if 4.5 <= prom_general <= 5.0:
-                            resultados.append({
-                                "nombre": nom,
-                                "grado": g,
-                                "promedio": prom_general
-                            })
+                prom_general = round(sum(trims) / len(trims), 2)
+                if 4.5 <= prom_general <= 5.0:
+                    resultados.append({
+                        "nombre": info["nombre"],
+                        "grado": info["grado"],
+                        "promedio": prom_general
+                    })
+
         except Exception as e:
-            print(f"[!] Error calculating cuadro de honor: {e}")
-        finally:
-            if should_close: wb.close()
+            logger.error(f"Error calculando cuadro de honor desde SQL: {e}", exc_info=True)
 
         # Ordenar de mayor a menor promedio
         resultados = sorted(resultados, key=lambda x: x["promedio"], reverse=True)
         return resultados
 
-    def get_dashboard_stats(self, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
-            return {"total": 0, "riesgo": 0, "honor": "N/A", "honor_cant": 0, "asistencia": "—", "tareas_sin_nota": 0, "excusas": 0, "habitos": {"S": 0, "R": 0, "X": 0}}
 
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        
+
+    def get_dashboard_stats(self, wb=None):
+        """
+        Calcula estadísticas del dashboard EXCLUSIVAMENTE desde SQLite.
+        El parámetro wb se mantiene por compatibilidad pero se ignora — ya no se lee Excel.
+        """
         from utils.date_helpers import obtener_trimestre_actual
         trimestre_actual = obtener_trimestre_actual()
-        
+
+        # Valores por defecto
         total = 0
         riesgo = 0
         excusas = 0
@@ -1639,73 +2097,72 @@ class DataEngine:
         total_asist_dias = 0
         total_asist_ausencias = 0
 
-        # Obtener Cuadro de Honor (General del año entero)
-        cuadro_honor = self.obtener_cuadro_honor_general(wb=wb)
-        honor_cant = len(cuadro_honor)
-        best_student = cuadro_honor[0]["nombre"] if honor_cant > 0 else "N/A"
-        best_prom = cuadro_honor[0]["promedio"] if honor_cant > 0 else 0.0
-
         try:
-            grados = self.obtener_grados_activos(wb=wb)
-            for g in grados:
-                estudiantes = self.obtener_estudiantes_completos(g, wb=wb)
-                total += len(estudiantes)
-                
-                # Promedios de riesgo para el trimestre actual solamente
-                proms = self.obtener_promedios_reales(g, None, trimestre_actual, wb=wb)
-                for nom, prom in proms.items():
-                    if prom is not None:
-                        if prom < 3.0:
-                            riesgo += 1
+            cursor = self.db_conn.cursor()
 
-                # Conteo de excusas E y promedio de asistencia para el trimestre actual solamente
-                hoja_asist = None
-                g_clean = g.replace("°", "")
-                for s in wb.sheetnames:
-                    if "ASISTENCIA" in s.upper() and (self.modalidad == "primaria" or g_clean in s):
-                        hoja_asist = s
-                        break
-                if hoja_asist:
-                    ws_as = wb[hoja_asist]
-                    mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
-                    fila_fechas = mapa_trimestres.get(trimestre_actual, 2)
-                    for r in range(fila_fechas + 1, fila_fechas + 1 + len(estudiantes)):
-                        for c in range(3, 61):
-                            val_fecha = ws_as.cell(row=fila_fechas, column=c).value
-                            if val_fecha:
-                                val = ws_as.cell(row=r, column=c).value
-                                if val is not None and str(val).strip():
-                                    total_asist_dias += 1
-                                    if val == "E":
-                                        excusas += 1
-                                    elif val == "-":
-                                        total_asist_ausencias += 1
+            # 1. Total de estudiantes activos
+            cursor.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'Activo';")
+            total = cursor.fetchone()[0] or 0
 
-                # Conteo de tareas sin nota (vacías) para el trimestre actual solamente
-                materias = self.obtener_materias_por_grado(g, wb=wb)
-                for mat in materias:
-                    if mat in ["Sin materias", "No hay materias", "General"]:
-                        continue
-                    hoja_prom = self._encontrar_hoja_prom(wb, g, mat)
-                    if not hoja_prom:
-                        continue
-                    ws_pm = wb[hoja_prom]
-                    for trimestre in [trimestre_actual]:
-                        for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
-                            col_inicio, col_fin = self._obtener_rango_columnas(ws_pm, trimestre, tipo_nota)
-                            if col_inicio is None or col_fin is None:
-                                continue
-                            for c in range(col_inicio, col_fin + 1):
-                                desc = ws_pm.cell(row=self.fila_desc, column=c).value
-                                if desc and str(desc).strip():
-                                    for r in range(5, 5 + len(estudiantes)):
-                                        nota = ws_pm.cell(row=r, column=c).value
-                                        if nota is None or str(nota).strip() == "":
-                                            tareas_sin_nota += 1
+            # 2. Alumnos en riesgo (promedio < 3.0 en trimestre actual)
+            try:
+                trim_num = int(trimestre_actual.replace("Trimestre ", ""))
+                cursor.execute("""
+                    SELECT e.id, AVG(n.valor) as prom
+                    FROM estudiantes e
+                    JOIN notas n ON n.estudiante_id = e.id
+                    WHERE e.estado = 'Activo' AND n.trimestre = ? AND n.valor IS NOT NULL
+                    GROUP BY e.id
+                    HAVING prom < 3.0;
+                """, (trim_num,))
+                riesgo = len(cursor.fetchall())
+            except Exception:
+                riesgo = 0
+
+            # 3. Asistencia del trimestre actual
+            try:
+                trim_num = int(trimestre_actual.replace("Trimestre ", ""))
+                cursor.execute("""
+                    SELECT estado, COUNT(*) FROM asistencia
+                    WHERE trimestre = ?
+                    GROUP BY estado;
+                """, (trim_num,))
+                rows_asist = cursor.fetchall()
+                for estado, cnt in rows_asist:
+                    total_asist_dias += cnt
+                    if estado == '-':
+                        total_asist_ausencias += cnt
+                    elif estado == 'E':
+                        excusas += cnt
+            except Exception:
+                pass
+
+            # 4. Hábitos y actitudes
+            s_count = 0
+            r_count = 0
+            x_count = 0
+            cursor.execute("SELECT nota, COUNT(*) FROM habitos GROUP BY nota;")
+            for nota, cnt in cursor.fetchall():
+                if nota == "S":
+                    s_count = cnt
+                elif nota == "R":
+                    r_count = cnt
+                elif nota == "X":
+                    x_count = cnt
+
         except Exception as e:
-            print(f"[!] Error loading dashboard stats: {e}")
-        finally:
-            if should_close: wb.close()
+            logger.error(f"Error cargando dashboard stats desde SQL: {e}")
+
+        # 5. Cuadro de Honor (ya usa SQL internamente)
+        try:
+            cuadro_honor = self.obtener_cuadro_honor_general()
+            honor_cant = len(cuadro_honor)
+            best_student = cuadro_honor[0]["nombre"] if honor_cant > 0 else "N/A"
+            best_prom = cuadro_honor[0]["promedio"] if honor_cant > 0 else 0.0
+        except Exception:
+            honor_cant = 0
+            best_student = "N/A"
+            best_prom = 0.0
 
         asistencia_pct = "—"
         if total_asist_dias > 0:
@@ -1714,24 +2171,6 @@ class DataEngine:
             asistencia_pct = f"{pct:.1f}%"
 
         honor = f"{best_student} ({best_prom:.2f})" if best_prom > 0.0 else "N/A"
-
-        # Conteo de habitos y actitudes desde SQLite (Tarea 12, 19)
-        s_count = 0
-        r_count = 0
-        x_count = 0
-        try:
-            if hasattr(self, "db_conn") and self.db_conn:
-                cursor = self.db_conn.cursor()
-                cursor.execute("SELECT nota, COUNT(*) FROM habitos GROUP BY nota;")
-                for nota, cnt in cursor.fetchall():
-                    if nota == "S":
-                        s_count = cnt
-                    elif nota == "R":
-                        r_count = cnt
-                    elif nota == "X":
-                        x_count = cnt
-        except Exception as e:
-            print(f"Error calculating habits stats from SQLite: {e}")
 
         return {
             "total": total,
@@ -1747,6 +2186,7 @@ class DataEngine:
                 "X": x_count
             }
         }
+
 
     def _encontrar_hoja_prom(self, wb, grado, materia):
         materia_clean = materia.lower().replace(" ", "").replace(".", "")
@@ -1777,6 +2217,57 @@ class DataEngine:
         return col_inicio, col_fin
 
     def guardar_columna_notas(self, grado, materia, trimestre, tipo_nota, fecha, desc, dic_notas):
+        if os.path.basename(self.ruta).startswith("Registro_"):
+            if not self._wb_cache:
+                self._verificar_y_recargar_cache()
+            wb = self._wb_cache
+            nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
+            if not nombre_hoja:
+                return False, f"No se encontró la hoja PROM para {materia} {grado}"
+            ws = wb[nombre_hoja]
+            rango = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
+            if rango == (None, None):
+                return False, "No se encontró el bloque en el Excel."
+            col_inicio, col_fin = rango
+            limite_columnas = col_fin - col_inicio + 1
+            
+            cursor = self.db_conn.cursor()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (grado, "A", self.modalidad))
+            row_g = cursor.fetchone()
+            if not row_g:
+                return False, "Grado no encontrado."
+            grado_id = row_g[0]
+            
+            cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+            row_m = cursor.fetchone()
+            if not row_m:
+                return False, "Materia no encontrada."
+            materia_id = row_m[0]
+            
+            trim_num = int(str(trimestre).replace("Trimestre ", ""))
+            cursor.execute("""
+                SELECT COUNT(DISTINCT descripcion) FROM notas
+                WHERE materia_id = ? AND trimestre = ? AND tipo = ?;
+            """, (materia_id, trim_num, tipo_nota))
+            columnas_ocupadas = cursor.fetchone()[0]
+            
+            if columnas_ocupadas >= limite_columnas:
+                if tipo_nota == "Examen": return False, "Límite alcanzado: Solo hay espacio para 2 exámenes."
+                return False, "El bloque de notas está lleno."
+                
+            if tipo_nota == "Examen": desc = f"Examen {columnas_ocupadas + 1} ({fecha})"
+            
+            for id_estudiante, val_nota in dic_notas.items():
+                cursor.execute(
+                    """INSERT OR REPLACE INTO notas (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha)
+                    VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                    (str(id_estudiante), materia_id, trim_num, tipo_nota, desc, float(val_nota) if val_nota is not None else None, str(fecha))
+                )
+            self.db_conn.commit()
+            self._schedule_save()
+            self.actualizar_resumen(grado)
+            return True, ""
+
         if not os.path.exists(self.ruta): return False, "El archivo Excel no existe."
         wb = openpyxl.load_workbook(self.ruta)
         nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
@@ -1812,11 +2303,10 @@ class DataEngine:
             cell_desc.font = Font(name='Calibri', size=11, bold=True)
         except AttributeError: pass
         for id_estudiante, nota in dic_notas.items():
-            fila_excel = 4 + int(id_estudiante)
+            fila_excel = 4 + (int(id_estudiante) % 100)
             try: ws.cell(row=fila_excel, column=col_vacia).value = nota
             except AttributeError: pass
             
-        # Sincronizar a SQLite
         try:
             cursor = self.db_conn.cursor()
             cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = ? AND modalidad = ?;", (grado, "A", self.modalidad))
@@ -1835,7 +2325,7 @@ class DataEngine:
                             (str(id_estudiante), materia_id, trim_num, tipo_nota, desc, float(val_nota) if val_nota is not None else None, str(fecha))
                         )
                     self.db_conn.commit()
-                    self.db_manager.guardar_cifrado()
+                    self._schedule_save()
         except Exception as e:
             logger.error(f"Error guardando notas en SQLite: {e}")
 
@@ -1846,91 +2336,164 @@ class DataEngine:
         return True, ""
 
     def obtener_descripciones_notas(self, grado, materia, trimestre, tipo_nota, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
-        if not nombre_hoja:
+        if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
+            if not nombre_hoja:
+                if should_close: wb.close()
+                return []
+            ws = wb[nombre_hoja]
+            rango = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
+            if rango == (None, None):
+                if should_close: wb.close()
+                return []
+            col_inicio, col_fin = rango
+            descripciones = []
+            for c in range(col_inicio, col_fin + 1):
+                try:
+                    val = ws.cell(row=self.fila_desc, column=c).value
+                    if val:
+                        desc_limpia = str(val).replace('\n', ' ').strip()
+                        descripciones.append(desc_limpia)
+                except AttributeError: continue
             if should_close: wb.close()
+            return descripciones
+
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
             return []
-        ws = wb[nombre_hoja]
-        rango = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
-        if rango == (None, None):
-            if should_close: wb.close()
+        grado_id = row_g[0]
+        
+        cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+        row_m = cursor.fetchone()
+        if not row_m:
             return []
-        col_inicio, col_fin = rango
-        descripciones = []
-        for c in range(col_inicio, col_fin + 1):
-            try:
-                val = ws.cell(row=self.fila_desc, column=c).value
-                if val:
-                    desc_limpia = str(val).replace('\n', ' ').strip()
-                    descripciones.append(desc_limpia)
-            except AttributeError: continue
-        if should_close: wb.close()
-        return descripciones
+        materia_id = row_m[0]
+        
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        cursor.execute("""
+            SELECT DISTINCT descripcion FROM notas 
+            WHERE materia_id = ? AND trimestre = ? AND tipo = ?;
+        """, (materia_id, trim_num, tipo_nota))
+        rows = cursor.fetchall()
+        return [r[0] for r in rows if r[0]]
 
     def buscar_notas_por_descripcion_exacta(self, grado, materia, trimestre, tipo_nota, descripcion, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
-        if not nombre_hoja: 
-            if should_close: wb.close()
+        cursor = self.db_conn.cursor()
+        
+        # Obtener grado_id
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
             return None
-        ws = wb[nombre_hoja]
-        rango = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
-        if rango == (None, None):
-            if should_close: wb.close()
+        grado_id = row_g[0]
+        
+        # Obtener materia_id
+        cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+        row_m = cursor.fetchone()
+        if not row_m:
             return None
-        col_inicio, col_fin = rango
-        col_encontrada = None
-        for c in range(col_inicio, col_fin + 1):
-            try:
-                val = ws.cell(row=self.fila_desc, column=c).value
-                if val and str(val).replace('\n', ' ').strip().lower() == descripcion.lower():
-                    col_encontrada = c
-                    break
-            except AttributeError: continue
-        if not col_encontrada:
-            if should_close: wb.close()
+        materia_id = row_m[0]
+        
+        trim_num = int(trimestre.replace("Trimestre ", ""))
+        
+        # Buscar notas coincidentes en la base de datos
+        cursor.execute("""
+            SELECT estudiante_id, valor, fecha 
+            FROM notas 
+            WHERE materia_id = ? AND trimestre = ? AND tipo = ? AND descripcion = ?;
+        """, (materia_id, trim_num, tipo_nota, descripcion))
+        rows = cursor.fetchall()
+        
+        if not rows:
             return None
+            
         notas = {}
-        for r in range(5, 46):
-            try:
-                nota = ws.cell(row=r, column=col_encontrada).value
-                if nota is not None: notas[r - 4] = nota
-            except AttributeError: continue
-        if should_close: wb.close()
-        return {"columna": col_encontrada, "notas": notas}
+        fecha_nota = ""
+        for est_id, val, fecha in rows:
+            notas[int(est_id)] = val
+            if not fecha_nota and fecha:
+                fecha_nota = fecha
+                
+        return {
+            "columna": descripcion,
+            "notas": notas,
+            "fecha": fecha_nota or datetime.date.today().strftime("%d-%m")
+        }
 
     def actualizar_notas_existentes(self, grado, materia, columna, dic_notas):
+        if os.path.basename(self.ruta).startswith("Registro_"):
+            cursor = self.db_conn.cursor()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+            row_g = cursor.fetchone()
+            if not row_g:
+                return False
+            grado_id = row_g[0]
+            
+            cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+            row_m = cursor.fetchone()
+            if not row_m:
+                return False
+            materia_id = row_m[0]
+            
+            desc_limpia = None
+            if isinstance(columna, str):
+                desc_limpia = columna.replace('\n', ' ').strip()
+            else:
+                if not self._wb_cache:
+                    self._verificar_y_recargar_cache()
+                nombre_hoja = self._encontrar_hoja_prom(self._wb_cache, grado, materia)
+                if nombre_hoja:
+                    ws = self._wb_cache[nombre_hoja]
+                    desc = ws.cell(row=self.fila_desc, column=columna).value
+                    if desc:
+                        desc_limpia = str(desc).replace('\n', ' ').strip()
+            
+            if not desc_limpia:
+                return False
+                
+            for id_estudiante, val_nota in dic_notas.items():
+                cursor.execute(
+                    """SELECT id FROM notas WHERE estudiante_id = ? AND materia_id = ? AND descripcion = ?;""",
+                    (str(id_estudiante), materia_id, desc_limpia)
+                )
+                row_n = cursor.fetchone()
+                if row_n:
+                    cursor.execute(
+                        "UPDATE notas SET valor = ? WHERE id = ?;",
+                        (float(val_nota) if val_nota is not None else None, row_n[0])
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO notas (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha)
+                        VALUES (?, ?, 1, 'Diaria / Parcial', ?, ?, ?);""",
+                        (str(id_estudiante), materia_id, desc_limpia, float(val_nota) if val_nota is not None else None, datetime.date.today().strftime("%d-%m"))
+                    )
+            self.db_conn.commit()
+            self._schedule_save()
+            self.actualizar_resumen(grado)
+            return True
+
         if not os.path.exists(self.ruta): return False
-
-        # Optimization: Use cache to find sheet name first, then open writeable workbook
         nombre_hoja = self._encontrar_hoja_prom(self._wb_cache, grado, materia) if self._wb_cache else None
-
         wb = openpyxl.load_workbook(self.ruta)
         if not nombre_hoja:
             nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
-
         if not nombre_hoja: 
             wb.close()
             return False
-
         ws = wb[nombre_hoja]
         for id_estudiante, nota in dic_notas.items():
-            fila_excel = 4 + int(id_estudiante)
+            fila_excel = 4 + (int(id_estudiante) % 100)
             try: ws.cell(row=fila_excel, column=columna).value = nota
             except AttributeError: continue
-
-        # Sincronizar a SQLite
         try:
             desc = ws.cell(row=self.fila_desc, column=columna).value
             fecha = ws.cell(row=4, column=columna).value or "01-01"
@@ -1963,10 +2526,9 @@ class DataEngine:
                                     (str(id_estudiante), materia_id, desc_limpia, float(val_nota) if val_nota is not None else None, str(fecha))
                                 )
                         self.db_conn.commit()
-                        self.db_manager.guardar_cifrado()
+                        self._schedule_save()
         except Exception as e:
             logger.error(f"Error actualizando notas en SQLite: {e}")
-
         self._save_wb(wb)
         wb.close()
         self._cargar_en_memoria()
@@ -1980,57 +2542,141 @@ class DataEngine:
         return None
 
     def obtener_fechas_asistencia(self, grado, trimestre, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return []
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        hoja = self._encontrar_hoja_asistencia(wb, grado)
-        if not hoja:
+        """Retorna las fechas distintas de asistencia para un grado y trimestre."""
+        if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+                return []
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            hoja = self._encontrar_hoja_asistencia(wb, grado)
+            if not hoja:
+                if should_close: wb.close()
+                return []
+            ws = wb[hoja]
+            mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
+            fila_fechas = mapa_trimestres.get(trimestre, 2)
+            fechas = []
+            for c in range(3, 61):
+                val = ws.cell(row=fila_fechas, column=c).value
+                if val:
+                    fechas.append(str(val).strip())
             if should_close: wb.close()
+            return fechas
+
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
             return []
-        ws = wb[hoja]
-        mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
-        fila_fechas = mapa_trimestres.get(trimestre, 2)
-        fechas = []
-        for c in range(3, 61):
-            val = ws.cell(row=fila_fechas, column=c).value
-            if val: fechas.append(str(val).strip())
-        if should_close: wb.close()
-        return fechas
+        grado_id = row_g[0]
+        
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        cursor.execute("""
+            SELECT DISTINCT fecha FROM asistencia a
+            JOIN estudiantes e ON a.estudiante_id = e.id
+            WHERE e.grado_id = ? AND a.trimestre = ? ORDER BY fecha;
+        """, (grado_id, trim_num))
+        rows = cursor.fetchall()
+        return [r[0] for r in rows]
 
     def buscar_asistencia_existente(self, grado, trimestre, fecha, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
-        hoja = self._encontrar_hoja_asistencia(wb, grado)
-        if not hoja:
+        if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return None
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+            hoja = self._encontrar_hoja_asistencia(wb, grado)
+            if not hoja:
+                if should_close: wb.close()
+                return None
+            ws = wb[hoja]
+            mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
+            fila_fechas = mapa_trimestres.get(trimestre, 2)
+            col_encontrada = None
+            for c in range(3, 61):
+                val = ws.cell(row=fila_fechas, column=c).value
+                if val and str(val).strip() == fecha.strip():
+                    col_encontrada = c
+                    break
+            if not col_encontrada:
+                if should_close: wb.close()
+                return None
+            asistencia = {}
+            for id_est in range(1, 46): 
+                val = ws.cell(row=fila_fechas + id_est, column=col_encontrada).value
+                if val is not None: asistencia[id_est] = val
             if should_close: wb.close()
+            return {"columna": col_encontrada, "asistencia": asistencia}
+
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        if not row_g:
             return None
-        ws = wb[hoja]
-        mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
-        fila_fechas = mapa_trimestres.get(trimestre, 2)
-        col_encontrada = None
-        for c in range(3, 61):
-            val = ws.cell(row=fila_fechas, column=c).value
-            if val and str(val).strip() == fecha.strip():
-                col_encontrada = c
-                break
-        if not col_encontrada:
-            if should_close: wb.close()
+        grado_id = row_g[0]
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        
+        cursor.execute("""
+            SELECT a.estudiante_id, a.estado FROM asistencia a
+            JOIN estudiantes e ON a.estudiante_id = e.id
+            WHERE e.grado_id = ? AND a.trimestre = ? AND a.fecha = ?;
+        """, (grado_id, trim_num, fecha))
+        rows = cursor.fetchall()
+        if not rows:
             return None
+            
+        cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
+        ordered_ids = [r[0] for r in cursor.fetchall()]
+        
         asistencia = {}
-        for id_est in range(1, 46): 
-            val = ws.cell(row=fila_fechas + id_est, column=col_encontrada).value
-            if val is not None: asistencia[id_est] = val
-        if should_close: wb.close()
-        return {"columna": col_encontrada, "asistencia": asistencia}
+        for est_id, estado in rows:
+            try:
+                idx_1based = ordered_ids.index(est_id) + 1
+                asistencia[idx_1based] = estado
+            except ValueError:
+                pass
+                
+        return {"columna": 999, "asistencia": asistencia}
 
     def guardar_asistencia(self, grado, trimestre, fecha, dic_asistencia):
+        if os.path.basename(self.ruta).startswith("Registro_"):
+            try:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+                row_g = cursor.fetchone()
+                if not row_g:
+                    return False, "Grado no encontrado."
+                grado_id = row_g[0]
+                
+                cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
+                student_ids = [r[0] for r in cursor.fetchall()]
+                
+                trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                
+                for id_estudiante, datos in dic_asistencia.items():
+                    try:
+                        idx_1based = int(id_estudiante) % 100 if str(id_estudiante).isdigit() else int(id_estudiante)
+                        est_id = student_ids[idx_1based - 1]
+                        cursor.execute(
+                            """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
+                            VALUES (?, ?, ?, ?);""",
+                            (str(est_id), str(fecha), datos["estado"], trim_num)
+                        )
+                    except (IndexError, ValueError) as e:
+                        logger.error(f"Error mapping student in guardar_asistencia: {e}")
+                self.db_conn.commit()
+                self._schedule_save()
+                self.actualizar_resumen(grado)
+                return True, ""
+            except Exception as e:
+                logger.error(f"Error guardando asistencia en SQLite: {e}")
+                return False, str(e)
+
         if not os.path.exists(self.ruta): return False, "El archivo Excel no existe."
         wb = openpyxl.load_workbook(self.ruta)
         hoja = self._encontrar_hoja_asistencia(wb, grado)
@@ -2051,22 +2697,22 @@ class DataEngine:
         ws.cell(row=fila_fechas, column=col_vacia).value = fecha
         fuente_meduca = Font(name='Calibri', size=9, bold=True)
         for id_estudiante, datos in dic_asistencia.items():
-            fila_excel = fila_fechas + int(id_estudiante) 
+            fila_excel = fila_fechas + (int(id_estudiante) % 100) 
             celda = ws.cell(row=fila_excel, column=col_vacia)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
 
-        # Sincronizar a SQLite
         try:
             cursor = self.db_conn.cursor()
+            trim_num = int(str(trimestre).replace("Trimestre ", ""))
             for id_estudiante, datos in dic_asistencia.items():
                 cursor.execute(
-                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado)
-                    VALUES (?, ?, ?);""",
-                    (str(id_estudiante), str(fecha), datos["estado"])
+                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
+                    VALUES (?, ?, ?, ?);""",
+                    (str(id_estudiante), str(fecha), datos["estado"], trim_num)
                 )
             self.db_conn.commit()
-            self.db_manager.guardar_cifrado()
+            self._schedule_save()
         except Exception as e:
             logger.error(f"Error guardando asistencia en SQLite: {e}")
 
@@ -2077,6 +2723,56 @@ class DataEngine:
         return True, ""
 
     def actualizar_asistencia(self, grado, trimestre, columna, dic_asistencia):
+        if os.path.basename(self.ruta).startswith("Registro_"):
+            try:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+                row_g = cursor.fetchone()
+                if not row_g:
+                    return False
+                grado_id = row_g[0]
+                
+                cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
+                student_ids = [r[0] for r in cursor.fetchall()]
+                
+                trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                
+                fecha = None
+                if isinstance(columna, str):
+                    fecha = columna.strip()
+                else:
+                    cursor.execute("""
+                        SELECT DISTINCT fecha FROM asistencia a
+                        JOIN estudiantes e ON a.estudiante_id = e.id
+                        WHERE e.grado_id = ? AND a.trimestre = ? ORDER BY fecha;
+                    """, (grado_id, trim_num))
+                    fechas = [r[0] for r in cursor.fetchall()]
+                    idx = columna - 3
+                    if 0 <= idx < len(fechas):
+                        fecha = fechas[idx]
+                
+                if not fecha:
+                    return False
+                    
+                for id_estudiante, datos in dic_asistencia.items():
+                    try:
+                        idx_1based = int(id_estudiante) % 100 if str(id_estudiante).isdigit() else int(id_estudiante)
+                        est_id = student_ids[idx_1based - 1]
+                        cursor.execute(
+                            """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
+                            VALUES (?, ?, ?, ?);""",
+                            (str(est_id), str(fecha), datos["estado"], trim_num)
+                        )
+                    except (IndexError, ValueError) as e:
+                        logger.error(f"Error mapping student in actualizar_asistencia: {e}")
+                self.db_conn.commit()
+                self._schedule_save()
+                self.actualizar_resumen(grado)
+                return True
+            except Exception as e:
+                logger.error(f"Error actualizando asistencia en SQLite: {e}")
+                return False
+
         if not os.path.exists(self.ruta): return False
         wb = openpyxl.load_workbook(self.ruta)
         hoja = self._encontrar_hoja_asistencia(wb, grado)
@@ -2089,22 +2785,22 @@ class DataEngine:
         fuente_meduca = Font(name='Calibri', size=9, bold=True)
         fecha = ws.cell(row=fila_fechas, column=columna).value or "01-01"
         for id_estudiante, datos in dic_asistencia.items():
-            fila_excel = fila_fechas + int(id_estudiante)
+            fila_excel = fila_fechas + (int(id_estudiante) % 100)
             celda = ws.cell(row=fila_excel, column=columna)
             celda.value = datos["estado"]
             celda.font = fuente_meduca
 
-        # Sincronizar a SQLite
         try:
             cursor = self.db_conn.cursor()
+            trim_num = int(str(trimestre).replace("Trimestre ", ""))
             for id_estudiante, datos in dic_asistencia.items():
                 cursor.execute(
-                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado)
-                    VALUES (?, ?, ?);""",
-                    (str(id_estudiante), str(fecha), datos["estado"])
+                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
+                    VALUES (?, ?, ?, ?);""",
+                    (str(id_estudiante), str(fecha), datos["estado"], trim_num)
                 )
             self.db_conn.commit()
-            self.db_manager.guardar_cifrado()
+            self._schedule_save()
         except Exception as e:
             logger.error(f"Error actualizando asistencia en SQLite: {e}")
 
@@ -2391,8 +3087,128 @@ class DataEngine:
         self._cargar_en_memoria()
         return True, "Materia clonada y agregada al Resumen."
 
+    def exportar_todo_a_excel(self, ruta_destino):
+        try:
+            import shutil
+            import datetime
+            shutil.copy2(self.ruta, ruta_destino)
+            wb = openpyxl.load_workbook(ruta_destino)
+            
+            grados = self.obtener_grados_activos()
+            
+            for grado in grados:
+                cursor = self.db_conn.cursor()
+                cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+                row_g = cursor.fetchone()
+                if not row_g:
+                    continue
+                grado_id = row_g[0]
+                
+                # Exportar Notas
+                materias = self.obtener_materias_por_grado(grado)
+                for materia in materias:
+                    nombre_hoja = self._encontrar_hoja_prom(wb, grado, materia)
+                    if not nombre_hoja:
+                        continue
+                    ws = wb[nombre_hoja]
+                    
+                    cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;", (materia, grado_id))
+                    row_m = cursor.fetchone()
+                    if not row_m:
+                        continue
+                    materia_id = row_m[0]
+                    
+                    for trim_idx in (1, 2, 3):
+                        trim_str = f"Trimestre {trim_idx}"
+                        for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
+                            col_inicio, col_fin = self._obtener_rango_columnas(ws, trim_str, tipo)
+                            if col_inicio is None or col_fin is None:
+                                continue
+                                
+                            cursor.execute("""
+                                SELECT DISTINCT descripcion, fecha FROM notas
+                                WHERE materia_id = ? AND trimestre = ? AND tipo = ?;
+                            """, (materia_id, trim_idx, tipo))
+                            cols_data = cursor.fetchall()
+                            
+                            c = col_inicio
+                            for desc, fecha in cols_data:
+                                if c > col_fin:
+                                    break
+                                    
+                                try: ws.cell(row=4, column=c).value = fecha
+                                except AttributeError: pass
+                                
+                                try:
+                                    cell_desc = ws.cell(row=self.fila_desc, column=c)
+                                    cell_desc.value = desc
+                                    cell_desc.alignment = Alignment(wrapText=True, horizontal='center', vertical='center', textRotation=90)
+                                    cell_desc.font = Font(name='Calibri', size=11, bold=True)
+                                except AttributeError: pass
+                                
+                                cursor.execute("""
+                                    SELECT estudiante_id, valor FROM notas
+                                    WHERE materia_id = ? AND trimestre = ? AND tipo = ? AND descripcion = ?;
+                                """, (materia_id, trim_idx, tipo, desc))
+                                for est_id, val in cursor.fetchall():
+                                    fila_excel = 4 + (int(est_id) % 100)
+                                    try: ws.cell(row=fila_excel, column=c).value = val
+                                    except AttributeError: pass
+                                c += 1
+                                
+                # Exportar Asistencia
+                hoja_asist = self._encontrar_hoja_asistencia(wb, grado)
+                if hoja_asist:
+                    ws_asist = wb[hoja_asist]
+                    mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
+                    fuente_meduca = Font(name='Calibri', size=9, bold=True)
+                    
+                    for trim_idx in (1, 2, 3):
+                        trim_str = f"Trimestre {trim_idx}"
+                        fila_fechas = mapa_trimestres.get(trim_str, 2)
+                        
+                        cursor.execute("""
+                            SELECT DISTINCT a.fecha FROM asistencia a
+                            JOIN estudiantes e ON a.estudiante_id = e.id
+                            WHERE e.grado_id = ? AND a.trimestre = ? ORDER BY a.fecha;
+                        """, (grado_id, trim_idx))
+                        fechas = [r[0] for r in cursor.fetchall()]
+                        
+                        c = 3
+                        for fecha in fechas:
+                            if c > 60:
+                                break
+                            ws_asist.cell(row=fila_fechas, column=c).value = fecha
+                            
+                            cursor.execute("""
+                                SELECT e.id, a.estado FROM asistencia a
+                                JOIN estudiantes e ON a.estudiante_id = e.id
+                                WHERE e.grado_id = ? AND a.fecha = ? AND a.trimestre = ?;
+                            """, (grado_id, fecha, trim_idx))
+                            for est_id, estado in cursor.fetchall():
+                                fila_excel = fila_fechas + (int(est_id) % 100)
+                                celda = ws_asist.cell(row=fila_excel, column=c)
+                                celda.value = estado
+                                celda.font = fuente_meduca
+                            c += 1
+            
+            wb.save(ruta_destino)
+            wb.close()
+            
+            wb_res = openpyxl.load_workbook(ruta_destino)
+            for grado in grados:
+                self.actualizar_resumen(grado, wb=wb_res, force_excel=True)
+            wb_res.save(ruta_destino)
+            wb_res.close()
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error en exportar_todo_a_excel: {e}")
+            return False
 
-    def actualizar_resumen(self, grado, wb=None):
+    def actualizar_resumen(self, grado, wb=None, force_excel=False):
+        if not force_excel and os.path.basename(self.ruta).startswith("Registro_"):
+            return True
         if wb is None:
             self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None: return False
@@ -2538,44 +3354,107 @@ class DataEngine:
         }
 
     def obtener_tareas_sin_nota(self, grado, trimestre, id_estudiante, wb=None):
-        if wb is None:
-            self._verificar_y_recargar_cache()
-        if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
-            return {"tareas_vacias_por_materia": {}, "total_vacias": 0}
-        should_close = not bool(self._wb_cache) if wb is None else False
-        if wb is None:
-            wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+        row_g = cursor.fetchone()
+        
+        sql_has_data = False
+        if row_g and os.path.basename(self.ruta).startswith("Registro_"):
+            grado_id = row_g[0]
+            cursor.execute("""
+                SELECT COUNT(*) FROM notas n
+                JOIN materias m ON n.materia_id = m.id
+                WHERE m.grado_id = ? AND n.trimestre = ?;
+            """, (grado_id, int(str(trimestre).replace("Trimestre ", ""))))
+            sql_has_data = (cursor.fetchone()[0] > 0)
             
-        materias = self.obtener_materias_por_grado(grado, wb=wb)
+        if not sql_has_data:
+            if wb is None:
+                self._verificar_y_recargar_cache()
+            if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
+                return {"tareas_vacias_por_materia": {}, "total_vacias": 0}
+            should_close = not bool(self._wb_cache) if wb is None else False
+            if wb is None:
+                wb = self._wb_cache if self._wb_cache else openpyxl.load_workbook(self.ruta, data_only=True)
+                
+            materias = self.obtener_materias_por_grado(grado, wb=wb)
+            tareas_vacias = {}
+            total_vacias = 0
+            row_est = 4 + int(id_estudiante)
+            
+            if not materias or materias == ["Sin materias registradas"]:
+                materias = []
+                grado_num = grado.replace("°", "")
+                for sheet in wb.sheetnames:
+                    if "PROM" in sheet.upper():
+                        if self.modalidad == "premedia" and grado_num in sheet:
+                            mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").replace(grado, "").replace(grado_num, "").replace("°", "").strip()
+                            materias.append(mat.title())
+                        elif self.modalidad == "primaria":
+                            mat = sheet.upper().replace("PROM", "").replace("(", "").replace(")", "").strip()
+                            materias.append(mat.title())
+                materias = sorted(list(set(materias)))
+            
+            for mat in materias:
+                if mat == "Sin materias registradas":
+                    continue
+                hoja = self._encontrar_hoja_prom(wb, grado, mat)
+                if not hoja:
+                    continue
+                ws = wb[hoja]
+                
+                cnt_mat = 0
+                for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
+                    col_inicio, col_fin = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
+                    if col_inicio is None or col_fin is None:
+                        continue
+                    for c in range(col_inicio, col_fin + 1):
+                        desc = ws.cell(row=self.fila_desc, column=c).value
+                        if desc and str(desc).strip():
+                            nota = ws.cell(row=row_est, column=c).value
+                            if nota is None or str(nota).strip() == "":
+                                cnt_mat += 1
+                if cnt_mat > 0:
+                    tareas_vacias[mat] = cnt_mat
+                    total_vacias += cnt_mat
+                    
+            if should_close: wb.close()
+            return {
+                "tareas_vacias_por_materia": tareas_vacias,
+                "total_vacias": total_vacias
+            }
+
+        grado_id = row_g[0]
+        cursor.execute("SELECT id, nombre FROM materias WHERE grado_id = ?;", (grado_id,))
+        materias = cursor.fetchall()
+        
         tareas_vacias = {}
         total_vacias = 0
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
         
-        row_est = 4 + int(id_estudiante)
-        
-        for mat in materias:
-            if mat == "Sin materias registradas":
-                continue
-            hoja = self._encontrar_hoja_prom(wb, grado, mat)
-            if not hoja:
-                continue
-            ws = wb[hoja]
+        for mat_id, mat_nombre in materias:
+            cursor.execute("""
+                SELECT DISTINCT descripcion, tipo, fecha 
+                FROM notas 
+                WHERE materia_id = ? AND trimestre = ?;
+            """, (mat_id, trim_num))
+            tareas_registradas = cursor.fetchall()
             
             cnt_mat = 0
-            for tipo_nota in ["Diaria / Parcial", "Apreciación", "Examen"]:
-                col_inicio, col_fin = self._obtener_rango_columnas(ws, trimestre, tipo_nota)
-                if col_inicio is None or col_fin is None:
-                    continue
-                for c in range(col_inicio, col_fin + 1):
-                    desc = ws.cell(row=self.fila_desc, column=c).value
-                    if desc and str(desc).strip():
-                        nota = ws.cell(row=row_est, column=c).value
-                        if nota is None or str(nota).strip() == "":
-                            cnt_mat += 1
+            for desc, tipo, fecha in tareas_registradas:
+                cursor.execute("""
+                    SELECT valor 
+                    FROM notas 
+                    WHERE estudiante_id = ? AND materia_id = ? AND trimestre = ? AND descripcion = ? AND tipo = ? AND fecha = ?;
+                """, (str(id_estudiante), mat_id, trim_num, desc, tipo, fecha))
+                row_val = cursor.fetchone()
+                if not row_val or row_val[0] is None:
+                    cnt_mat += 1
+                    
             if cnt_mat > 0:
-                tareas_vacias[mat] = cnt_mat
+                tareas_vacias[mat_nombre] = cnt_mat
                 total_vacias += cnt_mat
                 
-        if should_close: wb.close()
         return {
             "tareas_vacias_por_materia": tareas_vacias,
             "total_vacias": total_vacias
