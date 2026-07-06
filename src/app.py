@@ -88,16 +88,18 @@ class MainApplication(ctk.CTkFrame):
         return nombres.get(self.menu_activo, "Inicio")
 
     def _renderizar_header(self):
-        if hasattr(self, "_header") and self._header.winfo_exists():
+        # Si ya se creó el header, solo actualizar el breadcrumb
+        if hasattr(self, "_header_created") and self._header_created:
             try:
-                for w in self._header.winfo_children():
-                    w.destroy()
+                if self._breadcrumb.winfo_exists():
+                    self._breadcrumb.configure(text="📍 " + self._obtener_nombre_menu_breadcrumb())
             except Exception:
                 pass
-        else:
-            self._header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=48)
-            self._header.grid(row=0, column=0, sticky="ew")
-            self._header.grid_propagate(False)
+            return
+
+        self._header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=48)
+        self._header.grid(row=0, column=0, sticky="ew")
+        self._header.grid_propagate(False)
         
         # Info versión
         ctk.CTkLabel(self._header, text="v.Prov.22:6", font=ctk.CTkFont(family=FONT_BODY, size=10), text_color=C["texto_dim"]).pack(side="right", padx=15, pady=13)
@@ -128,6 +130,8 @@ class MainApplication(ctk.CTkFrame):
         self._clase_badge.pack(side="right", padx=8, pady=12)
         # Título del header
         ctk.CTkLabel(self._header, text="RegistroDoc Pro — Control Académico", font=ctk.CTkFont(family=FONT_TITLE, size=14, weight="bold"), text_color=C["cian"]).pack(side="left", padx=20, pady=13)
+        
+        self._header_created = True
 
     def _cuerpo(self):
         self.columnconfigure(0, weight=1)
@@ -326,8 +330,8 @@ class MainApplication(ctk.CTkFrame):
         except Exception as e:
             print(f"Error updating header schedule: {e}")
             
-        # Run again in 10 seconds to update quickly
-        self.after(10000, self._actualizar_horario_header)
+        # Actualizar cada 60 segundos (los períodos de clase no cambian en 10s)
+        self.after(60000, self._actualizar_horario_header)
 
     def _highlight_menu_button(self, active_text):
         if self._destroyed or not self.winfo_exists():
@@ -446,7 +450,7 @@ class RegistroDocApp(ctk.CTk):
 
 
         # Iconos de la ventana (resolución para Windows / Barra de tareas)
-        icon_path = os.path.join(BASE_DIR, "..", "assets", "icon.ico")
+        icon_path = os.path.join(BASE_DIR, "..", "assets", "icon_fixed.ico")
         png_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
 
         if os.path.exists(icon_path):
@@ -494,6 +498,39 @@ class RegistroDocApp(ctk.CTk):
         iniciar_sincronizacion_hora_panama()
 
         self.mostrar_dashboard()
+
+        # ─── PRECARGA DE FRAMES EN SEGUNDO PLANO ───
+        self._precargar_frames()
+
+    def _precargar_frames(self):
+        """Pre-crea los frames más usados en segundo plano tras el arranque.
+        Usa after() escalonado para no bloquear la UI."""
+        frames_prioritarios = [
+            EstudiantesFrame,
+            NotasAsistenciaFrame,
+            ObservacionesFrame,
+            HabitosFrame,
+            ReportesYGraficosFrame,
+            ImpresionFrame,
+            TareasFrame,
+            ReunionesFrame,
+            RegistroCompletoFrame,
+        ]
+        for i, fc in enumerate(frames_prioritarios):
+            self.after(300 * (i + 1), lambda c=fc: self._precargar_un_frame(c))
+
+    def _precargar_un_frame(self, frame_class):
+        """Crea un frame y lo oculta inmediatamente."""
+        if self._destroyed:
+            return
+        class_name = frame_class.__name__
+        if class_name not in self._frames:
+            try:
+                f = frame_class(self.main_app.main_content_frame, self.engine)
+                f.pack_forget()
+                self._frames[class_name] = f
+            except Exception as e:
+                print(f"[!] Error precargando {class_name}: {e}")
 
     def limpiar_pantalla(self):
         for w in self.main_app.main_content_frame.winfo_children():

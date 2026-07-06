@@ -237,10 +237,15 @@ class GraficosFrame(ctk.CTkFrame):
             messagebox.showerror("Error", f"No se pudo exportar el gráfico: {e}")
 
     def limpiar_graficos(self):
+        # Cerrar figuras matplotlib para liberar memoria (evita leak de ~2-5MB por figura)
+        for fig in self.fig_objs:
+            try:
+                plt.close(fig)
+            except Exception:
+                pass
+        self.fig_objs.clear()
         for w in self.scroll_canvas.winfo_children():
             w.destroy()
-        self.fig_objs.clear()
-        self.fig_objs.clear()
 
     def actualizar_graficos(self):
         self.limpiar_graficos()

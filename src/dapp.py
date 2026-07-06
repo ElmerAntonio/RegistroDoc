@@ -119,9 +119,58 @@ class EstudiantesFrame(ctk.CTkFrame):
         self.cargar_lista(grado)
         self.cargar_retirados(grado)
 
-    def cargar_lista(self, grado):
+    # ── Pool de filas recicladas (Activos) ────────────────────────────────
+    def _obtener_fila_activo(self, index):
+        if not hasattr(self, "_pool_activos"):
+            self._pool_activos = []
+        if index < len(self._pool_activos):
+            f_row, widgets = self._pool_activos[index]
+            f_row.pack(fill="x", pady=2)
+            return f_row, widgets
+
+        f_row = ctk.CTkFrame(self.scroll_activos, fg_color=C["card"], corner_radius=5)
+        f_row.pack(fill="x", pady=2)
+
+        num_lbl = ctk.CTkLabel(f_row, text="", width=40)
+        num_lbl.pack(side="left", padx=6)
+
+        entry_nom = ctk.CTkEntry(f_row, width=320, fg_color=C["input"])
+        entry_nom.pack(side="left", padx=6)
+
+        entry_ced = ctk.CTkEntry(f_row, width=130, fg_color=C["input"],
+                                 placeholder_text="Ej: 4-123-456")
+        entry_ced.pack(side="left", padx=6)
+
+        combo_sex = ctk.CTkOptionMenu(f_row, values=["M", "F"], width=70)
+        combo_sex.pack(side="left", padx=6)
+
+        btn_retirar = ctk.CTkButton(
+            f_row, text="🚪 Retirar",
+            width=95, height=26,
+            fg_color="#F97316", hover_color="#EA580C",
+            font=(FONT_BODY, 11, "bold")
+        )
+        btn_retirar.pack(side="left", padx=6)
+
+        widgets = {
+            "num": num_lbl, "nombre": entry_nom, "cedula": entry_ced,
+            "sexo": combo_sex, "btn": btn_retirar
+        }
+        self._pool_activos.append((f_row, widgets))
+        return f_row, widgets
+
+    def _limpiar_scroll_activos(self):
+        pool_frames = set()
+        if hasattr(self, "_pool_activos"):
+            for f_row, _ in self._pool_activos:
+                pool_frames.add(f_row)
+                f_row.pack_forget()
         for w in self.scroll_activos.winfo_children():
-            w.destroy()
+            if w not in pool_frames:
+                w.destroy()
+
+    def cargar_lista(self, grado):
+        self._limpiar_scroll_activos()
         self.entradas_estudiantes.clear()
 
         estudiantes = self.engine.obtener_estudiantes_completos(grado)
@@ -133,42 +182,83 @@ class EstudiantesFrame(ctk.CTkFrame):
             return
 
         for i, est in enumerate(estudiantes):
-            fila = ctk.CTkFrame(self.scroll_activos, fg_color=C["card"], corner_radius=5)
-            fila.pack(fill="x", pady=2)
+            f_row, widgets = self._obtener_fila_activo(i)
 
-            ctk.CTkLabel(fila, text=str(i + 1), width=40).pack(side="left", padx=6)
+            widgets["num"].configure(text=str(i + 1))
 
-            entry_nom = ctk.CTkEntry(fila, width=320, fg_color=C["input"])
-            entry_nom.insert(0, est["nombre"])
-            entry_nom.pack(side="left", padx=6)
+            widgets["nombre"].delete(0, "end")
+            widgets["nombre"].insert(0, est["nombre"])
 
-            entry_ced = ctk.CTkEntry(fila, width=130, fg_color=C["input"],
-                                     placeholder_text="Ej: 4-123-456")
+            widgets["cedula"].delete(0, "end")
             if est["cedula"]:
-                entry_ced.insert(0, est["cedula"])
-            entry_ced.pack(side="left", padx=6)
-            entry_ced.bind("<FocusOut>", lambda e, ent=entry_ced: self._formatear_cedula_existente(ent))
+                widgets["cedula"].insert(0, est["cedula"])
+            widgets["cedula"].bind("<FocusOut>", lambda e, ent=widgets["cedula"]: self._formatear_cedula_existente(ent))
 
-            combo_sex = ctk.CTkOptionMenu(fila, values=["M", "F"], width=70)
-            combo_sex.set(est.get("sexo", "M") if est.get("sexo") in ["M", "F"] else "M")
-            combo_sex.pack(side="left", padx=6)
+            widgets["sexo"].set(est.get("sexo", "M") if est.get("sexo") in ["M", "F"] else "M")
 
-            # Botón Retirar (naranja)
-            ctk.CTkButton(
-                fila, text="🚪 Retirar",
-                width=95, height=26,
-                fg_color="#F97316", hover_color="#EA580C",
-                font=(FONT_BODY, 11, "bold"),
+            widgets["btn"].configure(
                 command=lambda eid=est["id"], enom=est["nombre"]: self._iniciar_retiro(eid, enom)
-            ).pack(side="left", padx=6)
+            )
 
             self.entradas_estudiantes[est["id"]] = {
-                "nombre": entry_nom, "cedula": entry_ced, "sexo": combo_sex
+                "nombre": widgets["nombre"], "cedula": widgets["cedula"], "sexo": widgets["sexo"]
             }
 
-    def cargar_retirados(self, grado):
+        # Ocultar filas sobrantes del pool
+        if hasattr(self, "_pool_activos"):
+            for idx in range(len(estudiantes), len(self._pool_activos)):
+                self._pool_activos[idx][0].pack_forget()
+
+    # ── Pool de filas recicladas (Retirados) ──────────────────────────────
+    def _obtener_fila_retirado(self, index):
+        if not hasattr(self, "_pool_retirados"):
+            self._pool_retirados = []
+        if index < len(self._pool_retirados):
+            f_row, widgets = self._pool_retirados[index]
+            f_row.pack(fill="x", pady=2)
+            return f_row, widgets
+
+        f_row = ctk.CTkFrame(self.scroll_retirados, fg_color="#3B1F1F", corner_radius=5)
+        f_row.pack(fill="x", pady=2)
+
+        num_lbl = ctk.CTkLabel(f_row, text="", width=35, text_color="#F87171")
+        num_lbl.pack(side="left", padx=5)
+        nom_lbl = ctk.CTkLabel(f_row, text="", width=250, anchor="w", text_color="#FCA5A5")
+        nom_lbl.pack(side="left", padx=5)
+        grado_lbl = ctk.CTkLabel(f_row, text="", width=60, anchor="w", text_color="#94A3B8")
+        grado_lbl.pack(side="left", padx=5)
+        fecha_lbl = ctk.CTkLabel(f_row, text="", width=90, anchor="w", text_color="#94A3B8")
+        fecha_lbl.pack(side="left", padx=5)
+        motivo_lbl = ctk.CTkLabel(f_row, text="", width=180, anchor="w", text_color="#94A3B8")
+        motivo_lbl.pack(side="left", padx=5)
+
+        btn_reactivar = ctk.CTkButton(
+            f_row, text="✅ Reactivar",
+            width=105, height=26,
+            fg_color="#16A34A", hover_color="#15803D",
+            font=(FONT_BODY, 11, "bold")
+        )
+        btn_reactivar.pack(side="left", padx=5)
+
+        widgets = {
+            "num": num_lbl, "nombre": nom_lbl, "grado": grado_lbl,
+            "fecha": fecha_lbl, "motivo": motivo_lbl, "btn": btn_reactivar
+        }
+        self._pool_retirados.append((f_row, widgets))
+        return f_row, widgets
+
+    def _limpiar_scroll_retirados(self):
+        pool_frames = set()
+        if hasattr(self, "_pool_retirados"):
+            for f_row, _ in self._pool_retirados:
+                pool_frames.add(f_row)
+                f_row.pack_forget()
         for w in self.scroll_retirados.winfo_children():
-            w.destroy()
+            if w not in pool_frames:
+                w.destroy()
+
+    def cargar_retirados(self, grado):
+        self._limpiar_scroll_retirados()
 
         retirados = self.engine.obtener_estudiantes_retirados(grado)
 
@@ -179,30 +269,26 @@ class EstudiantesFrame(ctk.CTkFrame):
             return
 
         for i, est in enumerate(retirados):
-            fila = ctk.CTkFrame(self.scroll_retirados,
-                                fg_color="#3B1F1F" if i % 2 == 0 else "#2D1A1A",
-                                corner_radius=5)
-            fila.pack(fill="x", pady=2)
+            f_row, widgets = self._obtener_fila_retirado(i)
+            f_row.configure(fg_color="#3B1F1F" if i % 2 == 0 else "#2D1A1A")
 
-            ctk.CTkLabel(fila, text=str(i + 1), width=35, text_color="#F87171").pack(side="left", padx=5)
-            ctk.CTkLabel(fila, text=est["nombre"],       width=250, anchor="w",
-                         text_color="#FCA5A5").pack(side="left", padx=5)
-            ctk.CTkLabel(fila, text=est["grado"],        width=60,  anchor="w",
-                         text_color="#94A3B8").pack(side="left", padx=5)
-            ctk.CTkLabel(fila, text=est["fecha_retiro"], width=90,  anchor="w",
-                         text_color="#94A3B8").pack(side="left", padx=5)
-            ctk.CTkLabel(fila, text=est["motivo_retiro"][:30] + "…"
-                         if len(est["motivo_retiro"]) > 30 else est["motivo_retiro"],
-                         width=180, anchor="w",
-                         text_color="#94A3B8").pack(side="left", padx=5)
+            widgets["num"].configure(text=str(i + 1))
+            widgets["nombre"].configure(text=est["nombre"])
+            widgets["grado"].configure(text=est["grado"])
+            widgets["fecha"].configure(text=est["fecha_retiro"])
+            motivo = est["motivo_retiro"]
+            widgets["motivo"].configure(
+                text=motivo[:30] + "…" if len(motivo) > 30 else motivo
+            )
 
-            ctk.CTkButton(
-                fila, text="✅ Reactivar",
-                width=105, height=26,
-                fg_color="#16A34A", hover_color="#15803D",
-                font=(FONT_BODY, 11, "bold"),
+            widgets["btn"].configure(
                 command=lambda eid=est["id"], enom=est["nombre"]: self._reactivar(eid, enom)
-            ).pack(side="left", padx=5)
+            )
+
+        # Ocultar filas sobrantes del pool de retirados
+        if hasattr(self, "_pool_retirados"):
+            for idx in range(len(retirados), len(self._pool_retirados)):
+                self._pool_retirados[idx][0].pack_forget()
 
     # ──────────────────────────────────────────────────────────────────────
     # Retiro y reactivación

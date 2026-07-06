@@ -1,16 +1,17 @@
 ; ══════════════════════════════════════════════════════════════
-;  REGISTRODOC PRO — CONFIGURACIÓN DE INSTALADOR WINDOWS (INNO SETUP)
+;  REGISTRODOC PRO — CONFIGURACIÓN DE INSTALADOR WINDOWS CON DATOS (INNO SETUP)
 ; ══════════════════════════════════════════════════════════════
 ; Compatible con Windows 10 y 11. Cumple con normas ISO 25010 y ISO 27001.
+; Este instalador incluye los datos preexistentes del docente para este equipo.
 
 [Setup]
-AppName=RegistroDoc Pro
+AppName=RegistroDoc Pro (Con Datos)
 AppVersion=1.0.0
 AppPublisher=RegistroDoc Pro - MEDUCA
 DefaultDirName={localappdata}\RegistroDocPro
 DefaultGroupName=RegistroDoc Pro
 DisableProgramGroupPage=yes
-OutputBaseFilename=RegistroDoc_Instalador_Vacio
+OutputBaseFilename=RegistroDoc_Instalador_ConDatos
 SetupIconFile=assets\icon_fixed.ico
 UninstallDisplayIcon={app}\RegistroDoc.exe
 Compression=lzma2/max
@@ -28,6 +29,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "dist\RegistroDoc.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Copiar configuración y token del docente al directorio de la aplicación ({app}\data)
+Source: "package_data\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Copiar la base de datos cifrada existente al AppData local ({localappdata}\RegistroDoc\data)
+Source: "package_data\appdata\data\registro.db.enc"; DestDir: "{localappdata}\RegistroDoc\data"; Flags: ignoreversion
+
+; Copiar las planillas Excel activas al AppData local ({localappdata}\RegistroDoc\temp)
+Source: "package_data\appdata\temp\Registro_Premedia.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion; Check: FileExists('package_data\appdata\temp\Registro_Premedia.xlsx')
+Source: "package_data\appdata\temp\Registro_Primaria.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion; Check: FileExists('package_data\appdata\temp\Registro_Primaria.xlsx')
+
 [Icons]
 Name: "{group}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"
 Name: "{userdesktop}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"; Tasks: desktopicon
@@ -35,9 +46,10 @@ Name: "{userdesktop}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"; Tasks:
 [Run]
 Filename: "{app}\RegistroDoc.exe"; Description: "{cm:LaunchProgram,RegistroDoc Pro}"; Flags: nowait postinstall skipifsilent
 
-; Registro de la aplicación para desinstalación segura
+; Registro de la aplicación para desinstalación segura y pre-carga de Cédula
 [Registry]
 Root: HKCU; Subkey: "Software\RegistroDocPro"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\RegistroDocPro"; ValueType: string; ValueName: "Cedula"; ValueData: "8-000-0000"; Flags: uninsdeletekey
 
 [Code]
 // ══════════════════════════════════════════════════════════════
@@ -172,12 +184,6 @@ begin
           Result := False;
           Exit;
         end;
-      end
-      else
-      begin
-        // Cancelado por el usuario
-        Result := False;
-        Exit;
       end;
     end;
   end;

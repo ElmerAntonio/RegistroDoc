@@ -213,14 +213,36 @@ class ObservacionesFrame(ctk.CTkFrame):
 
 
     def filtrar_lista(self, event=None):
+        # Debounce: cancelar búsqueda anterior y esperar 200ms
+        if hasattr(self, "_filtro_after_id") and self._filtro_after_id:
+            try:
+                self.after_cancel(self._filtro_after_id)
+            except Exception:
+                pass
+        self._filtro_after_id = self.after(200, self._ejecutar_filtro)
+
+    def _ejecutar_filtro(self):
+        self._filtro_after_id = None
         texto = self.entry_buscar.get().lower()
         filtrados = [
             est for est in self.lista_completa if texto in est["nombre"].lower()]
         self.mostrar_lista(filtrados)
 
     def mostrar_lista(self, lista):
+        # Pool de botones reciclables
+        if not hasattr(self, "_pool_btns"):
+            self._pool_btns = []
+
+        # Ocultar todos los botones del pool
+        for btn in self._pool_btns:
+            btn.pack_forget()
+
+        # Destruir solo widgets que no estén en el pool (ej: labels de "no hay coincidencias")
+        pool_set = set(self._pool_btns)
         for w in self.scroll_estudiantes.winfo_children():
-            w.destroy()
+            if w not in pool_set:
+                w.destroy()
+
         if not lista:
             ctk.CTkLabel(
                 self.scroll_estudiantes,
@@ -229,10 +251,16 @@ class ObservacionesFrame(ctk.CTkFrame):
                 pady=20)
             return
 
-        for est in lista:
-            btn = ctk.CTkButton(self.scroll_estudiantes, text=est['nombre'], fg_color="transparent",
-                                anchor="w", text_color=C["texto"], hover_color=C["hover"],
-                                command=lambda e=est: self.seleccionar_estudiante(e))
+        for i, est in enumerate(lista):
+            if i < len(self._pool_btns):
+                btn = self._pool_btns[i]
+                btn.configure(text=est['nombre'],
+                              command=lambda e=est: self.seleccionar_estudiante(e))
+            else:
+                btn = ctk.CTkButton(self.scroll_estudiantes, text=est['nombre'], fg_color="transparent",
+                                    anchor="w", text_color=C["texto"], hover_color=C["hover"],
+                                    command=lambda e=est: self.seleccionar_estudiante(e))
+                self._pool_btns.append(btn)
             btn.pack(fill="x", pady=2)
 
     def seleccionar_estudiante(self, estudiante):

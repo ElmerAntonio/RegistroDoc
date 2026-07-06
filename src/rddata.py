@@ -1404,6 +1404,27 @@ class DataEngine:
                 wb.close()
 
     def obtener_estudiantes_completos(self, grado, wb=None):
+        # ── Caché en memoria con invalidación por version de BD ──
+        db_version = 0
+        try:
+            if hasattr(self, 'db_conn') and self.db_conn:
+                raw_conn = getattr(self.db_conn, '_conn', self.db_conn)
+                db_version = raw_conn.total_changes
+        except Exception:
+            pass
+
+        if not hasattr(self, '_cache_estudiantes'):
+            self._cache_estudiantes = {}
+            self._cache_est_version = -1
+
+        if self._cache_est_version == db_version and grado in self._cache_estudiantes:
+            return self._cache_estudiantes[grado]
+
+        # Si la versión cambió, limpiar todo el caché
+        if self._cache_est_version != db_version:
+            self._cache_estudiantes.clear()
+            self._cache_est_version = db_version
+
         # 1. Intentar cargar desde SQLite y descifrar columnas
         try:
             cursor = self.db_conn.cursor()
@@ -1426,12 +1447,15 @@ class DataEngine:
                             "cedula": ced_desc,
                             "sexo": sex_desc
                         })
+                    self._cache_estudiantes[grado] = estudiantes
                     return estudiantes
         except Exception as e:
             logger.error(f"Error cargando estudiantes desde SQL: {e}")
 
         # Fallback a Excel
-        return self._obtener_estudiantes_desde_excel(grado, wb=wb)
+        resultado = self._obtener_estudiantes_desde_excel(grado, wb=wb)
+        self._cache_estudiantes[grado] = resultado
+        return resultado
 
     def agregar_estudiante(self, grado, nombre, cedula="", sexo="M"):
         if not os.path.exists(self.ruta): return False

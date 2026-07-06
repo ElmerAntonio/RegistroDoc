@@ -19,6 +19,7 @@ Algoritmos utilizados:
 © 2026 RegistroDoc Pro — Todos los derechos reservados
 """
 
+import sys
 import os
 import json
 import time
@@ -37,6 +38,7 @@ from cryptography.hazmat.backends import default_backend
 from config import BASE_DIR
 
 # Configurar logger
+# (Re-use logger definition below if needed, but we keep it here to keep things aligned)
 logger = logging.getLogger("rdsecurity")
 
 # ══════════════════════════════════════════════════════════════
@@ -55,7 +57,11 @@ DELAY_NIVEL_1   = 30               # segundos
 DELAY_NIVEL_2   = 3600             # 1 hora
 
 # Rutas absolutas resueltas desde la raíz del proyecto
-ROOT_DIR        = os.path.dirname(BASE_DIR)
+if getattr(sys, 'frozen', False):
+    ROOT_DIR = os.path.dirname(sys.executable)
+else:
+    ROOT_DIR = os.path.dirname(BASE_DIR)
+
 DATA_DIR        = os.path.join(ROOT_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -400,8 +406,7 @@ def actualizar_hash_excel(ruta_excel: str) -> None:
 # ══════════════════════════════════════════════════════════════
 
 # Cargar configuracion segura desde .env
-from config import BASE_DIR
-env_path = os.path.join(os.path.dirname(BASE_DIR), ".env")
+env_path = os.path.join(ROOT_DIR, ".env")
 load_dotenv(dotenv_path=env_path)
 
 def _persistir_master_salt(path: str, valor: str) -> None:
