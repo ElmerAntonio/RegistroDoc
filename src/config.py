@@ -3,6 +3,13 @@ import os
 # Directorio base del código fuente (src)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+import sys
+# Determinar la ruta real de los assets de forma segura
+if hasattr(sys, "_MEIPASS"):
+    ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
+else:
+    ASSETS_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "assets"))
+
 # Archivo de configuración principal (perfil.json)
 CONFIG_FILE = os.path.join(BASE_DIR, "..", "perfil.json")
 
@@ -12,8 +19,8 @@ def establecer_icono_ventana(window):
     import sys
     from PIL import Image, ImageTk
     
-    icon_path = os.path.join(BASE_DIR, "..", "assets", "icon_fixed.ico")
-    png_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
+    icon_path = os.path.join(ASSETS_DIR, "icon_fixed.ico")
+    png_path = os.path.join(ASSETS_DIR, "icono.png")
     
     # En Windows, usar iconbitmap directamente con retardos para asegurar que no se sobrescriba
     if sys.platform == "win32" and os.path.exists(icon_path):

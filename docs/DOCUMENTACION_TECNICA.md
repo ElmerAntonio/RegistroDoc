@@ -1,5 +1,5 @@
 # 📑 DOCUMENTACIÓN TÉCNICA Y DE SEGURIDAD (ISO/IEC COMPLIANCE)
-### RegistroDoc Pro — Versión Premium 4.0
+### RegistroDoc Pro — Versión Premium 5.0
 ---
 
 Este documento técnico detalla la arquitectura de datos, el diseño de la base de datos relacional, los mecanismos de seguridad implementados y su alineación con los estándares internacionales de calidad y seguridad de la información (**ISO/IEC 25010**, **ISO/IEC 27001**, **NIST SP 800-38D**, **NIST SP 800-63B**) y la legislación panameña (**Ley 81 de Protección de Datos Personales**).

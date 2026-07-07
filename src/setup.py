@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 import customtkinter as ctk
 from PIL import Image, ImageTk
-from config import BASE_DIR
+from config import BASE_DIR, ASSETS_DIR
 from rdsecurity import guardar_config_segura
 from rdsql import SQLDatabaseManager, obtener_dir_datos_usuario
 from rddata import DataEngine
@@ -30,6 +30,31 @@ class SetupWizard(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RegistroDoc Pro - Asistente de Configuración Inicial")
+        
+        # Configurar AppUserModelID para icono en barra de tareas
+        import sys
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("registrodoc.pro.v3")
+            except Exception:
+                pass
+
+        # Cargar iconos
+        icon_path = os.path.join(ASSETS_DIR, "icon_fixed.ico")
+        png_path = os.path.join(ASSETS_DIR, "icono.png")
+        if os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
+        if os.path.exists(png_path):
+            try:
+                pil = Image.open(png_path).resize((64, 64))
+                self._icono_app = ImageTk.PhotoImage(pil)
+                self.iconphoto(True, self._icono_app)
+            except Exception:
+                pass
         
         # Tamaño de la ventana
         width = 850
@@ -173,8 +198,8 @@ class SetupWizard(ctk.CTk):
             db.cerrar()
             
             # Copiar plantilla
-            from config import BASE_DIR
-            plantilla = os.path.join(BASE_DIR, "..", "assets", "templates", "Registro_Premedia.xlsx")
+            from config import ASSETS_DIR
+            plantilla = os.path.join(ASSETS_DIR, "templates", "Registro_Premedia.xlsx")
             user_dir = obtener_dir_datos_usuario()
             active_excel = os.path.join(user_dir, "temp", "Registro_Premedia.xlsx")
             os.makedirs(os.path.dirname(active_excel), exist_ok=True)
@@ -712,7 +737,7 @@ class SetupWizard(ctk.CTk):
 
             # 3. Copiar y poblar el Excel limpio en AppData
             archivo = "Registro_Primaria.xlsx" if self.datos["modalidad"] == "primaria" else "Registro_Premedia.xlsx"
-            plantilla = os.path.join(BASE_DIR, "..", "assets", "templates", archivo)
+            plantilla = os.path.join(ASSETS_DIR, "templates", archivo)
             
             user_dir = obtener_dir_datos_usuario()
             active_excel = os.path.join(user_dir, "temp", archivo)

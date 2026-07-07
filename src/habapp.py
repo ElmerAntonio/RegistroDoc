@@ -172,24 +172,45 @@ class HabitosFrame(ctk.CTkFrame):
             return
         self.cargar_tabla_matricial()
 
-    def _limpiar_grid(self):
+    def _grid_widget_if_needed(self, widget, row, column, **kwargs):
+        current_row = getattr(widget, "_grid_row", None)
+        current_col = getattr(widget, "_grid_col", None)
+        if current_row == row and current_col == column:
+            return
+        widget.grid(row=row, column=column, **kwargs)
+        widget._grid_row = row
+        widget._grid_col = column
+
+    def _forget_widget_if_gridded(self, widget):
+        if getattr(widget, "_grid_row", None) is not None:
+            widget.grid_forget()
+            widget._grid_row = None
+            widget._grid_col = None
+
+    def _obtener_todos_pool_widgets(self):
+        pool = set()
+        if hasattr(self, "_pool_headers"):
+            pool.update(self._pool_headers)
+        if hasattr(self, "_pool_filas"):
+            for lbl_nom, opt_menus in self._pool_filas:
+                pool.add(lbl_nom)
+                pool.update(opt_menus)
+        return pool
+
+    def _ocultar_todos_widgets(self):
         if hasattr(self, "_pool_headers"):
             for h in self._pool_headers:
-                h.grid_forget()
+                self._forget_widget_if_gridded(h)
         if hasattr(self, "_pool_filas"):
             for lbl_nom, opt_menus in self._pool_filas:
-                lbl_nom.grid_forget()
+                self._forget_widget_if_gridded(lbl_nom)
                 for opt in opt_menus:
-                    opt.grid_forget()
-        pool_widgets = set()
-        if hasattr(self, "_pool_headers"):
-            pool_widgets.update(self._pool_headers)
-        if hasattr(self, "_pool_filas"):
-            for lbl_nom, opt_menus in self._pool_filas:
-                pool_widgets.add(lbl_nom)
-                pool_widgets.update(opt_menus)
+                    self._forget_widget_if_gridded(opt)
+
+    def _limpiar_grid(self):
+        pool_w = self._obtener_todos_pool_widgets()
         for w in self.scroll_tabla.winfo_children():
-            if w not in pool_widgets:
+            if w not in pool_w:
                 try:
                     w.destroy()
                 except Exception:
@@ -240,9 +261,19 @@ class HabitosFrame(ctk.CTkFrame):
 
         self.estudiantes = self.engine.obtener_estudiantes_completos(grado)
         if not self.estudiantes or "Sin estudiantes" in self.estudiantes[0]['nombre']:
+            self._ocultar_todos_widgets()
             lbl = ctk.CTkLabel(self.scroll_tabla, text="No hay estudiantes inscritos en este grado.", font=("Outfit", 14, "italic"), text_color="#A3A3A3")
             lbl.pack(pady=40)
             return
+
+        # Destroy non-pool widgets that might be left in scroll_tabla
+        pool_w = self._obtener_todos_pool_widgets()
+        for w in self.scroll_tabla.winfo_children():
+            if w not in pool_w:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
 
         es_primaria = any(g in grado for g in ["1°", "2°", "3°", "4°", "5°", "6°"])
         criterios_info = CRITERIOS_PRIMARIA if es_primaria else CRITERIOS_PREMEDIA_MEDIA
@@ -281,22 +312,23 @@ class HabitosFrame(ctk.CTkFrame):
             self.scroll_tabla.grid_columnconfigure(c_idx, minsize=90)
 
         lbl_est = self._obtener_header_label(0, "Estudiante", "#3B82F6", 0, "left", ("Outfit", 12, "bold"))
-        lbl_est.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self._grid_widget_if_needed(lbl_est, row=0, column=0, padx=10, pady=10, sticky="w")
 
         for c_idx, crit in enumerate(self.criterios_activos, 1):
             lbl_crit = self._obtener_header_label(c_idx, crit, "#22D3EE", 85, "center", ("Outfit", 10, "bold"))
-            lbl_crit.grid(row=0, column=c_idx, padx=5, pady=10)
+            self._grid_widget_if_needed(lbl_crit, row=0, column=c_idx, padx=5, pady=10)
 
         for idx in range(len(self.criterios_activos) + 1, len(self._pool_headers)):
-            self._pool_headers[idx].grid_forget()
+            self._forget_widget_if_gridded(self._pool_headers[idx])
 
         self.combo_widgets = {}
         for r_idx, est in enumerate(self.estudiantes, 1):
             est_id = str(est['id'])
             lbl_nom, opt_menus = self._obtener_fila_reciclada(r_idx - 1)
             
-            lbl_nom.configure(text=est['nombre'])
-            lbl_nom.grid(row=r_idx, column=0, padx=10, pady=4, sticky="w")
+            if lbl_nom.cget("text") != est['nombre']:
+                lbl_nom.configure(text=est['nombre'])
+            self._grid_widget_if_needed(lbl_nom, row=r_idx, column=0, padx=10, pady=4, sticky="w")
             
             def get_color(val):
                 return "#10B981" if val == "S" else ("#F59E0B" if val == "R" else ("#EF4444" if val == "X" else "#4B5563"))
@@ -307,27 +339,32 @@ class HabitosFrame(ctk.CTkFrame):
                 
                 color = get_color(val_actual)
                 
-                def make_command(eid=est_id, cn=crit, menu=opt_menu):
-                    return lambda val: self.cambiar_valor_celda(eid, cn, val)
+                current_color = getattr(opt_menu, "_current_color", None)
+                current_key = getattr(opt_menu, "_current_command_key", None)
+                if current_color != color or current_key != (est_id, crit):
+                    opt_menu.configure(
+                        fg_color=color,
+                        button_color=color,
+                        command=lambda val, eid=est_id, cn=crit: self.cambiar_valor_celda(eid, cn, val)
+                    )
+                    opt_menu._current_color = color
+                    opt_menu._current_command_key = (est_id, crit)
                 
-                opt_menu.configure(
-                    fg_color=color,
-                    button_color=color,
-                    command=make_command()
-                )
-                opt_menu.set(val_actual)
-                opt_menu.grid(row=r_idx, column=c_idx, padx=5, pady=4)
+                if getattr(opt_menu, "_current_val", None) != val_actual:
+                    opt_menu.set(val_actual)
+                    opt_menu._current_val = val_actual
                 
+                self._grid_widget_if_needed(opt_menu, row=r_idx, column=c_idx, padx=5, pady=4)
                 self.combo_widgets[(est_id, crit)] = opt_menu
                 
             for idx in range(len(self.criterios_activos), 12):
-                opt_menus[idx].grid_forget()
+                self._forget_widget_if_gridded(opt_menus[idx])
 
         for r_idx in range(len(self.estudiantes), len(self._pool_filas)):
             lbl_nom, opt_menus = self._pool_filas[r_idx]
-            lbl_nom.grid_forget()
+            self._forget_widget_if_gridded(lbl_nom)
             for opt in opt_menus:
-                opt.grid_forget()
+                self._forget_widget_if_gridded(opt)
 
     def cambiar_valor_celda(self, est_id, criterio, valor):
         self.evaluaciones_temporales[est_id][criterio] = valor
@@ -335,6 +372,8 @@ class HabitosFrame(ctk.CTkFrame):
         if opt_menu:
             color = "#10B981" if valor == "S" else ("#F59E0B" if valor == "R" else ("#EF4444" if valor == "X" else "#4B5563"))
             opt_menu.configure(fg_color=color, button_color=color)
+            opt_menu._current_color = color
+            opt_menu._current_val = valor
 
     def autorellenar_con_ia(self):
         grado = self.combo_grado.get()

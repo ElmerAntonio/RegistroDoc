@@ -6,7 +6,7 @@
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
-Versión:      2.0.0
+Versión:      5.0.0
 Desarrollado: Elmer Tugri
 Institución:  Escuela Cerro Cacicón
 País:         República de Panamá
@@ -69,12 +69,12 @@ Características principales:
 ═════════════════════════════════════
 
 PASO 1 — Recibir el programa
-  • El proveedor le entregará el archivo: RegistroDocPro.exe
+  • El proveedor le entregará el archivo: RegistroDoc_Instalador.exe
   • Guárdelo en una carpeta de su preferencia (ej: Documentos\RegistroDoc)
   • NO lo mueva a otra carpeta después de activarlo
 
 PASO 2 — Primera apertura
-  • Haga doble clic en RegistroDocPro.exe
+  • Haga doble clic en RegistroDoc_Instalador.exe para instalar la aplicación
   • Si Windows muestra "Windows protegió su PC", haga clic en
     "Más información" y luego "Ejecutar de todas formas"
     (es normal para programas nuevos no firmados digitalmente)

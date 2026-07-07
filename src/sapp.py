@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import os
-from config import BASE_DIR
+from config import BASE_DIR, ASSETS_DIR
 import json
 import threading
 import datetime
@@ -470,7 +470,7 @@ class ConfigFrame(ctk.CTkFrame):
             return
 
         archivo_nuevo = "Registro_Primaria.xlsx" if nueva == "primaria" else "Registro_Premedia.xlsx"
-        ruta_nueva = os.path.join(BASE_DIR, "..", "assets", "templates", archivo_nuevo)
+        ruta_nueva = os.path.join(ASSETS_DIR, "templates", archivo_nuevo)
         if not os.path.exists(ruta_nueva):
             self.var_modalidad.set(self.engine.modalidad.capitalize())
             return messagebox.showerror("Error", f"Falta el archivo: {archivo_nuevo}")

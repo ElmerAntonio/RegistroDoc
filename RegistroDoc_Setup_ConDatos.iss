@@ -6,7 +6,7 @@
 
 [Setup]
 AppName=RegistroDoc Pro (Con Datos)
-AppVersion=1.0.0
+AppVersion=5.0.0
 AppPublisher=RegistroDoc Pro - MEDUCA
 DefaultDirName={localappdata}\RegistroDocPro
 DefaultGroupName=RegistroDoc Pro
@@ -23,7 +23,7 @@ PrivilegesRequired=lowest
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; Check: IsNotUpdate
 
 [Files]
 Source: "dist\RegistroDoc.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -33,15 +33,15 @@ Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs
 Source: "package_data\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Copiar la base de datos cifrada existente al AppData local ({localappdata}\RegistroDoc\data)
-Source: "package_data\appdata\data\registro.db.enc"; DestDir: "{localappdata}\RegistroDoc\data"; Flags: ignoreversion
+Source: "package_data\appdata\data\registro.db.enc"; DestDir: "{localappdata}\RegistroDoc\data"; Flags: ignoreversion onlyifdoesntexist
 
 ; Copiar las planillas Excel activas al AppData local ({localappdata}\RegistroDoc\temp)
-Source: "package_data\appdata\temp\Registro_Premedia.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion; Check: FileExists('package_data\appdata\temp\Registro_Premedia.xlsx')
-Source: "package_data\appdata\temp\Registro_Primaria.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion; Check: FileExists('package_data\appdata\temp\Registro_Primaria.xlsx')
+Source: "package_data\appdata\temp\Registro_Premedia.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion onlyifdoesntexist; Check: FileExists('package_data\appdata\temp\Registro_Premedia.xlsx')
+Source: "package_data\appdata\temp\Registro_Primaria.xlsx"; DestDir: "{localappdata}\RegistroDoc\temp"; Flags: ignoreversion onlyifdoesntexist; Check: FileExists('package_data\appdata\temp\Registro_Primaria.xlsx')
 
 [Icons]
 Name: "{group}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"
-Name: "{userdesktop}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"; Tasks: desktopicon
+Name: "{userdesktop}\RegistroDoc Pro"; Filename: "{app}\RegistroDoc.exe"; Tasks: desktopicon; Check: IsNotUpdate
 
 [Run]
 Filename: "{app}\RegistroDoc.exe"; Description: "{cm:LaunchProgram,RegistroDoc Pro}"; Flags: nowait postinstall skipifsilent
@@ -49,9 +49,12 @@ Filename: "{app}\RegistroDoc.exe"; Description: "{cm:LaunchProgram,RegistroDoc P
 ; Registro de la aplicación para desinstalación segura y pre-carga de Cédula
 [Registry]
 Root: HKCU; Subkey: "Software\RegistroDocPro"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\RegistroDocPro"; ValueType: string; ValueName: "Cedula"; ValueData: "8-000-0000"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\RegistroDocPro"; ValueType: string; ValueName: "Cedula"; ValueData: "8-000-0000"; Flags: uninsdeletekey createvalueifdoesntexist
 
 [Code]
+var
+  PrevVersionInstalled: Boolean;
+
 // ══════════════════════════════════════════════════════════════
 //  1. VERIFICACIÓN DE SUITES OFIMÁTICAS (PRERREQUISITOS)
 // ══════════════════════════════════════════════════════════════
@@ -59,7 +62,31 @@ function InitializeSetup(): Boolean;
 var
   ExcelInstalado: Boolean;
   LibreOfficeInstalado: Boolean;
+  ExecPath1: String;
+  ExecPath2: String;
 begin
+  // 1. Detectar si hay una versión previa instalada (Chequeo robusto por ejecutables antiguos/nuevos y registro)
+  ExecPath1 := ExpandConstant('{localappdata}\RegistroDocPro\RegistroDoc.exe');
+  ExecPath2 := ExpandConstant('{localappdata}\RegistroDocPro\RegistroDocPro.exe');
+  
+  PrevVersionInstalled := FileExists(ExecPath1) or 
+                          FileExists(ExecPath2) or 
+                          RegValueExists(HKEY_CURRENT_USER, 'Software\RegistroDocPro', 'Cedula') or
+                          RegKeyExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\RegistroDoc Pro_is1') or
+                          RegKeyExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\RegistroDoc Pro (Con Datos)_is1');
+  
+  if PrevVersionInstalled then
+  begin
+    MsgBox(
+      'Se ha detectado una versión previa de RegistroDoc Pro instalada en su equipo.' + #13#10 + #13#10 +
+      'El instalador actualizará la aplicación a la nueva versión.' + #13#10 +
+      'Nota: Su base de datos local y sus planillas Excel de notas existentes NO serán modificadas.', 
+      mbInformation, 
+      MB_OK
+    );
+  end;
+
+  // 2. Verificar suites ofimáticas
   ExcelInstalado := RegKeyExists(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\EXCEL.EXE') or
                     RegKeyExists(HKEY_CURRENT_USER, 'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\EXCEL.EXE');
                     
@@ -78,6 +105,11 @@ begin
   end;
   
   Result := True;
+end;
+
+function IsNotUpdate(): Boolean;
+begin
+  Result := not PrevVersionInstalled;
 end;
 
 // ══════════════════════════════════════════════════════════════

@@ -57,12 +57,13 @@ def get_school_logo_path():
         pass
 
     # 2. Intentar obtener desde el paquete (PyInstaller fallback)
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+    import sys
+    if hasattr(sys, "_MEIPASS"):
+        internal_path = os.path.join(sys._MEIPASS, "assets", "logo.png")
+    else:
+        from config import BASE_DIR
+        internal_path = os.path.normpath(os.path.join(BASE_DIR, "..", "assets", "logo.png"))
 
-    internal_path = os.path.join(base_path, "assets", "logo.png")
     if os.path.exists(internal_path):
         return internal_path
 

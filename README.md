@@ -106,11 +106,16 @@ Estado: **90/90 passed** (cifrado, logica SQL, UI, exportacion).
 ## Compilar e Instalar
 
 ```bash
-# Ejecutable
+# Generar Ejecutable portable (.exe)
 pyinstaller RegistroDoc.spec --clean
 
-# Instalador Windows (Inno Setup)
-& "C:\...\Inno Setup 6\ISCC.exe" RegistroDoc_Setup.iss
+# Compilar Instaladores de Windows (Inno Setup)
+
+# 1. Instalador Limpio ("Sin Datos") - Instalación desde cero:
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" RegistroDoc_Setup.iss
+
+# 2. Instalador con Datos ("Con Datos") - Actualización segura / Datos preexistentes:
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" RegistroDoc_Setup_ConDatos.iss
 ```
 
 ---

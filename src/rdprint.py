@@ -32,10 +32,11 @@ def _ruta_excel():
         return ruta_appdata
 
     # Fallback a plantillas de la raíz
-    from config import BASE_DIR
+    from config import BASE_DIR, ASSETS_DIR
     raiz = os.path.join(BASE_DIR, "..")
     candidatos = [
         ruta_appdata,
+        os.path.join(ASSETS_DIR, "templates", archivo),
         os.path.join(raiz, "assets", "templates", archivo),
         os.path.join(BASE_DIR, "assets", "templates", archivo),
         os.path.join(raiz, archivo),

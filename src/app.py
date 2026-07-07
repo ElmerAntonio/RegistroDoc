@@ -6,7 +6,7 @@ try:
 except Exception:
     pass
 
-from config import BASE_DIR
+from config import BASE_DIR, ASSETS_DIR
 import ctypes
 import json
 import tkinter as tk
@@ -197,7 +197,7 @@ class MainApplication(ctk.CTkFrame):
             w.destroy()
 
         # Renderizar logo
-        logo_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
+        logo_path = os.path.join(ASSETS_DIR, "icono.png")
         if PIL_OK and os.path.exists(logo_path):
             try:
                 size = (80, 80)
@@ -448,76 +448,112 @@ class RegistroDocApp(ctk.CTk):
         self.resizable(True, True) # Permite maximizar y achicar
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # Ocultar ventana principal durante la pantalla de carga
+        self.withdraw()
 
         # Iconos de la ventana (resolución para Windows / Barra de tareas)
-        icon_path = os.path.join(BASE_DIR, "..", "assets", "icon_fixed.ico")
-        png_path = os.path.join(BASE_DIR, "..", "assets", "icono.png")
+        icon_path = os.path.join(ASSETS_DIR, "icon_fixed.ico")
+        png_path = os.path.join(ASSETS_DIR, "icono.png")
 
         if os.path.exists(icon_path):
             try:
                 self.iconbitmap(icon_path)
             except Exception:
                 pass
+        self.bind("<Configure>", self._on_window_configure)
+        self._resizing = False
+        self._resize_job = None
+        self._last_width = 1280
+        self._last_height = 720
+        self._resize_overlay = None
 
-        # Fallback multi-plataforma
-        if os.path.exists(png_path) and getattr(self, "iconphoto", None):
+        # Definir las tareas del Splash Screen (Arranque rápido e instantáneo)
+        def task_cargar_motor(sp):
+            archivo = ("Registro_Primaria.xlsx"
+                       if modalidad_inicial == "primaria"
+                       else "Registro_Premedia.xlsx")
+            ruta = os.path.join(ASSETS_DIR, "templates", archivo)
+            self.engine = DataEngine(ruta_excel=ruta, modalidad=modalidad_inicial)
+
+        def task_cargar_ui(sp):
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_rowconfigure(0, weight=1)
+            self.main_app = MainApplication(self, self.engine, app_principal=self)
+            self.main_app.grid(row=0, column=0, sticky="nsew")
+
+        def task_sincronizacion(sp):
+            self._registrar_atajos()
+            self._iniciar_inactividad_check()
+            self._iniciar_auto_backup()
             try:
-                if PIL_OK:
-                    pil = Image.open(png_path).resize((64, 64))
-                    self._icono_app = ImageTk.PhotoImage(pil)
-                    self.iconphoto(True, self._icono_app)
+                from utils.date_helpers import iniciar_sincronizacion_hora_panama
+                iniciar_sincronizacion_hora_panama()
             except Exception:
                 pass
 
-        # Motor de datos
-        archivo = ("Registro_Primaria.xlsx"
-                   if modalidad_inicial == "primaria"
-                   else "Registro_Premedia.xlsx")
-        ruta    = os.path.join(BASE_DIR, "..", "assets", "templates", archivo)
-        self.engine = DataEngine(ruta_excel=ruta, modalidad=modalidad_inicial)
+        def task_finalizar(sp):
+            self.mostrar_dashboard()
+            if sp:
+                sp.app_instance = self
 
-        # Contenedor raíz
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            # En entorno de pruebas (pytest), inicializar todo síncronamente y omitir el Splash Screen
+            task_cargar_motor(None)
+            task_cargar_ui(None)
+            task_sincronizacion(None)
+            self._precargar_un_frame(DashboardFrame)
+            self._precargar_un_frame(EstudiantesFrame)
+            self._precargar_un_frame(NotasAsistenciaFrame)
+            self._precargar_un_frame(ObservacionesFrame)
+            self._precargar_un_frame(HabitosFrame)
+            self._precargar_un_frame(ReportesYGraficosFrame)
+            self._precargar_un_frame(ImpresionFrame)
+            self._precargar_un_frame(TareasFrame)
+            self._precargar_un_frame(ReunionesFrame)
+            self._precargar_un_frame(RegistroCompletoFrame)
+            task_finalizar(None)
+        else:
+            # Iniciar la pantalla de carga transparente en el hilo principal
+            from splash import SplashScreen
+            self.splash = SplashScreen(self)
 
-        # Iniciar Aplicación
-        self.main_app = MainApplication(self, self.engine, app_principal=self)
-        self.main_app.grid(row=0, column=0, sticky="nsew")
+            loading_tasks = [
+                ("Cargando base de datos...", task_cargar_motor),
+                ("Inicializando interfaz...", task_cargar_ui),
+                ("Configurando sistema...", task_sincronizacion),
+                ("Panel de Control...", lambda sp: self._precargar_un_frame(DashboardFrame)),
+                ("Módulo de Estudiantes...", lambda sp: self._precargar_un_frame(EstudiantesFrame)),
+                ("Módulo de Calificaciones...", lambda sp: self._precargar_un_frame(NotasAsistenciaFrame)),
+                ("Módulo de Observaciones...", lambda sp: self._precargar_un_frame(ObservacionesFrame)),
+                ("Módulo de Hábitos...", lambda sp: self._precargar_un_frame(HabitosFrame)),
+                ("Reportes y Gráficos...", lambda sp: self._precargar_un_frame(ReportesYGraficosFrame)),
+                ("Módulo de Impresión...", lambda sp: self._precargar_un_frame(ImpresionFrame)),
+                ("Módulo de Tareas...", lambda sp: self._precargar_un_frame(TareasFrame)),
+                ("Minutas y Reuniones...", lambda sp: self._precargar_un_frame(ReunionesFrame)),
+                ("Registro Consolidado...", lambda sp: self._precargar_un_frame(RegistroCompletoFrame)),
+                ("Abriendo aplicación...", task_finalizar),
+            ]
 
-        # ─── ATAJOS DE TECLADO GLOBALES ───
-        self._registrar_atajos()
+            def on_splash_complete(app_inst):
+                if app_inst:
+                    try:
+                        app_inst.deiconify()
+                        
+                        # Cargar icono en barra de tareas al revelar la ventana
+                        icon_p = os.path.join(ASSETS_DIR, "icon_fixed.ico")
+                        if os.path.exists(icon_p):
+                            try:
+                                app_inst.iconbitmap(icon_p)
+                            except Exception:
+                                pass
+                                
+                        app_inst.lift()
+                        app_inst.focus_force()
+                    except Exception:
+                        pass
 
-        # ─── AUTO-BLOQUEO POR INACTIVIDAD ───
-        self._iniciar_inactividad_check()
-
-        # ─── AUTO-BACKUP CADA 30 MIN ───
-        self._iniciar_auto_backup()
-
-        # Sincronización horaria con Panamá
-        from utils.date_helpers import iniciar_sincronizacion_hora_panama
-        iniciar_sincronizacion_hora_panama()
-
-        self.mostrar_dashboard()
-
-        # ─── PRECARGA DE FRAMES EN SEGUNDO PLANO ───
-        self._precargar_frames()
-
-    def _precargar_frames(self):
-        """Pre-crea los frames más usados en segundo plano tras el arranque.
-        Usa after() escalonado para no bloquear la UI."""
-        frames_prioritarios = [
-            EstudiantesFrame,
-            NotasAsistenciaFrame,
-            ObservacionesFrame,
-            HabitosFrame,
-            ReportesYGraficosFrame,
-            ImpresionFrame,
-            TareasFrame,
-            ReunionesFrame,
-            RegistroCompletoFrame,
-        ]
-        for i, fc in enumerate(frames_prioritarios):
-            self.after(300 * (i + 1), lambda c=fc: self._precargar_un_frame(c))
+            self.splash.set_tasks(loading_tasks, on_splash_complete)
+            self.splash.iniciar()
 
     def _precargar_un_frame(self, frame_class):
         """Crea un frame y lo oculta inmediatamente."""
@@ -531,6 +567,20 @@ class RegistroDocApp(ctk.CTk):
                 self._frames[class_name] = f
             except Exception as e:
                 print(f"[!] Error precargando {class_name}: {e}")
+
+    def _mostrar_app_principal(self):
+        try:
+            self.deiconify()
+            icon_p = os.path.join(ASSETS_DIR, "icon_fixed.ico")
+            if os.path.exists(icon_p):
+                try:
+                    self.iconbitmap(icon_p)
+                except Exception:
+                    pass
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
 
     def limpiar_pantalla(self):
         for w in self.main_app.main_content_frame.winfo_children():
@@ -820,7 +870,11 @@ class RegistroDocApp(ctk.CTk):
         cfg = cargar_config_segura({})
         cedula_correcta = cfg.get("docente_cedula", "").strip()
         
-        if not cedula_correcta or cedula_ingresada == cedula_correcta:
+        import re
+        norm_ingresada = re.sub(r'[^a-zA-Z0-9]', '', cedula_ingresada).upper()
+        norm_correcta = re.sub(r'[^a-zA-Z0-9]', '', cedula_correcta).upper()
+        
+        if not cedula_correcta or norm_ingresada == norm_correcta:
             # Desbloquear
             self._bloqueado = False
             self.unbind_all("<Key>")
@@ -921,6 +975,55 @@ class RegistroDocApp(ctk.CTk):
             super().destroy()
         except Exception:
             pass
+
+    def _on_window_configure(self, event):
+        if event.widget == self:
+            w = event.width
+            h = event.height
+            if w != self._last_width or h != self._last_height:
+                self._last_width = w
+                self._last_height = h
+                self._handle_resize_start()
+
+    def _handle_resize_start(self):
+        if not self._resizing:
+            self._resizing = True
+            try:
+                # Cover the entire root window (self) directly to block black margins or layout structures
+                self._resize_overlay = ctk.CTkFrame(
+                    self,
+                    fg_color=C["fondo"],
+                    corner_radius=0
+                )
+                self._resize_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+                
+                lbl = ctk.CTkLabel(
+                    self._resize_overlay,
+                    text="⚙️ OPTIMIZANDO DISEÑO...",
+                    font=(FONT_BODY, 13, "bold"),
+                    text_color=C["texto_dim"]
+                )
+                lbl.place(relx=0.5, rely=0.5, anchor="center")
+                self._resize_overlay.lift()
+                self.update()
+            except Exception:
+                pass
+
+        if self._resize_job:
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(185, self._handle_resize_end)
+
+    def _handle_resize_end(self):
+        self._resizing = False
+        self._resize_job = None
+        if self._resize_overlay:
+            try:
+                if self._resize_overlay.winfo_exists():
+                    self._resize_overlay.destroy()
+            except Exception:
+                pass
+            self._resize_overlay = None
+            self.update()
 
 
 def iniciar_programa_principal():
