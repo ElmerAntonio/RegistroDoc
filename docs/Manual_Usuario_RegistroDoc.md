@@ -476,8 +476,7 @@ INDICE:
   8. observaciones  — historial de conducta del expediente
   9. habitos        — evaluaciones S/R/X por criterio y trimestre
   10. tareas        — recordatorios programados con fecha limite
-  11. reuniones     — actas y citaciones
-  12. auditoria     — log inmutable de todas las transacciones
+  11. auditoria     — log inmutable de todas las transacciones
 
   NOTA: Al cerrar el programa, sqlite_temp.db es eliminado
   y sobreescrito de forma segura (wiping con datos aleatorios).

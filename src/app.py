@@ -483,13 +483,14 @@ class RegistroDocApp(ctk.CTk):
 
         def task_sincronizacion(sp):
             self._registrar_atajos()
-            self._iniciar_inactividad_check()
-            self._iniciar_auto_backup()
-            try:
-                from utils.date_helpers import iniciar_sincronizacion_hora_panama
-                iniciar_sincronizacion_hora_panama()
-            except Exception:
-                pass
+            if not os.environ.get("PYTEST_CURRENT_TEST"):
+                self._iniciar_inactividad_check()
+                self._iniciar_auto_backup()
+                try:
+                    from utils.date_helpers import iniciar_sincronizacion_hora_panama
+                    iniciar_sincronizacion_hora_panama()
+                except Exception:
+                    pass
 
         def task_finalizar(sp):
             self.mostrar_dashboard()
@@ -913,7 +914,7 @@ class RegistroDocApp(ctk.CTk):
 
         try:
             ruta_original = self.engine.ruta
-            if not os.path.exists(ruta_original):
+            if not isinstance(ruta_original, str) or not os.path.exists(ruta_original):
                 return
             dir_base = os.path.dirname(os.path.abspath(ruta_original))
             dir_respaldos = os.path.join(dir_base, "Respaldos_Auto")

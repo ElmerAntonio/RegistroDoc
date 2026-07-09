@@ -251,7 +251,7 @@ Cada agente tiene un rol fijo, responsabilidades claras y entregables medibles.
 - Objetivo Mes 1: 5 docentes activados
 - Objetivo Mes 3: 20 docentes
 - Objetivo Mes 6: 50 docentes en toda la Comarca Ngäbe Buglé
-- Precio sugerido: B/. 25.00 por licencia anual
+- Precio sugerido: B/. 20.00 por licencia anual
 
 ### Calidad
 - Manual leído y comprendido por el 100% de usuarios
@@ -270,8 +270,9 @@ Cada agente tiene un rol fijo, responsabilidades claras y entregables medibles.
 
 ---
 
-*Plan elaborado por: Isabel — Asistente de Planificación Educativa y Desarrollo*  
-*Fecha: Marzo 2026 | Versión del documento: 1.0*
+*Plan elaborado por: Isabel — Asistente de Planificación Educativa y Desarrollo, en colaboración con Inteligencia Artificial (Antigravity)*  
+*Modelo de Desarrollo: Co-creación Humano-IA. El desarrollador humano lideró el diseño, realizó pruebas funcionales continuas, detectó errores y depuró la aplicación en entornos reales de Windows, mientras que el asistente de IA colaboró directamente en la escritura, refactorización de código, estructuración y cumplimiento de estándares de seguridad.*  
+*Fecha: Julio 2026 | Versión del documento: 1.1*
 
 
 ### Actualización de rddata.py (DataEngine)

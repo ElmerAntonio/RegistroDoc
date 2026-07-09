@@ -1,7 +1,7 @@
 # RegistroDoc Pro v5.0 — Sistema de Registro Académico (Panamá)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests Status](https://img.shields.io/badge/Tests-90%2F90%20Passed-brightgreen.svg)](#)
+[![Tests Status](https://img.shields.io/badge/Tests-94%2F94%20Passed-brightgreen.svg)](#)
 [![Architecture](https://img.shields.io/badge/Datos-SQL--First-orange.svg)](#)
 [![Security](https://img.shields.io/badge/Security-AES--256--GCM-darkblue.svg)](#)
 
@@ -29,7 +29,7 @@
 - Clave criptografica derivada del hardware del equipo (PBKDF2-HMAC-SHA256, 600 000 iteraciones)
 - Numeracion visual 1,2,3... — IDs internos ocultos al docente
 - Navegacion sin recarga de pagina — cache de frames en memoria
-- 90/90 tests automatizados
+- 94/94 tests automatizados
 
 ---
 
@@ -86,7 +86,7 @@ Mientras la app esta abierta la BD temporal descifrada se encuentra en:
 C:\Users\<Usuario>\AppData\Local\RegistroDoc\temp\sqlite_temp.db
 ```
 
-Tablas disponibles: `configuracion`, `grados`, `estudiantes`, `materias`, `horario`, `notas`, `asistencia`, `observaciones`, `habitos`, `tareas`, `reuniones`, `auditoria`.
+Tablas disponibles: `configuracion`, `grados`, `estudiantes`, `materias`, `horario`, `notas`, `asistencia`, `observaciones`, `habitos`, `tareas`, `auditoria`.
 
 Al cerrar la app el archivo temporal es eliminado con sobreescritura segura.
 
@@ -95,11 +95,11 @@ Al cerrar la app el archivo temporal es eliminado con sobreescritura segura.
 ## Tests Automatizados
 
 ```bash
-python -m pytest        # 90 tests
+python -m pytest        # 94 tests
 python -m pytest -q     # modo silencioso
 ```
 
-Estado: **90/90 passed** (cifrado, logica SQL, UI, exportacion).
+Estado: **94/94 passed** (cifrado, logica SQL, UI, exportacion).
 
 ---
 
@@ -131,7 +131,8 @@ pyinstaller RegistroDoc.spec --clean
 
 ---
 
-## Creditos
+## Creditos y Declaración de Co-creación
 
-- **Autor Principal:** Docente Independiente (Panama)
-- **Arquitectura SQL-First v5.0 & QA:** Antigravity AI (Google DeepMind)
+Este proyecto ha sido desarrollado éticamente bajo un modelo de **Co-creación Humano-IA**:
+- **Desarrollador Humano:** Lideró y diseñó la aplicación, ejecutó pruebas exhaustivas en sistemas reales Windows, detectó y corrigió errores funcionales, y adaptó los lineamientos oficiales de MEDUCA.
+- **Asistente de IA (Antigravity AI / Google DeepMind):** Colaboró activamente en la programación de módulos, refactorizaciones de código, hardening de seguridad y la suite de control de calidad (QA).

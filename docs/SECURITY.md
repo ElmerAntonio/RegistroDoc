@@ -8,8 +8,8 @@ Actualmente, solo proporcionamos actualizaciones de seguridad y parches de calid
 
 | Versión | Soporte de Seguridad |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| 5.0.x   | :white_check_mark: |
+| < 5.0   | :x:                |
 
 ## Reportar una Vulnerabilidad
 

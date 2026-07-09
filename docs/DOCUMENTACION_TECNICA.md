@@ -69,38 +69,47 @@ Almacena pares clave-valor de configuración persistente e integridad de la apli
 
 #### 2. Tabla: `grados`
 Define los grupos asignados al docente.
-*   **`id`** (TEXT, PRIMARY KEY): Nombre único del grado y sección (ej. "7A").
-*   **`modalidad`** (TEXT, CHECK: `modalidad IN ('primaria', 'premedia')`): Tipo de currículo oficial de MEDUCA.
+*   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT): Identificador numérico autoincremental del grado.
+*   **`nombre`** (TEXT, NOT NULL): Nombre del grado (ej: "7°").
+*   **`seccion`** (TEXT, NOT NULL): Sección/grupo del grado (ej: "A").
+*   **`modalidad`** (TEXT, NOT NULL, CHECK: `modalidad IN ('primaria', 'premedia')`): Tipo de currículo oficial de MEDUCA.
+*   *Restricción*: Clave única combinada de (`nombre`, `seccion`, `modalidad`).
 
 #### 3. Tabla: `estudiantes`
 Directorio de alumnos del salón.
-*   **`id`** (TEXT, PRIMARY KEY): Cédula o identificador interno.
-*   **`nombre`** (TEXT, NOT NULL): Nombre completo del estudiante (cifrado a nivel columna mediante AES-256 en memoria).
-*   **`cedula_cifrada`** (TEXT): Cédula cifrada para resguardar la identidad (Ley 81 de Panamá).
-*   **`sexo`** (TEXT, CHECK: `sexo IN ('M', 'F')`): Género del estudiante.
-*   **`grado_id`** (TEXT, NOT NULL): Grado al que pertenece. Vinculado por clave foránea (`FOREIGN KEY (grado_id) REFERENCES grados(id) ON DELETE CASCADE`).
+*   **`id`** (TEXT, PRIMARY KEY): Identificador único del estudiante.
+*   **`nombre`** (TEXT, NOT NULL): Nombre completo del estudiante (cifrado AES-256 en base de datos).
+*   **`cedula`** (TEXT): Cédula cifrada del estudiante (cifrado AES-256 en base de datos para cumplimiento de la Ley 81 de Panamá).
+*   **`sexo`** (TEXT): Género/sexo del estudiante.
+*   **`grado_id`** (INTEGER, NOT NULL): Grado al que pertenece. Vinculado por clave foránea (`FOREIGN KEY (grado_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE RESTRICT`).
+*   **`estado`** (TEXT, CHECK: `estado IN ('Activo', 'Retirado')`): Estado de matrícula del estudiante (por defecto 'Activo').
+*   **`fecha_retiro`** (TEXT): Fecha del retiro del estudiante si aplica.
+*   **`motivo_retiro`** (TEXT): Motivo detallado del retiro.
+*   **`nombre_acudiente`** (TEXT): Nombre completo del acudiente.
 
 #### 4. Tabla: `materias`
 Asignaturas impartidas por el docente.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
 *   **`nombre`** (TEXT, NOT NULL): Nombre de la asignatura (ej: "Español").
-*   **`grado_id`** (TEXT, NOT NULL): Grado asignado. Vinculado por clave foránea (`FOREIGN KEY (grado_id) REFERENCES grados(id) ON DELETE CASCADE`).
+*   **`grado_id`** (INTEGER, NOT NULL): Identificador del grado asociado. Vinculado por clave foránea (`FOREIGN KEY (grado_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE CASCADE`).
 
 #### 5. Tabla: `horario`
 Configuración del planificador de horario semanal de clases.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`dia`** (TEXT, CHECK: `dia IN ('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes')`): Día de la semana.
-*   **`hora`** (TEXT, NOT NULL): Bloque horario (ej: "07:00 - 07:40").
-*   **`materia_id`** (INTEGER, NOT NULL): Clave foránea que referencia a `materias(id)`.
-*   **`grado_id`** (TEXT, NOT NULL): Clave foránea que referencia a `grados(id)`.
+*   **`bloque_orden`** (INTEGER, NOT NULL DEFAULT 0): Orden cronológico del bloque de clase en el día.
+*   **`dia`** (TEXT, NOT NULL, CHECK: `dia IN ('lunes', 'martes', 'miercoles', 'jueves', 'viernes')`): Día de la semana en minúsculas y sin acentos.
+*   **`bloque_hora`** (TEXT, NOT NULL): Rango horario del bloque (ej: "07:00 - 07:40").
+*   **`materia_texto`** (TEXT DEFAULT ''): Texto descriptivo libre de la materia.
+*   **`materia_id`** (INTEGER): Identificador de la materia. Vinculado por clave foránea (`FOREIGN KEY (materia_id) REFERENCES materias(id) ON UPDATE CASCADE ON DELETE SET NULL`).
+*   **`grado_id`** (INTEGER): Identificador del grado. Vinculado por clave foránea (`FOREIGN KEY (grado_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE SET NULL`).
 
 #### 6. Tabla: `notas`
 Almacenamiento de todas las calificaciones de actividades académicas.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
-*   **`materia_id`** (INTEGER, NOT NULL): Clave foránea que referencia a `materias(id)`.
-*   **`trimestre`** (INTEGER, CHECK: `trimestre IN (1, 2, 3)`): Trimestre lectivo.
-*   **`tipo`** (TEXT, CHECK: `tipo IN ('Diaria / Parcial', 'Apreciación', 'Examen')`): Tipo de evaluación según MEDUCA.
+*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE`.
+*   **`materia_id`** (INTEGER, NOT NULL): Clave foránea que referencia a `materias(id) ON UPDATE CASCADE ON DELETE CASCADE`.
+*   **`trimestre`** (INTEGER, NOT NULL, CHECK: `trimestre IN (1, 2, 3)`): Trimestre lectivo.
+*   **`tipo`** (TEXT, NOT NULL, CHECK: `tipo IN ('Diaria / Parcial', 'Apreciación', 'Examen')`): Tipo de evaluación según MEDUCA.
 *   **`descripcion`** (TEXT, NOT NULL): Título o descripción de la tarea (ej: "Taller de verbos").
 *   **`valor`** (REAL, CHECK: `valor >= 1.0 AND valor <= 5.0`): Nota final obtenida.
 *   **`puntos_obtenidos`** (REAL): Puntos reales obtenidos por el alumno.
@@ -110,40 +119,36 @@ Almacenamiento de todas las calificaciones de actividades académicas.
 #### 7. Tabla: `asistencia`
 Control de ausencias y tardanzas.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
+*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE`.
 *   **`fecha`** (TEXT, NOT NULL): Fecha registrada en formato "YYYY-MM-DD".
-*   **`estado`** (TEXT, CHECK: `estado IN ('.', '-', 'T', 'E')`): Estado de la asistencia en base a la simbología oficial (. = Presente, - = Ausente, T = Tardanza, E = Excusa).
+*   **`estado`** (TEXT, NOT NULL, CHECK: `estado IN ('.', '-', 'T', 'E')`): Estado de la asistencia en base a la simbología oficial (. = Presente, - = Ausente, T = Tardanza, E = Excusa).
+*   **`trimestre`** (INTEGER): Trimestre lectivo correspondiente.
 *   **`motivo`** (TEXT): Detalle o justificación de la ausencia/tardanza.
-*   **`trimestre`** (TEXT, CHECK: `trimestre IN ('Trimestre 1', 'Trimestre 2', 'Trimestre 3')`): Trimestre escolar correspondiente a la toma de asistencia.
 
 #### 8. Tabla: `observaciones`
 Registro de bitácoras de conducta y méritos.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
-*   **`fecha`** (TEXT, NOT NULL): Fecha en formato "YYYY-MM-DD".
-*   **`categoria`** (TEXT, CHECK: `categoria IN ('Conducta', 'Académico', 'Citación', 'Mérito')`): Categoría del expediente.
-*   **`texto`** (TEXT, NOT NULL): Detalle y descripción del evento escolar.
+*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE`.
+*   **`trimestre`** (INTEGER, NOT NULL, CHECK: `trimestre IN (1, 2, 3)`): Trimestre escolar correspondiente a la observación.
+*   **`comentario`** (TEXT, NOT NULL): Contenido detallado del expediente u observación.
 
 #### 9. Tabla: `habitos`
 Evaluación periódica de hábitos de estudio y actitudes personales.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id)`.
-*   **`trimestre`** (INTEGER, CHECK: `trimestre IN (1, 2, 3)`): Trimestre académico.
-*   **`criterio`** (TEXT, NOT NULL): Nombre completo del criterio de hábitos evaluado.
-*   **`frecuencia`** (TEXT, CHECK: `frecuencia IN ('Diario', 'Semanal', 'Mensual')`): Frecuencia de la evaluación de hábitos.
-*   **`periodo`** (TEXT, NOT NULL): Identificador del período de evaluación correspondiente a la frecuencia (ej: "Día 1", "Semana 3", "Mes 2").
-*   **`valor`** (TEXT, CHECK: `valor IN ('S', 'R', 'X')`): Evaluación final (S = Satisfactorio, R = Regular, X = No Satisface).
-*   **`fecha`** (TEXT, NOT NULL): Fecha de registro en formato "YYYY-MM-DD".
+*   **`estudiante_id`** (TEXT, NOT NULL): Clave foránea que referencia a `estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE`.
+*   **`trimestre`** (INTEGER, NOT NULL, CHECK: `trimestre IN (1, 2, 3)`): Trimestre académico.
+*   **`criterio_codigo`** (TEXT, NOT NULL): Identificador o código del criterio evaluado.
+*   **`nota`** (TEXT, NOT NULL, CHECK: `nota IN ('S', 'R', 'X', '-')`): Calificación de hábitos (S = Satisfactorio, R = Regular, X = No Satisface, - = Sin evaluar).
+*   **`frecuencia`** (TEXT DEFAULT 'Trimestral'): Frecuencia de la evaluación.
+*   **`periodo`** (TEXT DEFAULT ''): Período de evaluación correspondiente.
 
 #### 10. Tabla: `tareas`
 Control y recordatorio de evaluaciones planificadas.
 *   **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT).
-*   **`titulo`** (TEXT, NOT NULL): Título descriptivo de la tarea pendiente.
-*   **`grado_id`** (TEXT, NOT NULL): Clave foránea que referencia a `grados(id)`.
-*   **`materia_id`** (INTEGER, NOT NULL): Clave foránea que referencia a `materias(id)`.
-*   **`tipo`** (TEXT): Tipo de evaluación.
-*   **`fecha_limite`** (TEXT, NOT NULL): Formato "DD-MM-YYYY".
-*   **`completada`** (INTEGER, CHECK: `completada IN (0, 1)`): Estado de finalización.
+*   **`descripcion`** (TEXT, NOT NULL): Descripción detallada del recordatorio o tarea programada.
+*   **`fecha_limite`** (TEXT, NOT NULL): Fecha de entrega planificada.
+*   **`estado`** (TEXT, CHECK: `estado IN ('Pendiente', 'Completada')` DEFAULT 'Pendiente'): Estado de finalización.
+*   **`materia_id`** (INTEGER): Clave foránea que referencia a `materias(id) ON UPDATE CASCADE ON DELETE CASCADE`.
 
 #### 11. Tabla: `auditoria`
 Log inmutable para cumplir con estándares de trazabilidad y no repudio.
@@ -167,7 +172,7 @@ El sistema integra un diseño de **Defensa en Profundidad** alineado con los est
     *   Se genera de forma dinámica en tiempo de ejecución extrayendo la **huella digital del hardware** del dispositivo (combinación del número de serie de la placa madre y procesador del equipo local).
     *   La huella se procesa usando **PBKDF2** con **HMAC-SHA256** utilizando **600,000 iteraciones** y una sal fija única.
 3.  **Cifrado a Nivel Columna en Memoria (Doble Capa)**:
-    *   Para mitigar ataques de volcado de memoria (Memory Dumping), los campos de `nombre` y `cedula_cifrada` se encriptan a nivel de base de datos SQL con una sub-clave AES-256 secundaria enlazada estrictamente al identificador del proceso de la aplicación (`PID`).
+    *   Para mitigar ataques de volcado de memoria (Memory Dumping), los campos de `nombre` y `cedula` se encriptan a nivel de base de datos SQL con una sub-clave AES-256 secundaria enlazada estrictamente al identificador del proceso de la aplicación (`PID`).
     *   Al cerrarse el programa, se realiza una sobreescritura aleatoria (Wiping) del archivo temporal en memoria/disco virtual para evitar su recuperación física.
 
 ### B. Módulo Anti-Análisis y Anti-IA (`src/anti_analysis.py`)
@@ -200,3 +205,11 @@ El sistema integra un diseño de **Defensa en Profundidad** alineado con los est
 | **Trazabilidad (No repudio)** | Tabla `auditoria` automatizada e inmutable con marcas de tiempo locales. | `tests/test_rdsql.py` (triggers de auditoría) |
 | **Comportamiento Temporal** | Acceso en caliente (hot-data) a través de SQLite en lugar de persistencia directa en hojas Excel. | `tests/test_perf_asistencia.py` y `tests/test_perf_db.py` |
 | **Aptitud para Pruebas (Testability)**| Aislamiento completo de archivos físicos de prueba usando el fixture `tmp_path` de pytest. | Toda la suite ejecuta de manera aislada en entornos temporales dinámicos. |
+
+---
+
+## 4. Declaración de Co-creación y Ética de Desarrollo
+
+Este software ha sido desarrollado bajo un modelo de **Co-creación Humano-IA**:
+* **Desarrollador Humano:** Lideró el diseño de la aplicación, ejecutó pruebas exhaustivas y continuas en entornos de producción Windows, detectó errores de flujo y de negocio, y modificó los parámetros del sistema para asegurar su aplicabilidad real.
+* **Asistente de IA (Antigravity):** Ejecutó tareas guiadas de codificación, refactorización, optimización de consultas SQL, robustecimiento criptográfico y desarrollo de la suite de pruebas automatizadas.
