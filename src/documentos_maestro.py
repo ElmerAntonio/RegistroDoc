@@ -203,13 +203,20 @@ def generar_nota_acudiente(datos):
     set_cell_width(c_doc_lbl, 3.25)
     set_cell_width(c_acu_lbl, 3.25)
     
-    _crear_parrafo_celda(c_doc_lbl, f"Firma del Docente\n{datos.get('docente_nombre', '')}", centrar=True, tam=9)
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    docente = datos.get('docente_nombre') or cfg.get("docente_nombre", "")
+    cedula = cfg.get("docente_cedula", "")
+
+    _crear_parrafo_celda(c_doc_lbl, f"Firma del Docente\n{docente}\nCédula: {cedula}", centrar=True, tam=9)
     _crear_parrafo_celda(c_acu_lbl, "Firma del Acudiente\nCédula: _______________________", centrar=True, tam=9)
 
     # Carpeta
-    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes")
+    os.makedirs(carpeta, exist_ok=True)
         
     nombre_seguro = datos.get("alumno", "Comunicado").replace(" ", "_")
     fecha_str = datos.get("fecha", datetime.datetime.now().strftime("%d-%m-%Y"))
@@ -228,6 +235,12 @@ def generar_informe_calificaciones(datos):
     """
     doc = Document()
     
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    docente = datos.get("docente_nombre") or cfg.get("docente_nombre", "")
+    cedula_docente = cfg.get("docente_cedula", "")
+    docente_str = f"{docente} (Céd. {cedula_docente})" if cedula_docente else docente
+
     # Márgenes de 1 pulgada
     for section in doc.sections:
         section.top_margin = Inches(1.0)
@@ -259,7 +272,7 @@ def generar_informe_calificaciones(datos):
     datos_campos = [
         [("Estudiante:", datos.get("alumno", "")), ("Cédula:", datos.get("cedula", "N/A"))],
         [("Grado/Grupo:", datos.get("grado", "")), ("Año Lectivo:", datos.get("ano_lectivo", ""))],
-        [("Docente:", datos.get("docente_nombre", "")), ("Fecha Emisión:", datos.get("fecha", ""))],
+        [("Docente:", docente_str), ("Fecha Emisión:", datos.get("fecha", ""))],
         [("Centro Educativo:", datos.get("escuela_nombre", "")), ("Estado Final:", datos.get("estado_final", "EN PROCESO"))]
     ]
     
@@ -429,7 +442,7 @@ def generar_informe_calificaciones(datos):
     set_cell_width(c_doc_lbl, 3.25)
     set_cell_width(c_dir_lbl, 3.25)
     
-    _crear_parrafo_celda(c_doc_lbl, f"Firma del Docente\n{datos.get('docente_nombre', '')}", centrar=True, tam=9.5)
+    _crear_parrafo_celda(c_doc_lbl, f"Firma del Docente\n{docente}\nCédula: {cedula_docente}", centrar=True, tam=9.5)
     _crear_parrafo_celda(c_dir_lbl, "Firma de la Dirección\nCentro Educativo", centrar=True, tam=9.5)
 
     # Footer y numeración
@@ -441,9 +454,11 @@ def generar_informe_calificaciones(datos):
     setup_footer_page_numbers(doc)
 
     # Carpeta
-    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes")
+    os.makedirs(carpeta, exist_ok=True)
         
     nombre_seguro = datos.get("alumno", "Estudiante").replace(" ", "_")
     ruta = os.path.join(carpeta, f"Informe_Calificaciones_{nombre_seguro}.docx")
@@ -457,6 +472,11 @@ def generar_lista_clase(datos):
     datos: dict con claves:
         - grado, docente_nombre, escuela_nombre, ano_lectivo, estudiantes (lista de dicts con 'id', 'nombre', 'cedula')
     """
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    docente = datos.get("docente_nombre") or cfg.get("docente_nombre", "")
+    cedula_docente = cfg.get("docente_cedula", "")
+
     doc = Document()
     
     # Márgenes de 0.6 pulgadas
@@ -481,7 +501,7 @@ def generar_lista_clase(datos):
     
     p_info = doc.add_paragraph()
     p_info.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_info = p_info.add_run(f"Docente: {datos.get('docente_nombre', '')}   |   Año Lectivo: {datos.get('ano_lectivo', '')}")
+    run_info = p_info.add_run(f"Docente: {docente} (Cédula: {cedula_docente})   |   Año Lectivo: {datos.get('ano_lectivo', '')}")
     run_info.font.size = Pt(9.5)
     run_info.font.name = "Arial"
     
@@ -555,9 +575,11 @@ def generar_lista_clase(datos):
     setup_footer_page_numbers(doc)
 
     # Carpeta
-    carpeta = os.path.join(BASE_DIR, "..", "Documentos")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Documentos")
+    os.makedirs(carpeta, exist_ok=True)
         
     grado_str = datos.get("grado", "Grado").replace("°", "")
     ruta = os.path.join(carpeta, f"Lista_Clase_{grado_str}.docx")
@@ -569,9 +591,12 @@ def generar_citacion_txt(datos):
     """
     Genera una citación estructurada en texto plano (.txt) para Notepad (Tarea 20).
     """
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
     escuela = datos.get("escuela_nombre", "Ministerio de Educación")
     fecha = datos.get("fecha", datetime.datetime.now().strftime("%d-%m-%Y"))
-    docente = datos.get("docente_nombre", "Docente")
+    docente = datos.get("docente_nombre") or cfg.get("docente_nombre", "Docente")
+    cedula_docente = cfg.get("docente_cedula", "")
     ano = datos.get("ano_lectivo", "2026")
     alumno = datos.get("alumno", "Estudiante")
     grado = datos.get("grado", "")
@@ -586,7 +611,7 @@ def generar_citacion_txt(datos):
 
 Fecha: {fecha}
 Centro Educativo: {escuela}
-Docente: {docente}
+Docente: {docente} (Cédula: {cedula_docente})
 Año Lectivo: {ano}
 
 Estimado(a) Acudiente de: {alumno}
@@ -616,16 +641,18 @@ Atentamente,
 
 
 __________________________________       __________________________________
-     Firma del Docente                        Firma del Acudiente
-                                              Cédula: _____________________
+     Firma del Docente ({docente})            Firma del Acudiente
+     Cédula: {cedula_docente}                  Cédula: _____________________
 
 ========================================================================
                  "La educación es el camino al éxito"
 ========================================================================
 """
-    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "Citaciones")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta, exist_ok=True)
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes", "Citaciones")
+    os.makedirs(carpeta, exist_ok=True)
         
     nombre_seguro = alumno.replace(" ", "_")
     ruta_txt = os.path.join(carpeta, f"Citacion_{nombre_seguro}_{fecha.replace('-', '_')}.txt")
@@ -771,9 +798,14 @@ def generar_expediente_retiro(datos: dict) -> str:
     # ── Firmas ────────────────────────────────────────────────────────────
     _encabezado_seccion("V. FIRMAS")
     doc.add_paragraph()
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    docente = datos.get("docente_nombre") or cfg.get("docente_nombre", "")
+    cedula_docente = cfg.get("docente_cedula", "")
+
     p_f = doc.add_paragraph()
-    p_f.add_run("Docente a cargo: ").bold = True
-    p_f.add_run("_________________________________    ")
+    p_f.add_run(f"Docente a cargo: {docente} (Cédula: {cedula_docente})\n").bold = True
+    p_f.add_run("Firma: _________________________________    ")
     p_f.add_run("Fecha: ").bold = True
     p_f.add_run("_____________")
 
@@ -798,7 +830,10 @@ def generar_expediente_retiro(datos: dict) -> str:
         pass
 
     # ── Guardar ───────────────────────────────────────────────────────────
-    carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "Retiros")
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes", "Retiros")
     os.makedirs(carpeta, exist_ok=True)
     nombre_seguro = nombre.replace(" ", "_").replace(",", "")
     ruta = os.path.join(carpeta, f"Expediente_Retiro_{nombre_seguro}_{hoy.replace('/', '-')}.docx")

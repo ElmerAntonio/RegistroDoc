@@ -260,8 +260,78 @@ class DataEngine:
                             (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
                         )
 
+                    # Si no tiene notas en la BD, importar notas desde Excel para este grado (Autocuración)
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM notas n 
+                        JOIN materias m ON n.materia_id = m.id 
+                        WHERE m.grado_id = ?;
+                    """, (grado_id,))
+                    tiene_notas_grado = cursor.fetchone()[0] > 0
+                    
+                    if not tiene_notas_grado:
+                        materias = self.obtener_materias_por_grado(g, wb=self._wb_cache)
+                        for mat in materias:
+                            if mat == "Sin materias registradas":
+                                continue
+                            cursor.execute(
+                                "INSERT OR IGNORE INTO materias (nombre, grado_id) VALUES (?, ?);",
+                                (mat, grado_id)
+                            )
+                            self.db_conn.commit()
+                            
+                            cursor.execute(
+                                "SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;",
+                                (mat, grado_id)
+                            )
+                            materia_id = cursor.fetchone()[0]
+                            
+                            for trim in (1, 2, 3):
+                                trim_str = f"Trimestre {trim}"
+                                for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
+                                    descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo, wb=self._wb_cache)
+                                    if not descripciones:
+                                        continue
+                                    
+                                    wb = self._wb_cache
+                                    nombre_hoja = self._encontrar_hoja_prom(wb, g, mat)
+                                    if not nombre_hoja:
+                                        continue
+                                    ws = wb[nombre_hoja]
+                                    rango = self._obtener_rango_columnas(ws, trim_str, tipo)
+                                    if rango == (None, None):
+                                        continue
+                                    
+                                    col_inicio, col_fin = rango
+                                    for c in range(col_inicio, col_fin + 1):
+                                        val_desc = ws.cell(row=self.fila_desc, column=c).value
+                                        if not val_desc:
+                                            continue
+                                        
+                                        fecha_val = ws.cell(row=4, column=c).value or "01-01"
+                                        desc_limpia = str(val_desc).replace('\n', ' ').strip()
+                                        
+                                        for est in estudiantes:
+                                            fila_excel = 4 + (int(est["id"]) % 100)
+                                            val_nota = ws.cell(row=fila_excel, column=c).value
+                                            if val_nota is not None:
+                                                try:
+                                                    cursor.execute(
+                                                        """INSERT OR REPLACE INTO notas 
+                                                        (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha) 
+                                                        VALUES (?, ?, ?, ?, ?, ?, ?);""",
+                                                        (str(est["id"]), materia_id, trim, tipo, desc_limpia, float(val_nota), str(fecha_val))
+                                                    )
+                                                except Exception:
+                                                    pass
+
                     # Si no tiene asistencia en la BD, importar asistencia desde Excel para este grado (Autocuración)
-                    if not tiene_asistencia:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM asistencia 
+                        WHERE estudiante_id IN (SELECT id FROM estudiantes WHERE grado_id = ?);
+                    """, (grado_id,))
+                    tiene_asistencia_grado = cursor.fetchone()[0] > 0
+                    
+                    if not tiene_asistencia_grado:
                         for trim in (1, 2, 3):
                             trim_str = f"Trimestre {trim}"
                             fechas = self.obtener_fechas_asistencia(g, trim_str, wb=self._wb_cache)
@@ -1782,7 +1852,7 @@ class DataEngine:
             materia_id = row_m[0]
             
             # Si el trimestre es "Anual" o "FINAL" o "PROMEDIO"
-            if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+            if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO", "TODOS", "TODOS LOS TRIMESTRES"]:
                 for est_id, est_nombre in estudiantes:
                     trim_notas = []
                     for t in [1, 2, 3]:
@@ -1823,7 +1893,7 @@ class DataEngine:
                 norm_notas = []
                 for m_id in norm_mats:
                     prom_m = None
-                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO", "TODOS", "TODOS LOS TRIMESTRES"]:
                         trim_vals = []
                         for t in [1, 2, 3]:
                             p_t = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, t)
@@ -1846,7 +1916,7 @@ class DataEngine:
                 tech_notas = []
                 for m_id in tech_mats:
                     prom_m = None
-                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO"]:
+                    if str(trimestre).upper() in ["ANUAL", "FINAL", "PROMEDIO", "TODOS", "TODOS LOS TRIMESTRES"]:
                         trim_vals = []
                         for t in [1, 2, 3]:
                             p_t = self._calcular_promedio_trimestre_materia_sql(est_id, m_id, t)
@@ -2005,14 +2075,10 @@ class DataEngine:
             if not estudiantes_raw:
                 return datos
 
-            # Determinar trimestres a consultar
-            if trimestre == "Todos":
-                trim_nums = [1, 2, 3]
-            else:
-                try:
-                    trim_nums = [int(trimestre.replace("Trimestre ", ""))]
-                except (ValueError, AttributeError):
-                    trim_nums = [1, 2, 3]
+            # Obtener los promedios reales calculados correctamente por materia y área
+            # Si trimestre es "Todos", pasamos "Anual"
+            trim_query = "Anual" if trimestre == "Todos" else trimestre
+            promedios_reales = self.obtener_promedios_reales(grado, None, trim_query)
 
             # Calcular promedio por estudiante consultando notas en SQL
             for est_id, est_nombre, est_cedula in estudiantes_raw:
@@ -2020,14 +2086,8 @@ class DataEngine:
                 nom = self.db_manager.desencriptar_campo(est_nombre) if est_nombre else ""
                 ced = self.db_manager.desencriptar_campo(est_cedula) if est_cedula else ""
 
-                # Promedio de notas en el/los trimestres solicitados
-                placeholders = ",".join("?" for _ in trim_nums)
-                cursor.execute(
-                    f"SELECT AVG(valor) FROM notas WHERE estudiante_id = ? AND trimestre IN ({placeholders}) AND valor IS NOT NULL;",
-                    (str(est_id), *trim_nums)
-                )
-                prom_row = cursor.fetchone()
-                prom_val = prom_row[0] if prom_row and prom_row[0] is not None else None
+                # Obtener el promedio real de la estructura
+                prom_val = promedios_reales.get(nom, None)
 
                 if prom_val is not None:
                     prom_str = f"{prom_val:.2f}"
@@ -2130,16 +2190,14 @@ class DataEngine:
 
             # 2. Alumnos en riesgo (promedio < 3.0 en trimestre actual)
             try:
-                trim_num = int(trimestre_actual.replace("Trimestre ", ""))
-                cursor.execute("""
-                    SELECT e.id, AVG(n.valor) as prom
-                    FROM estudiantes e
-                    JOIN notas n ON n.estudiante_id = e.id
-                    WHERE e.estado = 'Activo' AND n.trimestre = ? AND n.valor IS NOT NULL
-                    GROUP BY e.id
-                    HAVING prom < 3.0;
-                """, (trim_num,))
-                riesgo = len(cursor.fetchall())
+                cursor.execute("SELECT nombre FROM grados WHERE modalidad = ?;", (self.modalidad,))
+                grados_activos = [r[0] for r in cursor.fetchall()]
+                riesgo = 0
+                for g in grados_activos:
+                    proms = self.obtener_promedios_reales(g, None, trimestre_actual)
+                    for p in proms.values():
+                        if p is not None and p < 3.0:
+                            riesgo += 1
             except Exception:
                 riesgo = 0
 
@@ -2241,6 +2299,9 @@ class DataEngine:
         return col_inicio, col_fin
 
     def guardar_columna_notas(self, grado, materia, trimestre, tipo_nota, fecha, desc, dic_notas):
+        from utils.date_helpers import normalizar_fecha_a_mm_dd
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        fecha = normalizar_fecha_a_mm_dd(fecha, trimestre=trim_num)
         if os.path.basename(self.ruta).startswith("Registro_"):
             if not self._wb_cache:
                 self._verificar_y_recargar_cache()
@@ -2268,7 +2329,6 @@ class DataEngine:
                 return False, "Materia no encontrada."
             materia_id = row_m[0]
             
-            trim_num = int(str(trimestre).replace("Trimestre ", ""))
             cursor.execute("""
                 SELECT COUNT(DISTINCT descripcion) FROM notas
                 WHERE materia_id = ? AND trimestre = ? AND tipo = ?;
@@ -2452,7 +2512,7 @@ class DataEngine:
             "fecha": fecha_nota or datetime.date.today().strftime("%d-%m")
         }
 
-    def actualizar_notas_existentes(self, grado, materia, columna, dic_notas):
+    def actualizar_notas_existentes(self, grado, materia, columna, dic_notas, nueva_fecha=None):
         if os.path.basename(self.ruta).startswith("Registro_"):
             cursor = self.db_conn.cursor()
             cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
@@ -2483,6 +2543,19 @@ class DataEngine:
             if not desc_limpia:
                 return False
                 
+            # Calcular nueva fecha y descripción si aplica
+            nueva_desc = desc_limpia
+            fecha_final = None
+            if nueva_fecha:
+                from utils.date_helpers import normalizar_fecha_a_mm_dd
+                cursor.execute("SELECT trimestre FROM notas WHERE materia_id = ? AND descripcion = ? LIMIT 1;", (materia_id, desc_limpia))
+                r_trim = cursor.fetchone()
+                trim_val = r_trim[0] if r_trim else 1
+                fecha_final = normalizar_fecha_a_mm_dd(nueva_fecha, trimestre=trim_val)
+                if desc_limpia.startswith("Examen "):
+                    import re
+                    nueva_desc = re.sub(r'\([\d\-/\s]+\)$', f'({fecha_final})', desc_limpia)
+            
             for id_estudiante, val_nota in dic_notas.items():
                 cursor.execute(
                     """SELECT id FROM notas WHERE estudiante_id = ? AND materia_id = ? AND descripcion = ?;""",
@@ -2498,8 +2571,15 @@ class DataEngine:
                     cursor.execute(
                         """INSERT INTO notas (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha)
                         VALUES (?, ?, 1, 'Diaria / Parcial', ?, ?, ?);""",
-                        (str(id_estudiante), materia_id, desc_limpia, float(val_nota) if val_nota is not None else None, datetime.date.today().strftime("%d-%m"))
+                        (str(id_estudiante), materia_id, desc_limpia, float(val_nota) if val_nota is not None else None, fecha_final or datetime.date.today().strftime("%m-%d"))
                     )
+            
+            if fecha_final:
+                cursor.execute(
+                    "UPDATE notas SET fecha = ?, descripcion = ? WHERE materia_id = ? AND descripcion = ?;",
+                    (str(fecha_final), nueva_desc, materia_id, desc_limpia)
+                )
+                
             self.db_conn.commit()
             self._schedule_save()
             self.actualizar_resumen(grado)
@@ -2514,6 +2594,27 @@ class DataEngine:
             wb.close()
             return False
         ws = wb[nombre_hoja]
+        
+        # En caso de nueva_fecha, actualizar en Excel antes de procesar
+        if nueva_fecha:
+            from utils.date_helpers import normalizar_fecha_a_mm_dd
+            trim_val = 1
+            for t_idx in (1, 2, 3):
+                for t_type in ("Diaria / Parcial", "Apreciación", "Examen"):
+                    r_col = self._obtener_rango_columnas(ws, f"Trimestre {t_idx}", t_type)
+                    if r_col[0] is not None and r_col[0] <= columna <= r_col[1]:
+                        trim_val = t_idx
+                        break
+            nueva_fecha_normalized = normalizar_fecha_a_mm_dd(nueva_fecha, trimestre=trim_val)
+            ws.cell(row=4, column=columna).value = nueva_fecha_normalized
+            desc_val = ws.cell(row=self.fila_desc, column=columna).value
+            if desc_val:
+                desc_str = str(desc_val).replace('\n', ' ').strip()
+                if desc_str.startswith("Examen "):
+                    import re
+                    nueva_desc_str = re.sub(r'\([\d\-/\s]+\)$', f'({nueva_fecha_normalized})', desc_str)
+                    ws.cell(row=self.fila_desc, column=columna).value = nueva_desc_str
+                    
         for id_estudiante, nota in dic_notas.items():
             fila_excel = 4 + (int(id_estudiante) % 100)
             try: ws.cell(row=fila_excel, column=columna).value = nota
@@ -2567,6 +2668,7 @@ class DataEngine:
 
     def obtener_fechas_asistencia(self, grado, trimestre, wb=None):
         """Retorna las fechas distintas de asistencia para un grado y trimestre."""
+        from utils.date_helpers import parse_fecha_segura
         if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
             if wb is None:
                 self._verificar_y_recargar_cache()
@@ -2588,6 +2690,7 @@ class DataEngine:
                 if val:
                     fechas.append(str(val).strip())
             if should_close: wb.close()
+            fechas.sort(key=parse_fecha_segura)
             return fechas
 
         cursor = self.db_conn.cursor()
@@ -2601,10 +2704,12 @@ class DataEngine:
         cursor.execute("""
             SELECT DISTINCT fecha FROM asistencia a
             JOIN estudiantes e ON a.estudiante_id = e.id
-            WHERE e.grado_id = ? AND a.trimestre = ? ORDER BY fecha;
+            WHERE e.grado_id = ? AND a.trimestre = ?;
         """, (grado_id, trim_num))
         rows = cursor.fetchall()
-        return [r[0] for r in rows]
+        fechas = [r[0] for r in rows]
+        fechas.sort(key=parse_fecha_segura)
+        return fechas
 
     def buscar_asistencia_existente(self, grado, trimestre, fecha, wb=None):
         if wb is not None or not os.path.basename(self.ruta).startswith("Registro_"):
@@ -2668,6 +2773,9 @@ class DataEngine:
         return {"columna": 999, "asistencia": asistencia}
 
     def guardar_asistencia(self, grado, trimestre, fecha, dic_asistencia):
+        from utils.date_helpers import normalizar_fecha_a_mm_dd
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        fecha = normalizar_fecha_a_mm_dd(fecha, trimestre=trim_num)
         if os.path.basename(self.ruta).startswith("Registro_"):
             try:
                 cursor = self.db_conn.cursor()
@@ -2679,8 +2787,6 @@ class DataEngine:
                 
                 cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
                 student_ids = [r[0] for r in cursor.fetchall()]
-                
-                trim_num = int(str(trimestre).replace("Trimestre ", ""))
                 
                 for id_estudiante, datos in dic_asistencia.items():
                     try:
@@ -2746,7 +2852,7 @@ class DataEngine:
         self.actualizar_resumen(grado)
         return True, ""
 
-    def actualizar_asistencia(self, grado, trimestre, columna, dic_asistencia):
+    def actualizar_asistencia(self, grado, trimestre, columna, dic_asistencia, nueva_fecha=None):
         if os.path.basename(self.ruta).startswith("Registro_"):
             try:
                 cursor = self.db_conn.cursor()
@@ -2777,6 +2883,17 @@ class DataEngine:
                 
                 if not fecha:
                     return False
+                
+                fecha_final = fecha
+                if nueva_fecha:
+                    from utils.date_helpers import normalizar_fecha_a_mm_dd
+                    fecha_final = normalizar_fecha_a_mm_dd(nueva_fecha, trimestre=trim_num)
+                    if fecha_final != fecha:
+                        cursor.execute("""
+                            DELETE FROM asistencia WHERE estudiante_id IN (
+                                SELECT id FROM estudiantes WHERE grado_id = ?
+                            ) AND fecha = ? AND trimestre = ?;
+                        """, (grado_id, str(fecha), trim_num))
                     
                 for id_estudiante, datos in dic_asistencia.items():
                     try:
@@ -2785,7 +2902,7 @@ class DataEngine:
                         cursor.execute(
                             """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
                             VALUES (?, ?, ?, ?);""",
-                            (str(est_id), str(fecha), datos["estado"], trim_num)
+                            (str(est_id), str(fecha_final), datos["estado"], trim_num)
                         )
                     except (IndexError, ValueError) as e:
                         logger.error(f"Error mapping student in actualizar_asistencia: {e}")
@@ -2807,7 +2924,16 @@ class DataEngine:
         mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
         fila_fechas = mapa_trimestres.get(trimestre, 2)
         fuente_meduca = Font(name='Calibri', size=9, bold=True)
-        fecha = ws.cell(row=fila_fechas, column=columna).value or "01-01"
+        
+        old_fecha = ws.cell(row=fila_fechas, column=columna).value
+        fecha_final = old_fecha or "01-01"
+        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+        
+        if nueva_fecha:
+            from utils.date_helpers import normalizar_fecha_a_mm_dd
+            fecha_final = normalizar_fecha_a_mm_dd(nueva_fecha, trimestre=trim_num)
+            ws.cell(row=fila_fechas, column=columna).value = fecha_final
+            
         for id_estudiante, datos in dic_asistencia.items():
             fila_excel = fila_fechas + (int(id_estudiante) % 100)
             celda = ws.cell(row=fila_excel, column=columna)
@@ -2816,15 +2942,25 @@ class DataEngine:
 
         try:
             cursor = self.db_conn.cursor()
-            trim_num = int(str(trimestre).replace("Trimestre ", ""))
-            for id_estudiante, datos in dic_asistencia.items():
-                cursor.execute(
-                    """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
-                    VALUES (?, ?, ?, ?);""",
-                    (str(id_estudiante), str(fecha), datos["estado"], trim_num)
-                )
-            self.db_conn.commit()
-            self._schedule_save()
+            cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (grado, self.modalidad))
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                if nueva_fecha and old_fecha and str(old_fecha) != str(fecha_final):
+                    cursor.execute("""
+                        DELETE FROM asistencia WHERE estudiante_id IN (
+                            SELECT id FROM estudiantes WHERE grado_id = ?
+                        ) AND fecha = ? AND trimestre = ?;
+                    """, (grado_id, str(old_fecha), trim_num))
+                    
+                for id_estudiante, datos in dic_asistencia.items():
+                    cursor.execute(
+                        """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
+                        VALUES (?, ?, ?, ?);""",
+                        (str(id_estudiante), str(fecha_final), datos["estado"], trim_num)
+                    )
+                self.db_conn.commit()
+                self._schedule_save()
         except Exception as e:
             logger.error(f"Error actualizando asistencia en SQLite: {e}")
 
@@ -3229,6 +3365,35 @@ class DataEngine:
         except Exception as e:
             logger.error(f"Error en exportar_todo_a_excel: {e}")
             return False
+
+    def formatear_reportes_excel(self, grado):
+        """
+        Exporta los datos de la base de datos SQLite de vuelta al Excel de trabajo temporal,
+        asegurando que los reportes impresos contengan los datos más recientes.
+        """
+        import tempfile
+        import shutil
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            tmp_name = tmp.name
+        try:
+            # Primero copiamos la plantilla/archivo actual al temporal
+            shutil.copy2(self.ruta, tmp_name)
+            # Poblamos el archivo temporal con los datos de SQLite
+            self.exportar_todo_a_excel(tmp_name)
+            # Sobrescribimos el archivo original de trabajo con el poblado
+            shutil.copy2(tmp_name, self.ruta)
+            # Recargar el cache para que openpyxl use el nuevo contenido
+            self._verificar_y_recargar_cache()
+            return True
+        except Exception as e:
+            logger.error(f"Error al formatear reportes de Excel: {e}", exc_info=True)
+            return False
+        finally:
+            if os.path.exists(tmp_name):
+                try:
+                    os.remove(tmp_name)
+                except Exception:
+                    pass
 
     def actualizar_resumen(self, grado, wb=None, force_excel=False):
         if not force_excel and os.path.basename(self.ruta).startswith("Registro_"):

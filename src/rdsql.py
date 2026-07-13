@@ -557,6 +557,26 @@ class SQLDatabaseManager:
                 except Exception as ex:
                     logger.error(f"Error al agregar columna 'periodo': {ex}")
 
+        # 16. Deduplicación de materias y creación de índice único
+        try:
+            cursor.execute("SELECT nombre, grado_id, MIN(id) FROM materias GROUP BY nombre, grado_id")
+            canonical = cursor.fetchall()
+            for nombre, grado_id, min_id in canonical:
+                cursor.execute("SELECT id FROM materias WHERE nombre = ? AND grado_id = ?", (nombre, grado_id))
+                all_ids = [r[0] for r in cursor.fetchall()]
+                dup_ids = [i for i in all_ids if i != min_id]
+                if dup_ids:
+                    placeholders = ",".join(["?"] * len(dup_ids))
+                    cursor.execute(f"UPDATE notas SET materia_id = ? WHERE materia_id IN ({placeholders})", (min_id, *dup_ids))
+                    cursor.execute(f"UPDATE horario SET materia_id = ? WHERE materia_id IN ({placeholders})", (min_id, *dup_ids))
+                    cursor.execute(f"UPDATE tareas SET materia_id = ? WHERE materia_id IN ({placeholders})", (min_id, *dup_ids))
+                    cursor.execute(f"DELETE FROM materias WHERE id IN ({placeholders})", dup_ids)
+            
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_materias_nombre_grado ON materias (nombre, grado_id);")
+            logger.info("Migración: Deduplicación de materias completada y creado índice único.")
+        except Exception as ex:
+            logger.error(f"Error en migración de deduplicación de materias: {ex}")
+
         conn.commit()
 
     def conectar(self) -> sqlite3.Connection:
@@ -565,7 +585,7 @@ class SQLDatabaseManager:
         Si no existe, inicializa una nueva base de datos.
         """
         if self.conn:
-            return self.conn
+            return ThreadSafeConnection(self.conn, self.db_lock)
 
         # 1. Validar proceso ejecutor (Process-Binding Protection)
         if not self._validar_proceso_ejecutor():

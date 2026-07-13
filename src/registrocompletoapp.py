@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 import customtkinter as ctk
 from theme import C, FONT_TITLE, FONT_BODY
@@ -19,8 +20,8 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         self.crear_filtros()
         self.crear_tabs()
         
-        # Cargar datos iniciales
-        self.actualizar_vista()
+        # Datos iniciales se cargan en actualizar_vista() al mostrar el frame
+        self._initialized = False
 
     def crear_filtros(self):
         self.f_top = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=10)
@@ -43,13 +44,6 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                                                  command=lambda _: self.cargar_datos_asincrono())
         self.combo_trimestre.pack(side="right", padx=5, pady=15)
 
-        # Combo de Materia
-        materias = self.engine.obtener_materias_por_grado(grados[0]) if grados[0] != "Sin datos" else ["No hay materias"]
-        self.combo_materia = ctk.CTkOptionMenu(self.f_top, values=materias, command=lambda _: self.cargar_datos_asincrono())
-        self.combo_materia.pack(side="right", padx=5, pady=15)
-        if materias:
-            self.combo_materia.set(materias[0])
-
     def al_cambiar_grado(self, grado):
         materias = self.engine.obtener_materias_por_grado(grado)
         if materias:
@@ -70,7 +64,7 @@ class RegistroCompletoFrame(ctk.CTkFrame):
 
         # Configurar pestañas
         self.tab_notas.grid_columnconfigure(0, weight=1)
-        self.tab_notas.grid_rowconfigure(1, weight=1)
+        self.tab_notas.grid_rowconfigure(2, weight=1)
 
         self.tab_asis.grid_columnconfigure(0, weight=1)
         self.tab_asis.grid_rowconfigure(1, weight=1)
@@ -78,12 +72,38 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         self.tab_habitos.grid_columnconfigure(0, weight=1)
         self.tab_habitos.grid_rowconfigure(1, weight=1)
 
+        # Panel de filtro interno para Notas (Asignatura)
+        self.notas_filter_frame = ctk.CTkFrame(self.tab_notas, fg_color="transparent")
+        self.notas_filter_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+
+        lbl_materia = ctk.CTkLabel(self.notas_filter_frame, text="Asignatura / Materia:",
+                                   font=(FONT_BODY, 12, "bold"), text_color=C["texto"])
+        lbl_materia.pack(side="left", padx=5)
+
+        grados = self.combo_grado.cget("values")
+        grado_actual = self.combo_grado.get() if grados else "Sin datos"
+        materias = self.engine.obtener_materias_por_grado(grado_actual) if grado_actual != "Sin datos" else ["No hay materias"]
+        self.combo_materia = ctk.CTkOptionMenu(self.notas_filter_frame, values=materias, command=lambda _: self.cargar_datos_asincrono())
+        self.combo_materia.pack(side="left", padx=5)
+        if materias:
+            self.combo_materia.set(materias[0])
+
+        # Filtro de Tipo de Nota
+        lbl_tipo = ctk.CTkLabel(self.notas_filter_frame, text="Tipo:",
+                                font=(FONT_BODY, 12, "bold"), text_color=C["texto"])
+        lbl_tipo.pack(side="left", padx=(15, 5))
+
+        tipos_nota = ["Todos", "Diaria / Parcial", "Apreciación", "Examen"]
+        self.combo_tipo_nota = ctk.CTkOptionMenu(self.notas_filter_frame, values=tipos_nota, command=lambda _: self.cargar_datos_asincrono())
+        self.combo_tipo_nota.pack(side="left", padx=5)
+        self.combo_tipo_nota.set("Todos")
+
         # Sub-frames para Notas
         self.stats_notas_frame = ctk.CTkFrame(self.tab_notas, fg_color="transparent")
-        self.stats_notas_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        self.stats_notas_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
 
         self.scroll_notas = ctk.CTkScrollableFrame(self.tab_notas, fg_color=C["card_alt"])
-        self.scroll_notas.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.scroll_notas.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         # Sub-frames para Asistencia
         self.stats_asis_frame = ctk.CTkFrame(self.tab_asis, fg_color="transparent")
@@ -104,8 +124,13 @@ class RegistroCompletoFrame(ctk.CTkFrame):
 
     def cargar_datos_asincrono(self):
         if self.loading:
-            return
+            # Timeout de seguridad: si lleva más de 15s cargando, forzar reset
+            if hasattr(self, '_loading_start') and (time.time() - self._loading_start) > 15:
+                self.loading = False
+            else:
+                return
         self.loading = True
+        self._loading_start = time.time()
 
         # Limpiar e insertar cargadores
         self._limpiar_scroll(self.scroll_notas)
@@ -128,19 +153,26 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         grado = self.combo_grado.get()
         trimestre = self.combo_trimestre.get()
         materia = self.combo_materia.get()
+        tipo_nota = self.combo_tipo_nota.get() if hasattr(self, 'combo_tipo_nota') else "Todos"
 
         def background_thread():
             try:
-                data = self._obtener_datos_de_excel(grado, trimestre, materia)
-                self.after(0, lambda: self._renderizar_datos(data))
+                data = self._obtener_datos_de_excel(grado, trimestre, materia, tipo_nota)
+                try:
+                    self.after(0, lambda: self._renderizar_datos(data))
+                except Exception:
+                    self.loading = False
             except Exception as e:
                 print(f"[!] Error cargando datos consolidados: {e}")
-                self.after(0, lambda: self._renderizar_error())
+                try:
+                    self.after(0, lambda: self._renderizar_error())
+                except Exception:
+                    self.loading = False
 
         t = threading.Thread(target=background_thread, daemon=True)
         t.start()
 
-    def _obtener_datos_de_excel(self, grado, trimestre, materia):
+    def _obtener_datos_de_excel(self, grado, trimestre, materia, tipo_nota="Todos"):
         # NOTA: Aunque conserva el nombre por compatibilidad, ahora lee 100% de SQLite para alto rendimiento.
         cursor = self.engine.db_conn.cursor()
         
@@ -197,13 +229,20 @@ class RegistroCompletoFrame(ctk.CTkFrame):
             GROUP BY tipo, descripcion, fecha
             ORDER BY MIN(id);
         """, (materia_id, trim_num))
-        tasks = []
+        tasks_raw = []
         for row in cursor.fetchall():
-            tasks.append({
+            tasks_raw.append({
                 "tipo": row[1],
                 "descripcion": row[2],
                 "fecha": row[3]
             })
+        # Filtrar por tipo de nota si no es "Todos"
+        if tipo_nota and tipo_nota != "Todos":
+            tasks = [t for t in tasks_raw if t["tipo"] == tipo_nota]
+        else:
+            tasks = tasks_raw
+        from utils.date_helpers import parse_fecha_segura
+        tasks.sort(key=lambda t: parse_fecha_segura(t["fecha"]))
             
         promedios_finales = self.engine.obtener_promedios_reales(grado, materia, trimestre)
         student_ids_str = [str(e["id"]) for e in estudiantes]
@@ -464,135 +503,137 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         }
 
     def _renderizar_datos(self, data):
-        self.loading = False
-        self._limpiar_scroll(self.scroll_notas)
-        self._limpiar_scroll(self.scroll_asis)
-        self._limpiar_scroll(self.scroll_habitos)
+        try:
+            self._limpiar_scroll(self.scroll_notas)
+            self._limpiar_scroll(self.scroll_asis)
+            self._limpiar_scroll(self.scroll_habitos)
 
-        if not data:
-            self._renderizar_error()
-            return
+            if not data:
+                self._renderizar_error()
+                return
 
-        # ─── 3. HÁBITOS ───
-        self._renderizar_stats_habitos(data["stats_habitos"])
-        self._renderizar_habitos(data["rows_habitos"], data["habitos_criterios"])
+            # ─── 3. HÁBITOS ───
+            self._renderizar_stats_habitos(data["stats_habitos"])
+            self._renderizar_habitos(data["rows_habitos"], data["habitos_criterios"])
 
-        # ─── 1. NOTAS ───
-        self._renderizar_stats_notas(data["stats_notas"])
-        h_notas = data["headers_notas"]
-        r_notas = data["rows_notas"]
+            # ─── 1. NOTAS ───
+            self._renderizar_stats_notas(data["stats_notas"])
+            h_notas = data["headers_notas"]
+            r_notas = data["rows_notas"]
 
-        if not h_notas:
-            ctk.CTkLabel(self.scroll_notas, text="No hay calificaciones registradas para esta materia y trimestre.",
-                         font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
-        else:
-            # Encabezados
-            f_header = ctk.CTkFrame(self.scroll_notas, fg_color=C["badge_bg"], corner_radius=5)
-            f_header.pack(fill="x", padx=5, pady=2)
-            
-            ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
-            ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
-            
-            for desc, tipo in h_notas:
-                # Mostrar descripción corta en el header
-                lbl_h = ctk.CTkLabel(f_header, text=desc[:8], width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
-                lbl_h.pack(side="left", padx=3)
+            if not h_notas:
+                ctk.CTkLabel(self.scroll_notas, text="No hay calificaciones registradas para esta materia y trimestre.",
+                             font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
+            else:
+                # Encabezados
+                f_header = ctk.CTkFrame(self.scroll_notas, fg_color=C["badge_bg"], corner_radius=5)
+                f_header.pack(fill="x", padx=5, pady=2)
                 
-            ctk.CTkLabel(f_header, text="Promedio", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
+                ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
+                ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
+                
+                for desc, tipo in h_notas:
+                    # Mostrar descripción corta en el header
+                    lbl_h = ctk.CTkLabel(f_header, text=desc[:8], width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
+                    lbl_h.pack(side="left", padx=3)
+                    
+                ctk.CTkLabel(f_header, text="Promedio", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
 
-            # Estudiantes
-            for i, row_data in enumerate(r_notas):
-                bg = C["card"] if i % 2 == 0 else C["card_alt"]
-                f_row, widgets = self._obtener_fila_reciclada(self.scroll_notas, i, bg)
+                # Estudiantes
+                for i, row_data in enumerate(r_notas):
+                    bg = C["card"] if i % 2 == 0 else C["card_alt"]
+                    f_row, widgets = self._obtener_fila_reciclada(self.scroll_notas, i, bg)
 
-                widgets["num"].configure(text=f"{i+1}")
-                widgets["nombre"].configure(text=row_data['nombre'])
+                    widgets["num"].configure(text=f"{i+1}")
+                    widgets["nombre"].configure(text=row_data['nombre'])
 
-                for lbl in widgets["valores"]:
-                    lbl.pack_forget()
-                while len(widgets["valores"]) < len(row_data["notas"]):
-                    lbl_val = ctk.CTkLabel(f_row, text="", width=65, font=(FONT_BODY, 11))
-                    widgets["valores"].append(lbl_val)
+                    for lbl in widgets["valores"]:
+                        lbl.pack_forget()
+                    while len(widgets["valores"]) < len(row_data["notas"]):
+                        lbl_val = ctk.CTkLabel(f_row, text="", width=65, font=(FONT_BODY, 11))
+                        widgets["valores"].append(lbl_val)
 
-                for j, nota in enumerate(row_data["notas"]):
-                    lbl_val = widgets["valores"][j]
-                    color = C["texto"]
-                    if isinstance(nota, (int, float)):
-                        if nota < 3.0:
+                    for j, nota in enumerate(row_data["notas"]):
+                        lbl_val = widgets["valores"][j]
+                        color = C["texto"]
+                        if isinstance(nota, (int, float)):
+                            if nota < 3.0:
+                                color = C["rojo"]
+                            elif nota >= 4.5:
+                                color = C["verde"]
+                        lbl_val.configure(text=f"{nota}" if nota != "" else "-", text_color=color)
+                        lbl_val.pack(side="left", padx=3)
+
+                    prom = row_data["promedio"]
+                    prom_str = f"{prom:.2f}" if isinstance(prom, (int, float)) else (f"{prom}" if prom else "-")
+                    color_prom = C["texto"]
+                    if isinstance(prom, (int, float)):
+                        if prom < 3.0:
+                            color_prom = C["rojo"]
+                        elif prom >= 4.0:
+                            color_prom = C["verde"]
+                    
+                    widgets["resumen"].configure(text=prom_str, text_color=color_prom)
+                self._limpiar_filas_excedentes(self.scroll_notas, len(r_notas))
+
+            # ─── 2. ASISTENCIA ───
+            self._renderizar_stats_asis(data["stats_asis"])
+            h_asis = data["headers_asis"]
+            r_asis = data["rows_asis"]
+
+            if not h_asis:
+                ctk.CTkLabel(self.scroll_asis, text="No hay registros de asistencia para este grado y trimestre.",
+                             font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
+            else:
+                # Encabezados
+                f_header = ctk.CTkFrame(self.scroll_asis, fg_color=C["badge_bg"], corner_radius=5)
+                f_header.pack(fill="x", padx=5, pady=2)
+                
+                ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
+                ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
+                
+                for f in h_asis:
+                    lbl_h = ctk.CTkLabel(f_header, text=f, width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
+                    lbl_h.pack(side="left", padx=3)
+                    
+                ctk.CTkLabel(f_header, text="Asistencia %", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
+
+                # Estudiantes
+                for i, row_data in enumerate(r_asis):
+                    bg = C["card"] if i % 2 == 0 else C["card_alt"]
+                    f_row, widgets = self._obtener_fila_reciclada(self.scroll_asis, i, bg)
+
+                    widgets["num"].configure(text=f"{i+1}")
+                    widgets["nombre"].configure(text=row_data['nombre'])
+
+                    for lbl in widgets["valores"]:
+                        lbl.pack_forget()
+                    while len(widgets["valores"]) < len(row_data["asistencia"]):
+                        lbl_val = ctk.CTkLabel(f_row, text="", width=65, font=(FONT_BODY, 11))
+                        widgets["valores"].append(lbl_val)
+
+                    for j, st in enumerate(row_data["asistencia"]):
+                        lbl_val = widgets["valores"][j]
+                        color = C["texto"]
+                        if st == "A":
                             color = C["rojo"]
-                        elif nota >= 4.5:
+                        elif st == "T":
+                            color = C["amarillo"]
+                        elif st == "E":
+                            color = C["acento2"]
+                        elif st == "P":
                             color = C["verde"]
-                    lbl_val.configure(text=f"{nota}" if nota != "" else "-", text_color=color)
-                    lbl_val.pack(side="left", padx=3)
+                        lbl_val.configure(text=st, text_color=color)
+                        lbl_val.pack(side="left", padx=3)
 
-                prom = row_data["promedio"]
-                prom_str = f"{prom:.2f}" if isinstance(prom, (int, float)) else (f"{prom}" if prom else "-")
-                color_prom = C["texto"]
-                if isinstance(prom, (int, float)):
-                    if prom < 3.0:
-                        color_prom = C["rojo"]
-                    elif prom >= 4.0:
-                        color_prom = C["verde"]
-                
-                widgets["resumen"].configure(text=prom_str, text_color=color_prom)
-            self._limpiar_filas_excedentes(self.scroll_notas, len(r_notas))
-
-        # ─── 2. ASISTENCIA ───
-        self._renderizar_stats_asis(data["stats_asis"])
-        h_asis = data["headers_asis"]
-        r_asis = data["rows_asis"]
-
-        if not h_asis:
-            ctk.CTkLabel(self.scroll_asis, text="No hay registros de asistencia para este grado y trimestre.",
-                         font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
-        else:
-            # Encabezados
-            f_header = ctk.CTkFrame(self.scroll_asis, fg_color=C["badge_bg"], corner_radius=5)
-            f_header.pack(fill="x", padx=5, pady=2)
-            
-            ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
-            ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
-            
-            for f in h_asis:
-                lbl_h = ctk.CTkLabel(f_header, text=f, width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
-                lbl_h.pack(side="left", padx=3)
-                
-            ctk.CTkLabel(f_header, text="Asistencia %", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
-
-            # Estudiantes
-            for i, row_data in enumerate(r_asis):
-                bg = C["card"] if i % 2 == 0 else C["card_alt"]
-                f_row, widgets = self._obtener_fila_reciclada(self.scroll_asis, i, bg)
-
-                widgets["num"].configure(text=f"{i+1}")
-                widgets["nombre"].configure(text=row_data['nombre'])
-
-                for lbl in widgets["valores"]:
-                    lbl.pack_forget()
-                while len(widgets["valores"]) < len(row_data["asistencia"]):
-                    lbl_val = ctk.CTkLabel(f_row, text="", width=65, font=(FONT_BODY, 11))
-                    widgets["valores"].append(lbl_val)
-
-                for j, st in enumerate(row_data["asistencia"]):
-                    lbl_val = widgets["valores"][j]
-                    color = C["texto"]
-                    if st == "A":
-                        color = C["rojo"]
-                    elif st == "T":
-                        color = C["amarillo"]
-                    elif st == "E":
-                        color = C["acento2"]
-                    elif st == "P":
-                        color = C["verde"]
-                    lbl_val.configure(text=st, text_color=color)
-                    lbl_val.pack(side="left", padx=3)
-
-                pct = row_data["porcentaje"]
-                pct_str = f"{pct}%" if row_data["dias"] > 0 else "-"
-                color_pct = C["verde"] if pct >= 90 else (C["amarillo"] if pct >= 80 else C["rojo"])
-                
-                widgets["resumen"].configure(text=pct_str, text_color=color_pct)
-            self._limpiar_filas_excedentes(self.scroll_asis, len(r_asis))
+                    pct = row_data["porcentaje"]
+                    pct_str = f"{pct}%" if row_data["dias"] > 0 else "-"
+                    color_pct = C["verde"] if pct >= 90 else (C["amarillo"] if pct >= 80 else C["rojo"])
+                    
+                    widgets["resumen"].configure(text=pct_str, text_color=color_pct)
+                self._limpiar_filas_excedentes(self.scroll_asis, len(r_asis))
+        finally:
+            self.loading = False
 
     def _renderizar_stats_notas(self, stats):
         # Actualizar valores de los cards existentes si ya fueron creados (evita recrear widgets)

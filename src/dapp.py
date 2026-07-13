@@ -107,9 +107,8 @@ class EstudiantesFrame(ctk.CTkFrame):
         self.scroll_retirados = ctk.CTkScrollableFrame(self.tab_retirados, fg_color="transparent")
         self.scroll_retirados.pack(fill="both", expand=True, pady=3)
 
-        # Cargar datos iniciales
-        self.cargar_lista(self.combo_grado.get())
-        self.cargar_retirados(self.combo_grado.get())
+        # Datos iniciales se cargan en actualizar_vista() al mostrar el frame
+        self._initialized = False
 
     # ──────────────────────────────────────────────────────────────────────
     # Navegación y carga
@@ -542,6 +541,7 @@ class EstudiantesFrame(ctk.CTkFrame):
         grado = self.combo_grado.get()
         self.cargar_lista(grado)
         self.cargar_retirados(grado)
+        self._initialized = True
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -559,6 +559,7 @@ class _DialogoRetiro(ctk.CTkToplevel):
         self.grab_set()
         self.lift()
         self.focus_force()
+        self.protocol("WM_DELETE_WINDOW", self._cancelar)
 
         self.confirmado = False
         self.motivo     = ""
@@ -602,8 +603,8 @@ class _DialogoRetiro(ctk.CTkToplevel):
                       command=self.destroy).pack(side="left", padx=10)
 
         self.bind("<Return>",  lambda e: self._confirmar())
-        self.bind("<Escape>",  lambda e: self.destroy())
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Escape>",  lambda e: self._cancelar())
+        self.protocol("WM_DELETE_WINDOW", self._cancelar)
 
     def _confirmar(self):
         motivo = self.entry_motivo.get().strip()
@@ -614,4 +615,11 @@ class _DialogoRetiro(ctk.CTkToplevel):
         self.motivo    = motivo
         self.acudiente = self.entry_acudiente.get().strip()
         self.confirmado = True
+        self._cancelar()
+
+    def _cancelar(self):
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         self.destroy()

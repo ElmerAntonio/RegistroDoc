@@ -127,7 +127,6 @@ class NotasFrame(ctk.CTkFrame):
         try:
             from utils.date_helpers import obtener_trimestre_actual
             self.combo_trimestre.set(obtener_trimestre_actual())
-            self.combo_trimestre.configure(state="disabled")
         except Exception:
             pass
 
@@ -141,6 +140,18 @@ class NotasFrame(ctk.CTkFrame):
         self.entry_fecha = ctk.CTkEntry(tab_nueva)
         self.entry_fecha.insert(0, datetime.datetime.now().strftime("%m-%d"))
         self.entry_fecha.pack(fill="x", padx=10, pady=5)
+
+        def al_escribir_fecha(event=None):
+            try:
+                from utils.date_helpers import obtener_trimestre_actual
+                fecha_str = self.entry_fecha.get().strip()
+                if len(fecha_str) >= 3:
+                    trim = obtener_trimestre_actual(fecha_str)
+                    if trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                        self.combo_trimestre.set(trim)
+            except Exception:
+                pass
+        self.entry_fecha.bind("<KeyRelease>", al_escribir_fecha)
 
         self.lbl_desc_counter = ctk.CTkLabel(
             tab_nueva, text="Descripción (Ej. Charla): (0/25)",
@@ -810,7 +821,6 @@ class NotasFrame(ctk.CTkFrame):
         self.entry_fecha_guardado.configure(state="normal")
         self.entry_fecha_guardado.delete(0, 'end')
         self.entry_fecha_guardado.insert(0, fecha_val)
-        self.entry_fecha_guardado.configure(state="readonly")
 
         for id_est, entries_list in self.entradas_notas.items():
             for entry in entries_list:
@@ -828,6 +838,8 @@ class NotasFrame(ctk.CTkFrame):
         if notas_guardar is None:
             return
 
+        nueva_fecha = self.entry_fecha_guardado.get().strip()
+
         for entries_list in self.entradas_notas.values():
             for entry in entries_list:
                 entry.delete(0, 'end')
@@ -836,7 +848,7 @@ class NotasFrame(ctk.CTkFrame):
 
         def tarea_fondo_act():
             exito = self.engine.actualizar_notas_existentes(
-                grado, materia, self.col_a_modificar, notas_guardar)
+                grado, materia, self.col_a_modificar, notas_guardar, nueva_fecha=nueva_fecha)
             self.after(0, lambda: self.finalizar_actualizacion(exito))
 
         threading.Thread(target=tarea_fondo_act, daemon=True).start()
@@ -892,6 +904,7 @@ class NotasFrame(ctk.CTkFrame):
         modal.resizable(False, False)
         modal.transient(self)
         modal.grab_set()
+        modal.protocol("WM_DELETE_WINDOW", lambda: (modal.grab_release(), modal.destroy()) if modal.winfo_exists() else None)
         
         from config import establecer_icono_ventana
         establecer_icono_ventana(modal)
@@ -982,6 +995,10 @@ class NotasFrame(ctk.CTkFrame):
             for g in grados_seleccionados:
                 tareas.agregar_tarea(tit, g, materia, combo_t.get(), fl, f"Programada desde Notas. Tipo: {tipo_nota}")
                 
+            try:
+                modal.grab_release()
+            except Exception:
+                pass
             modal.destroy()
             
             if hasattr(self, 'scroll_tareas_tab'):

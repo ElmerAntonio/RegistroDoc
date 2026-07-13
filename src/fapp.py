@@ -153,13 +153,12 @@ class AsistenciaFrame(ctk.CTkFrame):
         try:
             from utils.date_helpers import obtener_trimestre_actual
             self.combo_trimestre.set(obtener_trimestre_actual())
-            self.combo_trimestre.configure(state="disabled")
         except Exception:
             pass
 
         ctk.CTkLabel(
             tab_nueva,
-            text="Fecha (DD-MM):",
+            text="Fecha (MM-DD):",
             font=(
                 "Segoe UI",
                 12)).pack(
@@ -169,8 +168,20 @@ class AsistenciaFrame(ctk.CTkFrame):
                 15,
                 0))
         self.entry_fecha = ctk.CTkEntry(tab_nueva)
-        self.entry_fecha.insert(0, datetime.datetime.now().strftime("%d-%m"))
+        self.entry_fecha.insert(0, datetime.datetime.now().strftime("%m-%d"))
         self.entry_fecha.pack(fill="x", padx=10, pady=5)
+
+        def al_escribir_fecha(event=None):
+            try:
+                from utils.date_helpers import obtener_trimestre_actual
+                fecha_str = self.entry_fecha.get().strip()
+                if len(fecha_str) >= 3:
+                    trim = obtener_trimestre_actual(fecha_str)
+                    if trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                        self.combo_trimestre.set(trim)
+            except Exception:
+                pass
+        self.entry_fecha.bind("<KeyRelease>", al_escribir_fecha)
 
         # ─── ACCIONES RÁPIDAS ───
         quick_frame = ctk.CTkFrame(tab_nueva, fg_color="transparent")
@@ -263,6 +274,20 @@ class AsistenciaFrame(ctk.CTkFrame):
             pady=10,
             padx=10,
             fill="x")
+
+        ctk.CTkLabel(
+            tab_mod,
+            text="Fecha de guardado (MM-DD):",
+            font=(
+                "Segoe UI",
+                12)).pack(
+            anchor="w",
+            padx=10,
+            pady=(
+                15,
+                0))
+        self.entry_fecha_guardado = ctk.CTkEntry(tab_mod, placeholder_text="No cargada", justify="center")
+        self.entry_fecha_guardado.pack(fill="x", padx=10, pady=5)
 
         self.btn_actualizar = ctk.CTkButton(
             tab_mod,
@@ -439,7 +464,12 @@ class AsistenciaFrame(ctk.CTkFrame):
         return dic_asistencia, lista_excusas
 
     def _obtener_justificacion_word(self, nombre_est, grado, fecha):
-        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        ruta_base = cfg.get("ruta_exportacion")
+        if not ruta_base:
+            ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes")
         nombre_archivo = f"{nombre_est} - {grado.replace('°', '')}.docx".replace("/", "-")
         ruta_archivo = os.path.join(carpeta, nombre_archivo)
         if os.path.exists(ruta_archivo) and DOCX_DISPONIBLE:
@@ -528,6 +558,9 @@ class AsistenciaFrame(ctk.CTkFrame):
         self.col_a_modificar = resultado["columna"]
         datos_excel = resultado["asistencia"]
 
+        self.entry_fecha_guardado.delete(0, 'end')
+        self.entry_fecha_guardado.insert(0, fecha)
+
         for id_est, widgets in self.entradas_asistencia.items():
             idx_1based = int(id_est) % 100 if str(id_est).isdigit() else id_est
             if idx_1based in datos_excel:
@@ -554,6 +587,8 @@ class AsistenciaFrame(ctk.CTkFrame):
         fecha = self.combo_fechas_mod.get()
         dic_asistencia, lista_excusas = self.recopilar_datos()
 
+        nueva_fecha = self.entry_fecha_guardado.get().strip()
+
         # Validar si hay faltas/tardanzas/excusas sin justificación escrita en el modo edición
         for exc in lista_excusas:
             if exc["motivo"] == "Falta sin justificar":
@@ -573,10 +608,10 @@ class AsistenciaFrame(ctk.CTkFrame):
 
         def tarea():
             exito = self.engine.actualizar_asistencia(
-                grado, trimestre, self.col_a_modificar, dic_asistencia)
+                grado, trimestre, self.col_a_modificar, dic_asistencia, nueva_fecha=nueva_fecha)
             self.after(
                 0, lambda: self.finalizar_actualizacion(
-                    exito, grado, fecha, lista_excusas))
+                    exito, grado, nueva_fecha or fecha, lista_excusas))
 
         threading.Thread(target=tarea, daemon=True).start()
 
@@ -613,10 +648,13 @@ class AsistenciaFrame(ctk.CTkFrame):
             self.after(0, lambda: self._mostrar_toast_safe(f"✓ {mensaje_base} (Falta python-docx)", "#F59E0B"))
             return
 
-        carpeta_expedientes = os.path.join(
-            BASE_DIR, "..", "Expedientes_Estudiantes")
-        if not os.path.exists(carpeta_expedientes):
-            os.makedirs(carpeta_expedientes)
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        ruta_base = cfg.get("ruta_exportacion")
+        if not ruta_base:
+            ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        carpeta_expedientes = os.path.join(ruta_base, "Expedientes_Estudiantes")
+        os.makedirs(carpeta_expedientes, exist_ok=True)
 
         for exc in lista_excusas:
             self._actualizar_o_crear_word(

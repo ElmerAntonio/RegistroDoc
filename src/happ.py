@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import os
+import threading
 from tkinter import messagebox
 from theme import C
 
@@ -62,7 +63,8 @@ class ReportesFrame(ctk.CTkFrame):
         self.scroll_habitos = ctk.CTkScrollableFrame(self.tab_habitos, fg_color="transparent")
         self.scroll_habitos.pack(fill="both", expand=True)
 
-        self.cargar_reportes(self.combo_grado.get())
+        # Datos iniciales se cargan en actualizar_vista() al mostrar el frame
+        self._initialized = False
 
     def cargar_reportes(self, grado=None):
         if not grado:
@@ -130,9 +132,6 @@ class ReportesFrame(ctk.CTkFrame):
         # HABITOS TAB
         self._limpiar(self.scroll_habitos)
         
-        import json
-        ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
-        
         estudiantes = self.engine.obtener_estudiantes_completos(grado)
         
         # Header
@@ -143,30 +142,37 @@ class ReportesFrame(ctk.CTkFrame):
         ctk.CTkLabel(f_h_hab, text="Regulares (R)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#F59E0B").pack(side="left", padx=10)
         ctk.CTkLabel(f_h_hab, text="Insatisfactorios (X)", width=130, anchor="w", font=("Segoe UI", 13, "bold"), text_color="#EF4444").pack(side="left", padx=10)
 
-        # Aggregate stats per student
+        # Consultar hábitos desde SQLite
         stats_por_est = {}
-        if os.path.exists(ruta_json):
-            try:
-                with open(ruta_json, "r", encoding="utf-8") as f:
-                    habitos_data = json.load(f)
+        try:
+            mapa_trim = {"Trimestre 1": 1, "Trimestre 2": 2, "Trimestre 3": 3}
+            cursor = self.engine.db_conn.cursor()
+            student_ids = [str(est["id"]) for est in estudiantes]
+            if student_ids:
+                placeholders = ",".join(["?"] * len(student_ids))
+                if trimestre == "Todos":
+                    cursor.execute(f"""
+                        SELECT estudiante_id, nota
+                        FROM habitos
+                        WHERE estudiante_id IN ({placeholders}) AND nota IN ('S', 'R', 'X');
+                    """, tuple(student_ids))
+                else:
+                    trim_num = mapa_trim.get(trimestre, 1)
+                    cursor.execute(f"""
+                        SELECT estudiante_id, nota
+                        FROM habitos
+                        WHERE estudiante_id IN ({placeholders}) AND trimestre = ? AND nota IN ('S', 'R', 'X');
+                    """, (*student_ids, trim_num))
                 
-                for key, val_entry in habitos_data.items():
-                    parts = key.split("::")
-                    if len(parts) >= 2:
-                        k_grado = parts[0]
-                        k_trimestre = parts[1]
-                        if grado.replace("°","") in k_grado.replace("°",""):
-                            if trimestre == "Todos" or trimestre == k_trimestre:
-                                est_evals = val_entry.get("estudiantes", {})
-                                for est_id, crit_vals in est_evals.items():
-                                    e_idx = int(est_id) - 1
-                                    if e_idx not in stats_por_est:
-                                        stats_por_est[e_idx] = {"S": 0, "R": 0, "X": 0}
-                                    for score in crit_vals.values():
-                                        if score in ["S", "R", "X"]:
-                                            stats_por_est[e_idx][score] += 1
-            except Exception as e:
-                print(f"Error loading habits report stats: {e}")
+                for row in cursor.fetchall():
+                    est_id = int(row[0]) if str(row[0]).isdigit() else row[0]
+                    nota = row[1]
+                    if est_id not in stats_por_est:
+                        stats_por_est[est_id] = {"S": 0, "R": 0, "X": 0}
+                    if nota in ("S", "R", "X"):
+                        stats_por_est[est_id][nota] += 1
+        except Exception as e:
+            print(f"Error cargando hábitos desde SQL para reportes: {e}")
 
         for idx, est in enumerate(estudiantes):
             row_h = ctk.CTkFrame(self.scroll_habitos, fg_color=C["card"])
@@ -174,7 +180,7 @@ class ReportesFrame(ctk.CTkFrame):
             
             ctk.CTkLabel(row_h, text=est["nombre"], width=250, anchor="w").pack(side="left", padx=10)
             
-            stats = stats_por_est.get(idx, {"S": 0, "R": 0, "X": 0})
+            stats = stats_por_est.get(est["id"], {"S": 0, "R": 0, "X": 0})
             total = sum(stats.values())
             
             s_txt = f"{stats['S']} ({(stats['S']/total*100):.0f}%)" if total > 0 else "0 (0%)"
@@ -184,6 +190,20 @@ class ReportesFrame(ctk.CTkFrame):
             ctk.CTkLabel(row_h, text=s_txt, width=130, anchor="w", text_color="#10B981").pack(side="left", padx=10)
             ctk.CTkLabel(row_h, text=r_txt, width=130, anchor="w", text_color="#F59E0B").pack(side="left", padx=10)
             ctk.CTkLabel(row_h, text=x_txt, width=130, anchor="w", text_color="#EF4444").pack(side="left", padx=10)
+
+    def actualizar_vista(self):
+        """Recarga los grados activos y refresca los reportes."""
+        opciones = self.engine.obtener_grados_activos()
+        if not opciones:
+            opciones = ["Sin datos"]
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=opciones)
+        if old_sel in opciones:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(opciones[0])
+        self.cargar_reportes(self.combo_grado.get())
+        self._initialized = True
 
     def _limpiar(self, frame):
         for w in frame.winfo_children(): w.destroy()
@@ -395,9 +415,12 @@ class ReportesFrame(ctk.CTkFrame):
 
     def descargar_graficos(self):
         # Genera y guarda un DOCX solo con los gráficos del grado seleccionado
-        self._generar_docx_graficos(abrir=False)
+        threading.Thread(target=lambda: self._generar_docx_graficos(abrir=False), daemon=True).start()
 
     def descargar_pdf(self):
+        threading.Thread(target=self._descargar_pdf_worker, daemon=True).start()
+
+    def _descargar_pdf_worker(self):
         import tempfile
         try:
             from docx import Document
@@ -409,7 +432,7 @@ class ReportesFrame(ctk.CTkFrame):
 
         grado = self.combo_grado.get()
         trimestre = self.combo_trimestre.get() if hasattr(self, "combo_trimestre") else "Todos"
-        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimester)
+        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimestre)
         doc = Document()
         try:
             from utils.footer_utils import add_header_with_logo, get_school_logo_path
@@ -487,8 +510,9 @@ class ReportesFrame(ctk.CTkFrame):
         # Gráficos integrados según tipo de reporte
         try:
             from utils.docx_graphics import save_figure_as_image, add_image_to_doc
-            import matplotlib.pyplot as plt
-            promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, None, None)
+            from matplotlib.figure import Figure
+            trim_query = "Anual" if trimestre == "Todos" else trimestre
+            promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, None, trim_query)
             estudiantes = getattr(self.engine, 'obtener_estudiantes_completos', lambda g: [])(grado)
             est_name_to_idx = {est['nombre'].upper().strip(): idx + 1 for idx, est in enumerate(estudiantes)}
             if not promedios_por_est and estudiantes:
@@ -501,7 +525,8 @@ class ReportesFrame(ctk.CTkFrame):
                        sum(1 for v in promedios_por_est.values() if 2.5 <= v < 3.0),
                        sum(1 for v in promedios_por_est.values() if v < 2.5)]
             colores = ["#00FF88", "#FFD700", "#FF4444"]
-            fig1, ax1 = plt.subplots(figsize=(5, 4), dpi=100)
+            fig1 = Figure(figsize=(5, 4), dpi=100)
+            ax1 = fig1.add_subplot(111)
             if sum(valores) == 0:
                 ax1.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='black')
             else:
@@ -510,7 +535,6 @@ class ReportesFrame(ctk.CTkFrame):
             ax1.set_title("Distribución General del Salón", pad=20, fontweight="bold")
             img1 = save_figure_as_image(fig1, "pastel_")
             add_image_to_doc(doc, img1, ancho=5)
-            plt.close(fig1)
         except Exception as e:
             print("Error integrando gráficos en el reporte PDF:", e)
 
@@ -570,7 +594,13 @@ class ReportesFrame(ctk.CTkFrame):
         except Exception:
             pass
 
-        promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, trimestre)
+        # Mapa de nombres a índices para el scatter
+        est_name_to_idx = {est['nombre'].upper().strip(): idx + 1 for idx, est in enumerate(estudiantes)}
+
+        # Mapear trimestre para la consulta de base de datos
+        trim_query = "Anual" if trimestre in ["Todos", "Todos los Trimestres"] else trimestre
+
+        promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, trim_query)
         if not promedios_por_est and estudiantes:
             for est in estudiantes:
                 promedios_por_est[est['nombre']] = 1.0
@@ -580,14 +610,15 @@ class ReportesFrame(ctk.CTkFrame):
         reprobados = sum(1 for v in promedios_por_est.values() if v < 2.5)
 
 # --- Gráficos ---
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
         import numpy as np
 
         # Pastel
         etiquetas = ['Aprobados (>=3.0)', 'En Riesgo (2.5-2.9)', 'Reprobados (<2.5)']
         valores = [aprobados, en_riesgo, reprobados]
         colores = ["#00FF88", "#FFD700", "#FF4444"]
-        fig1, ax1 = plt.subplots(figsize=(5, 4), dpi=100)
+        fig1 = Figure(figsize=(5, 4), dpi=100)
+        ax1 = fig1.add_subplot(111)
         if sum(valores) == 0:
             ax1.text(0.5, 0.5, "Sin Datos", ha='center', va='center')
         else:
@@ -596,14 +627,14 @@ class ReportesFrame(ctk.CTkFrame):
         ax1.set_title("Distribución General del Salón", pad=20, fontweight="bold")
         img1 = save_figure_as_image(fig1, "pastel_")
         add_image_to_doc(doc, img1, ancho=5)
-        plt.close(fig1)
 
         # Barras
         nombres = list(promedios_por_est.keys())[:15]
         notas = [promedios_por_est[n] for n in nombres]
         nombres_cortos = [n.split(" ")[0] for n in nombres]
         colores_barras = ["#FF4444" if n < 3.0 else "#00FF88" for n in notas]
-        fig2, ax2 = plt.subplots(figsize=(6, 4), dpi=100)
+        fig2 = Figure(figsize=(6, 4), dpi=100)
+        ax2 = fig2.add_subplot(111)
         ax2.bar(nombres_cortos, notas, color=colores_barras, alpha=0.8)
         ax2.axhline(y=3.0, color="#FFD700", linestyle='--', alpha=0.7)
         ax2.tick_params(axis='x', rotation=45)
@@ -612,10 +643,10 @@ class ReportesFrame(ctk.CTkFrame):
         fig2.tight_layout()
         img2 = save_figure_as_image(fig2, "barras_")
         add_image_to_doc(doc, img2, ancho=5)
-        plt.close(fig2)
 
         # Tendencia / Histograma (Original y nuevo)
-        fig3, ax3 = plt.subplots(figsize=(10, 3.5), dpi=100)
+        fig3 = Figure(figsize=(10, 3.5), dpi=100)
+        ax3 = fig3.add_subplot(111)
         notas_all = list(promedios_por_est.values())
         if notas_all:
             counts, bins, patches = ax3.hist(notas_all, bins=10, range=(1.0, 5.0), alpha=0.6, edgecolor='white')
@@ -631,7 +662,6 @@ class ReportesFrame(ctk.CTkFrame):
         fig3.tight_layout()
         img3 = save_figure_as_image(fig3, "tendencia_")
         add_image_to_doc(doc, img3, ancho=7)
-        plt.close(fig3)
 
         # Nuevos: Pareto
         try:
@@ -651,7 +681,8 @@ class ReportesFrame(ctk.CTkFrame):
                 materias_cortas = [m[:10] for m in materias_nombres]
                 conteos = [reprobados_ordenado[m] for m in materias_nombres]
 
-                fig4, ax4 = plt.subplots(figsize=(6, 4), dpi=100)
+                fig4 = Figure(figsize=(6, 4), dpi=100)
+                ax4 = fig4.add_subplot(111)
                 ax4_2 = ax4.twinx()
                 if sum(conteos) > 0:
                     ax4.bar(materias_cortas, conteos, color="#FF4444", alpha=0.8)
@@ -668,24 +699,28 @@ class ReportesFrame(ctk.CTkFrame):
                 fig4.tight_layout()
                 img4 = save_figure_as_image(fig4, "pareto_")
                 add_image_to_doc(doc, img4, ancho=5)
-                plt.close(fig4)
         except Exception as e: print("Error Pareto", e)
 
         # Scatter
         try:
-            fig5, ax5 = plt.subplots(figsize=(6, 4), dpi=100)
+            fig5 = Figure(figsize=(6, 4), dpi=100)
+            ax5 = fig5.add_subplot(111)
             if notas_all:
                 x = []
+                # Determinar trimestre de asistencia contextualmente
+                asis_trim = "Trimestre 1"
+                if trimestre in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                    asis_trim = trimestre
                 for n, p in promedios_por_est.items():
                     asistencia = 100
                     try:
-                        fechas = getattr(self.engine, 'obtener_fechas_asistencia', lambda g,t: [])(grado, "Trimestre 1")
+                        fechas = getattr(self.engine, 'obtener_fechas_asistencia', lambda g,t: [])(grado, asis_trim)
                         if fechas:
                             presentes = 0
                             total = len(fechas)
                             est_idx = est_name_to_idx.get(n.upper().strip())
                             for fecha in fechas:
-                                asis_dia = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(grado, "Trimestre 1", fecha)
+                                asis_dia = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(grado, asis_trim, fecha)
                                 if asis_dia:
                                     asis_dict = asis_dia.get("asistencia", {})
                                     val = asis_dict.get(est_idx, "P") if est_idx is not None else "P"
@@ -702,12 +737,12 @@ class ReportesFrame(ctk.CTkFrame):
             fig5.tight_layout()
             img5 = save_figure_as_image(fig5, "scatter_")
             add_image_to_doc(doc, img5, ancho=5)
-            plt.close(fig5)
         except Exception as e: print("Error Scatter", e)
 
         # Boxplot
         try:
-            fig6, ax6 = plt.subplots(figsize=(6, 4), dpi=100)
+            fig6 = Figure(figsize=(6, 4), dpi=100)
+            ax6 = fig6.add_subplot(111)
             if notas_all:
                 bplot = ax6.boxplot(notas_all, patch_artist=True, vert=True)
                 for patch in bplot['boxes']: patch.set_facecolor("#00FF88")
@@ -716,12 +751,12 @@ class ReportesFrame(ctk.CTkFrame):
             fig6.tight_layout()
             img6 = save_figure_as_image(fig6, "box_")
             add_image_to_doc(doc, img6, ancho=5)
-            plt.close(fig6)
         except Exception as e: print("Error Boxplot", e)
 
         # Evolucion
         try:
-            fig7, ax7 = plt.subplots(figsize=(6, 4), dpi=100)
+            fig7 = Figure(figsize=(6, 4), dpi=100)
+            ax7 = fig7.add_subplot(111)
             p_t1 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 1")
             p_t2 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 2")
             p_t3 = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, "Trimestre 3")
@@ -735,12 +770,12 @@ class ReportesFrame(ctk.CTkFrame):
             fig7.tight_layout()
             img7 = save_figure_as_image(fig7, "evol_")
             add_image_to_doc(doc, img7, ancho=5)
-            plt.close(fig7)
         except Exception as e: print("Error Evol", e)
 
         # Heatmap
         try:
-            fig8, ax8 = plt.subplots(figsize=(6, 4), dpi=100)
+            fig8 = Figure(figsize=(6, 4), dpi=100)
+            ax8 = fig8.add_subplot(111)
             materias = self.engine.obtener_materias_por_grado(grado)
             if materias and materias != ["Sin materias"] and estudiantes:
                 m_c = [m[:10] for m in materias[:5]]
@@ -772,7 +807,6 @@ class ReportesFrame(ctk.CTkFrame):
             fig8.tight_layout()
             img8 = save_figure_as_image(fig8, "heat_")
             add_image_to_doc(doc, img8, ancho=5)
-            plt.close(fig8)
         except Exception as e: print("Error Heatmap", e)
 
         # Pie de página
@@ -782,9 +816,16 @@ class ReportesFrame(ctk.CTkFrame):
         except Exception:
             pass
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            doc.save(tmp.name)
-            tmp_docx = tmp.name
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        export_dir = cfg.get("ruta_exportacion")
+        if not export_dir:
+            export_dir = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        os.makedirs(export_dir, exist_ok=True)
+        trimestre_safe = str(trimestre).replace(" ", "_") if trimestre else "Anual"
+        filename = f"Graficos_Rendimiento_Grado_{grado}_{trimestre_safe}.docx"
+        tmp_docx = os.path.join(export_dir, filename)
+        doc.save(tmp_docx)
 
 
         if imprimir:
@@ -816,6 +857,9 @@ class ReportesFrame(ctk.CTkFrame):
             messagebox.showinfo("Descarga DOCX", f"Documento generado en:\n{tmp_docx}\n\nPuedes abrirlo y guardarlo como PDF desde Word.")
 
     def descargar_reportes_word(self):
+        threading.Thread(target=self._descargar_reportes_word_worker, daemon=True).start()
+
+    def _descargar_reportes_word_worker(self):
         import tempfile
         import os
         try:
@@ -827,7 +871,7 @@ class ReportesFrame(ctk.CTkFrame):
 
         grado = self.combo_grado.get()
         trimestre = self.combo_trimestre.get() if hasattr(self, "combo_trimestre") else "Todos"
-        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimester)
+        reportes = getattr(self.engine, 'obtener_datos_reportes', lambda g, t: {"docente": [], "aprobados": [], "direccion": []})(grado, trimestre)
         doc = Document()
         try:
             from utils.footer_utils import add_header_with_logo, get_school_logo_path
@@ -884,9 +928,16 @@ class ReportesFrame(ctk.CTkFrame):
             add_footer_with_logo(doc, logo_path, "RegistroDoc Pro v3.0", "Proverbios 22:6")
         except Exception: pass
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            doc.save(tmp.name)
-            tmp_docx = tmp.name
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        export_dir = cfg.get("ruta_exportacion")
+        if not export_dir:
+            export_dir = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        os.makedirs(export_dir, exist_ok=True)
+        trimestre_safe = str(trimestre).replace(" ", "_") if trimestre else "Anual"
+        filename = f"Reporte_Academico_Grado_{grado}_{trimestre_safe}.docx"
+        tmp_docx = os.path.join(export_dir, filename)
+        doc.save(tmp_docx)
 
         messagebox.showinfo("Descarga DOCX", f"Reportes generados en Word:\n{tmp_docx}")
 
@@ -919,22 +970,10 @@ class ReportesYGraficosFrame(ctk.CTkFrame):
                 self.frame_reportes.actualizar_vista()
             except Exception:
                 pass
-        
-        if hasattr(self.frame_reportes, "cargar_reportes"):
-            try:
-                self.frame_reportes.cargar_reportes(self.frame_reportes.combo_grado.get())
-            except Exception:
-                pass
 
         if hasattr(self.frame_graficos, "actualizar_vista"):
             try:
                 self.frame_graficos.actualizar_vista()
-            except Exception:
-                pass
-        
-        if hasattr(self.frame_graficos, "actualizar_graficos"):
-            try:
-                self.frame_graficos.actualizar_graficos()
             except Exception:
                 pass
 

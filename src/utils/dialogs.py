@@ -8,7 +8,10 @@ class CTkCustomMessagebox(ctk.CTkToplevel):
         self.resizable(False, False)
         if parent:
             self.transient(parent)
-        self.grab_set()
+        try:
+            self.grab_set()
+        except Exception:
+            pass
         
         # Tema visual
         from theme import C
@@ -124,22 +127,46 @@ class CTkCustomMessagebox(ctk.CTkToplevel):
         self.geometry(f"{w}x{h}+{px}+{py}")
         
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.wait_window(self)
+        try:
+            self.wait_window(self)
+        except Exception:
+            pass
+        finally:
+            try:
+                self.grab_release()
+            except Exception:
+                pass
         
     def _on_ok(self):
         self.result = True
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         self.destroy()
         
     def _on_yes(self):
         self.result = True
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         self.destroy()
         
     def _on_no(self):
         self.result = False
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         self.destroy()
         
     def _on_close(self):
         self.result = False
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         self.destroy()
 
 def obtener_parent_activo():
@@ -157,30 +184,77 @@ def obtener_parent_activo():
         pass
     return None
 
+def _ejecutar_dialogo_en_hilo_principal(funcion_dialogo, *args, **kwargs):
+    """
+    Ejecuta una función de diálogo de Tkinter en el hilo principal
+    y espera por su resultado de forma segura usando un threading.Event.
+    """
+    import threading
+    
+    # Si ya estamos en el hilo principal, ejecutar directamente
+    if threading.current_thread() is threading.main_thread():
+        return funcion_dialogo(*args, **kwargs)
+        
+    # De lo contrario, despachar al hilo principal
+    evento = threading.Event()
+    resultado = [None]
+    
+    def tarea():
+        try:
+            resultado[0] = funcion_dialogo(*args, **kwargs)
+        finally:
+            evento.set()
+            
+    # Obtener el root widget para usar after()
+    try:
+        import tkinter as tk
+        root = tk._default_root
+        if not root:
+            root = tk.Tk.nametowidget(".")
+        if root:
+            root.after(0, tarea)
+        else:
+            evento.set()
+    except Exception:
+        evento.set()
+        
+    evento.wait(timeout=10)
+    return resultado[0]
+
 def show_info(title, message, **kwargs):
-    parent = obtener_parent_activo()
-    dialog = CTkCustomMessagebox(parent, title, message, icon_type="info", option_type="ok")
-    return dialog.result
+    def impl():
+        parent = obtener_parent_activo()
+        dialog = CTkCustomMessagebox(parent, title, message, icon_type="info", option_type="ok")
+        return dialog.result
+    return _ejecutar_dialogo_en_hilo_principal(impl)
 
 def show_success(title, message, **kwargs):
-    parent = obtener_parent_activo()
-    dialog = CTkCustomMessagebox(parent, title, message, icon_type="success", option_type="ok")
-    return dialog.result
+    def impl():
+        parent = obtener_parent_activo()
+        dialog = CTkCustomMessagebox(parent, title, message, icon_type="success", option_type="ok")
+        return dialog.result
+    return _ejecutar_dialogo_en_hilo_principal(impl)
 
 def show_warning(title, message, **kwargs):
-    parent = obtener_parent_activo()
-    dialog = CTkCustomMessagebox(parent, title, message, icon_type="warning", option_type="ok")
-    return dialog.result
+    def impl():
+        parent = obtener_parent_activo()
+        dialog = CTkCustomMessagebox(parent, title, message, icon_type="warning", option_type="ok")
+        return dialog.result
+    return _ejecutar_dialogo_en_hilo_principal(impl)
 
 def show_error(title, message, **kwargs):
-    parent = obtener_parent_activo()
-    dialog = CTkCustomMessagebox(parent, title, message, icon_type="error", option_type="ok")
-    return dialog.result
+    def impl():
+        parent = obtener_parent_activo()
+        dialog = CTkCustomMessagebox(parent, title, message, icon_type="error", option_type="ok")
+        return dialog.result
+    return _ejecutar_dialogo_en_hilo_principal(impl)
 
 def ask_yes_no(title, message, **kwargs):
-    parent = obtener_parent_activo()
-    dialog = CTkCustomMessagebox(parent, title, message, icon_type="question", option_type="yesno")
-    return dialog.result
+    def impl():
+        parent = obtener_parent_activo()
+        dialog = CTkCustomMessagebox(parent, title, message, icon_type="question", option_type="yesno")
+        return dialog.result
+    return _ejecutar_dialogo_en_hilo_principal(impl)
 
 def patch_messagebox():
     """Realiza monkeypatch sobre tkinter.messagebox para usar los dialogos customizados."""

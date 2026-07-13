@@ -320,9 +320,13 @@ def generar_acta_docentes(datos):
         agregar_numero_pagina(section)
 
     # Guardar
-    carpeta = os.path.join(BASE_DIR, "..", "Reuniones")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Reuniones")
+    os.makedirs(carpeta, exist_ok=True)
 
     fecha_str = datos.get("fecha", datetime.datetime.now().strftime("%d-%m-%Y"))
     nombre = f"Acta_Reunion_Docentes_{fecha_str}.docx"
@@ -519,9 +523,13 @@ def generar_acta_padres(datos):
         agregar_numero_pagina(section)
 
     # Guardar
-    carpeta = os.path.join(BASE_DIR, "..", "Reuniones")
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
+    from rdsecurity import cargar_config_segura
+    cfg = cargar_config_segura({})
+    ruta_base = cfg.get("ruta_exportacion")
+    if not ruta_base:
+        ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+    carpeta = os.path.join(ruta_base, "Reuniones")
+    os.makedirs(carpeta, exist_ok=True)
 
     alumno = datos.get("alumno", "Alumno").replace(" ", "_")
     fecha_str = datos.get("fecha", datetime.datetime.now().strftime("%d-%m-%Y"))

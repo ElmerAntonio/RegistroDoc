@@ -30,7 +30,7 @@ Source: "dist\RegistroDoc.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Copiar configuración y token del docente al directorio de la aplicación ({app}\data)
-Source: "package_data\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "package_data\data\*"; DestDir: "{app}\data"; Flags: ignoreversion onlyifdoesntexist recursesubdirs createallsubdirs
 
 ; Copiar la base de datos cifrada existente al AppData local ({localappdata}\RegistroDoc\data)
 Source: "package_data\appdata\data\registro.db.enc"; DestDir: "{localappdata}\RegistroDoc\data"; Flags: ignoreversion onlyifdoesntexist

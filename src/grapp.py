@@ -55,8 +55,8 @@ class GraficosFrame(ctk.CTkFrame):
         self.fig_objs = [] # Para limpiar figuras después
 
         self.crear_filtros()
-        # Iniciar gráficos
-        self.actualizar_graficos()
+        # Los gráficos se cargan en actualizar_vista() al mostrar el frame
+        self._initialized = False
 
     def crear_filtros(self):
         f_top = ctk.CTkFrame(self, fg_color=self.C["card"], corner_radius=10)
@@ -153,7 +153,22 @@ class GraficosFrame(ctk.CTkFrame):
 
         ctk.CTkButton(f_top, text="ℹ️ Guía de Uso", fg_color="#00DDEB", text_color="#0A1628", hover_color="#00C0CD", font=("Segoe UI", 12, "bold"), command=self.mostrar_guia_graficas).pack(side="right", padx=5)
         ctk.CTkButton(f_top, text="Actualizar", fg_color="#3B82F6", command=self.actualizar_graficos).pack(side="right", padx=5)
-        self.al_cambiar_grado(grados[0])
+
+    def actualizar_vista(self):
+        """Recarga grados activos y actualiza los gráficos."""
+        grados = self.engine.obtener_grados_activos()
+        if not grados:
+            grados = ["Sin datos"]
+        else:
+            grados = ["Todos los Grados"] + grados
+        old_sel = self.combo_grado.get()
+        self.combo_grado.configure(values=grados)
+        if old_sel in grados:
+            self.combo_grado.set(old_sel)
+        else:
+            self.combo_grado.set(grados[0])
+        self.al_cambiar_grado(self.combo_grado.get())
+        self._initialized = True
 
     def mostrar_guia_graficas(self):
         from tkinter import messagebox
@@ -741,6 +756,11 @@ class GraficosFrame(ctk.CTkFrame):
             x = []
             y = []
             grados_info = {}
+            # Determinar trimestre de asistencia contextualmente
+            asis_trim = "Trimestre 1"
+            sel_trim = self.combo_trimestre.get()
+            if sel_trim in ["Trimestre 1", "Trimestre 2", "Trimestre 3"]:
+                asis_trim = sel_trim
             for n, p in promedios_dict.items():
                 est_grado = grado
                 est_name = n
@@ -752,7 +772,7 @@ class GraficosFrame(ctk.CTkFrame):
                 
                 if est_grado not in grados_info:
                     try:
-                        fechas = self.engine.obtener_fechas_asistencia(est_grado, "Trimestre 1")
+                        fechas = self.engine.obtener_fechas_asistencia(est_grado, asis_trim)
                         estudiantes = self.engine.obtener_estudiantes_completos(est_grado)
                         name_to_id = {e["nombre"].upper().strip(): e["id"] for e in estudiantes}
                         grados_info[est_grado] = {
@@ -770,7 +790,7 @@ class GraficosFrame(ctk.CTkFrame):
                     total = len(info["fechas"])
                     for fecha in info["fechas"]:
                         if fecha not in info["asis_cache"]:
-                            res = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(est_grado, "Trimestre 1", fecha)
+                            res = getattr(self.engine, 'buscar_asistencia_existente', lambda g,t,f: None)(est_grado, asis_trim, fecha)
                             info["asis_cache"][fecha] = res["asistencia"] if res else {}
                         
                         asis_dict = info["asis_cache"][fecha]

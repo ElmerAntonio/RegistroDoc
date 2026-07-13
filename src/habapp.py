@@ -54,7 +54,12 @@ class HabitosFrame(ctk.CTkFrame):
         self.criterios_activos = []
 
         # Ruta de datos JSON
-        self.ruta_json = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes", "habitos_evaluaciones.json")
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        ruta_base = cfg.get("ruta_exportacion")
+        if not ruta_base:
+            ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        self.ruta_json = os.path.join(ruta_base, "Expedientes_Estudiantes", "habitos_evaluaciones.json")
 
         self.crear_interfaz()
         self.al_cambiar_grado_trimestre()
@@ -417,7 +422,12 @@ class HabitosFrame(ctk.CTkFrame):
                 stats_notas = self.engine.obtener_tareas_sin_nota(grado, trimestre, id_est)
                 
                 reportes_disciplina = []
-                carpeta_exp = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
+                from rdsecurity import cargar_config_segura
+                cfg = cargar_config_segura({})
+                ruta_base = cfg.get("ruta_exportacion")
+                if not ruta_base:
+                    ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+                carpeta_exp = os.path.join(ruta_base, "Expedientes_Estudiantes")
                 nombre_archivo = f"{est['nombre']} - {grado.replace('°', '')}.docx".replace("/", "-")
                 ruta_word = os.path.join(carpeta_exp, nombre_archivo)
                 if os.path.exists(ruta_word) and DOCX_DISPONIBLE:

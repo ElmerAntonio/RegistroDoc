@@ -136,6 +136,7 @@ def test_exportar_todo_a_excel_and_benchmark(clean_db, tmp_path):
     # Open the exported excel and verify grades and attendance
     wb = openpyxl.load_workbook(export_dest, data_only=True)
     sheet_names = wb.sheetnames
+    print("DEBUG EXPORTED SHEET NAMES:", sheet_names)
     assert any("Ingles" in name for name in sheet_names)
     assert any("Asistencia" in name for name in sheet_names)
 

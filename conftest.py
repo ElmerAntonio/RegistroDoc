@@ -63,6 +63,23 @@ def _build_inmemory_manager():
 
 
 @pytest.fixture(autouse=True)
+def patch_user_dir(monkeypatch, tmp_path_factory):
+    """Aísla el directorio de datos de usuario para evitar interferencias con el entorno real."""
+    temp_dir = str(tmp_path_factory.mktemp("registrodoc_test_userdata"))
+    os.makedirs(os.path.join(temp_dir, "temp"), exist_ok=True)
+    os.makedirs(os.path.join(temp_dir, "data"), exist_ok=True)
+    os.makedirs(os.path.join(temp_dir, "backups"), exist_ok=True)
+
+    import rdsql
+    monkeypatch.setattr(rdsql, "obtener_dir_datos_usuario", lambda: temp_dir)
+
+    try:
+        import rdsecurity
+        monkeypatch.setattr(rdsecurity, "obtener_dir_datos_usuario", lambda: temp_dir)
+    except (ImportError, AttributeError):
+        pass
+
+@pytest.fixture(autouse=True)
 def patch_sql_manager(monkeypatch, request):
     """Parchea SQLDatabaseManager con BD en memoria compartida para todos los tests.
     Todas las instancias creadas dentro del mismo test comparten la misma BD en memoria.

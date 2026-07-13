@@ -36,3 +36,19 @@ def test_obtener_rango_fechas_trimestre():
     assert start < end
     assert start.year == 2026
     assert end.year == 2026
+
+def test_parse_fecha_segura():
+    from utils.date_helpers import parse_fecha_segura
+    # MM-DD
+    assert parse_fecha_segura("05-12", ano_lectivo="2026") == datetime.date(2026, 5, 12)
+    # DD-MM parsed securely
+    assert parse_fecha_segura("25-10", ano_lectivo="2026") == datetime.date(2026, 10, 25)
+
+def test_normalizar_fecha_a_mm_dd():
+    from utils.date_helpers import normalizar_fecha_a_mm_dd
+    # Standard format
+    assert normalizar_fecha_a_mm_dd("05-12") == "05-12"
+    # Ambiguous 12-05 - Trimestre 1 (March-June) maps to May 12 -> 05-12
+    assert normalizar_fecha_a_mm_dd("12-05", trimestre=1) == "05-12"
+    # Trimestre 3 (Sept-Dec) maps to Dec 5 -> 12-05
+    assert normalizar_fecha_a_mm_dd("12-05", trimestre=3) == "12-05"

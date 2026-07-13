@@ -35,7 +35,8 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.crear_panel_izquierdo()
         self.crear_panel_derecho()
 
-        self.al_cambiar_grado(self.combo_grado.get())
+        # Datos iniciales se cargan en actualizar_vista() al mostrar el frame
+        self._initialized = False
 
     def crear_panel_izquierdo(self):
         frame_izq = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=10)
@@ -361,9 +362,13 @@ class ObservacionesFrame(ctk.CTkFrame):
         self.btn_nota_acudiente.configure(state="disabled")
         self.btn_abrir_expediente.configure(state="disabled")
 
-        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
-        if not os.path.exists(carpeta):
-            os.makedirs(carpeta)
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        ruta_base = cfg.get("ruta_exportacion")
+        if not ruta_base:
+            ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes")
+        os.makedirs(carpeta, exist_ok=True)
 
         nombre_est = self.estudiante_seleccionado['nombre']
 
@@ -416,6 +421,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         modal.resizable(False, False)
         modal.transient(self)
         modal.grab_set()
+        modal.protocol("WM_DELETE_WINDOW", lambda: (modal.grab_release(), modal.destroy()) if modal.winfo_exists() else None)
         
         from config import establecer_icono_ventana
         establecer_icono_ventana(modal)
@@ -466,6 +472,10 @@ class ObservacionesFrame(ctk.CTkFrame):
             }
             ruta = generar_nota_acudiente(datos)
             ruta_txt = generar_citacion_txt(datos)
+            try:
+                modal.grab_release()
+            except Exception:
+                pass
             modal.destroy()
             
             if ruta or ruta_txt:
@@ -491,7 +501,12 @@ class ObservacionesFrame(ctk.CTkFrame):
             
         nombre_est = self.estudiante_seleccionado['nombre']
         nombre_archivo = f"{nombre_est} - {self.grado_actual.replace('°', '')}.docx".replace("/", "-")
-        carpeta = os.path.join(BASE_DIR, "..", "Expedientes_Estudiantes")
+        from rdsecurity import cargar_config_segura
+        cfg = cargar_config_segura({})
+        ruta_base = cfg.get("ruta_exportacion")
+        if not ruta_base:
+            ruta_base = os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc")
+        carpeta = os.path.join(ruta_base, "Expedientes_Estudiantes")
         ruta_archivo = os.path.join(carpeta, nombre_archivo)
         
         from utils.footer_utils import abrir_documento
@@ -789,6 +804,7 @@ class ObservacionesFrame(ctk.CTkFrame):
         modal.resizable(False, False)
         modal.transient(self)
         modal.grab_set()
+        modal.protocol("WM_DELETE_WINDOW", lambda: (modal.grab_release(), modal.destroy()) if modal.winfo_exists() else None)
         
         from config import establecer_icono_ventana
         establecer_icono_ventana(modal)
@@ -833,6 +849,10 @@ class ObservacionesFrame(ctk.CTkFrame):
                 self.combo_plantilla.configure(values=["Seleccionar plantilla..."] + list(self.plantillas.keys()))
                 self.combo_plantilla.set(nombre)
                 
+                try:
+                    modal.grab_release()
+                except Exception:
+                    pass
                 modal.destroy()
                 root = self.winfo_toplevel()
                 if hasattr(root, "mostrar_toast"):

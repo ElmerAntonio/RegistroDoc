@@ -75,12 +75,7 @@ def obtener_trimestre_actual(fecha_actual=None):
     if fecha_actual is None:
         fecha_actual = datetime.date.today()
     elif isinstance(fecha_actual, str):
-        # Intentar parsear 'DD-MM-YYYY'
-        try:
-            partes = fecha_actual.split("-")
-            fecha_actual = datetime.date(int(partes[2]), int(partes[1]), int(partes[0]))
-        except Exception:
-            fecha_actual = datetime.date.today()
+        fecha_actual = parse_fecha_segura(fecha_actual)
 
     cfg = cargar_config_segura({})
     ano_lectivo = cfg.get("ano_lectivo", str(fecha_actual.year))
@@ -228,3 +223,156 @@ def obtener_hoy_panama():
 def es_hora_sincronizada():
     """Retorna True si la hora fue sincronizada por internet."""
     return _TIME_SYNCHRONIZED
+
+
+def parse_fecha_segura(fecha_str, ano_lectivo=None):
+    """
+    Parses any date string (MM-DD, DD-MM, YYYY-MM-DD, DD-MM-YYYY, etc.)
+    and returns a datetime.date object.
+    """
+    import datetime
+    import re
+    from rdsecurity import cargar_config_segura
+    
+    if not fecha_str:
+        return datetime.date.today()
+        
+    if isinstance(fecha_str, datetime.date):
+        return fecha_str
+        
+    s = str(fecha_str).strip()
+    
+    # If it's already YYYY-MM-DD format (ISO)
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+        try:
+            return datetime.date.fromisoformat(s)
+        except Exception:
+            pass
+            
+    # Resolve year
+    if not ano_lectivo:
+        cfg = cargar_config_segura({})
+        ano_lectivo = cfg.get("ano_lectivo", str(datetime.date.today().year))
+    try:
+        ano = int(ano_lectivo)
+    except Exception:
+        ano = datetime.date.today().year
+        
+    # Clean and split parts
+    cleaned = re.sub(r'[^\d/\-]', '', s)
+    parts = re.split(r'[/\-]', cleaned)
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return datetime.date(ano, 1, 1)
+        
+    try:
+        a = int(parts[0])
+        b = int(parts[1])
+    except ValueError:
+        return datetime.date(ano, 1, 1)
+        
+    year = ano
+    if len(parts) >= 3 and parts[2]:
+        if len(parts[0]) == 4:
+            year = int(parts[0])
+            a = int(parts[1])
+            b = int(parts[2])
+        elif len(parts[2]) == 4:
+            year = int(parts[2])
+            a = int(parts[0])
+            b = int(parts[1])
+            
+    # Deduce day and month
+    if a > 12 and b <= 12:
+        m, d = b, a
+    elif b > 12 and a <= 12:
+        m, d = a, b
+    else:
+        # Default to treating first as month
+        m, d = a, b
+        
+    try:
+        return datetime.date(year, m, d)
+    except Exception:
+        return datetime.date(year, 1, 1)
+
+
+def normalizar_fecha_a_mm_dd(fecha_str, trimestre=None, ano_lectivo=None):
+    """
+    Normaliza un string de fecha al formato 'MM-DD'.
+    Usa el trimestre y el año lectivo para resolver la ambigüedad entre MM-DD y DD-MM.
+    """
+    import re
+    import datetime
+    from rdsecurity import cargar_config_segura
+    
+    if not fecha_str:
+        return datetime.date.today().strftime("%m-%d")
+        
+    if isinstance(fecha_str, datetime.date):
+        return fecha_str.strftime("%m-%d")
+        
+    s = re.sub(r'[^\d/\-]', '', str(fecha_str)).strip()
+    parts = re.split(r'[/\-]', s)
+    
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return datetime.date.today().strftime("%m-%d")
+        
+    try:
+        a = int(parts[0])
+        b = int(parts[1])
+    except ValueError:
+        return datetime.date.today().strftime("%m-%d")
+        
+    year = None
+    if len(parts) >= 3 and parts[2]:
+        if len(parts[0]) == 4:
+            year = int(parts[0])
+            a = int(parts[1])
+            b = int(parts[2])
+        elif len(parts[2]) == 4:
+            year = int(parts[2])
+            a = int(parts[0])
+            b = int(parts[1])
+            
+    if not ano_lectivo:
+        cfg = cargar_config_segura({})
+        ano_lectivo = cfg.get("ano_lectivo", str(datetime.date.today().year))
+    try:
+        ano = int(ano_lectivo)
+    except Exception:
+        ano = datetime.date.today().year
+        
+    if year is None:
+        year = ano
+
+    if a > 12 and b <= 12:
+        m, d = b, a
+    elif b > 12 and a <= 12:
+        m, d = a, b
+    elif a <= 12 and b <= 12:
+        opt1 = datetime.date(year, a, b)
+        opt2 = datetime.date(year, b, a)
+        
+        if trimestre:
+            try:
+                # Local import to avoid circular dependency
+                from utils.date_helpers import obtener_rango_fechas_trimestre
+                t_str = f"Trimestre {trimestre}" if isinstance(trimestre, (int, str)) and "Trimestre" not in str(trimestre) else str(trimestre)
+                start_t, end_t = obtener_rango_fechas_trimestre(t_str, str(year))
+                in_opt1 = (start_t <= opt1 <= end_t)
+                in_opt2 = (start_t <= opt2 <= end_t)
+                
+                if in_opt1 and not in_opt2:
+                    m, d = a, b
+                elif in_opt2 and not in_opt1:
+                    m, d = b, a
+                else:
+                    m, d = a, b
+            except Exception:
+                m, d = a, b
+        else:
+            m, d = a, b
+    else:
+        return datetime.date.today().strftime("%m-%d")
+        
+    return f"{m:02d}-{d:02d}"

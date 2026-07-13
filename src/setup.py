@@ -9,6 +9,7 @@ from config import BASE_DIR, ASSETS_DIR
 from rdsecurity import guardar_config_segura
 from rdsql import SQLDatabaseManager, obtener_dir_datos_usuario
 from rddata import DataEngine
+from utils.translator import tr, set_current_lang
 
 # ══════════════════════════════════════════════════════════════
 #  DISEÑO PREMIUM — PALETA DE COLORES (COHERENTE CON DASHBOARD)
@@ -76,6 +77,11 @@ class SetupWizard(ctk.CTk):
             "ano_lectivo": "2026",
             "modalidad": "premedia",
             "logo_escuela_path": "",
+            "ruta_exportacion": os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc"),
+            "idioma": "es",
+            "jornada": "Matutina",
+            "director_nombre": "",
+            "subdirector_nombre": "",
             "grados_seleccionados": {},  # {"7°": "A", "8°": "B"}
             "materias_mapeadas": {},     # {"Español": ["7° A", "8° B"]}
             "horario_slots": []          # [{"dia": "lunes", "bloque": "...", "materia_grado": "..."}]
@@ -99,13 +105,13 @@ class SetupWizard(ctk.CTk):
         self.nav_frame = ctk.CTkFrame(self, fg_color="transparent", height=60)
         self.nav_frame.pack(fill="x", side="bottom", padx=40, pady=20)
 
-        self.btn_atras = ctk.CTkButton(self.nav_frame, text="⬅️ Atrás", font=("Segoe UI", 12, "bold"), fg_color="#334155", hover_color="#475569", width=120, command=self.retroceder)
+        self.btn_atras = ctk.CTkButton(self.nav_frame, text=tr("⬅️ Atrás"), font=("Segoe UI", 12, "bold"), fg_color="#334155", hover_color="#475569", width=120, command=self.retroceder)
         self.btn_atras.pack(side="left")
 
-        self.btn_omitir = ctk.CTkButton(self.nav_frame, text="Omitir y Usar Demo ❌", font=("Segoe UI", 11), fg_color="#1E293B", hover_color="#334155", text_color=C["texto_sec"], width=150, command=self.omitir_asistente)
+        self.btn_omitir = ctk.CTkButton(self.nav_frame, text=tr("Omitir y Usar Demo ❌"), font=("Segoe UI", 11), fg_color="#1E293B", hover_color="#334155", text_color=C["texto_sec"], width=150, command=self.omitir_asistente)
         self.btn_omitir.pack(side="left", padx=20)
 
-        self.btn_siguiente = ctk.CTkButton(self.nav_frame, text="Siguiente ➡️", font=("Segoe UI", 12, "bold"), fg_color=C["azul"], hover_color=C["hover"], width=140, command=self.avanzar)
+        self.btn_siguiente = ctk.CTkButton(self.nav_frame, text=tr("Siguiente ➡️"), font=("Segoe UI", 12, "bold"), fg_color=C["azul"], hover_color=C["hover"], width=140, command=self.avanzar)
         self.btn_siguiente.pack(side="right")
 
         self.mostrar_paso()
@@ -118,7 +124,7 @@ class SetupWizard(ctk.CTk):
         lbl_title = ctk.CTkLabel(self.progress_frame, text="RegistroDoc Pro Setup", font=("Segoe UI", 15, "bold"), text_color=C["cian"])
         lbl_title.pack(side="left", padx=25)
 
-        steps = ["Perfil", "Grados", "Materias", "Horario", "Finalizar"]
+        steps = [tr("Perfil"), tr("Grados"), tr("Materias"), tr("Horario"), tr("Finalizar")]
         steps_frame = ctk.CTkFrame(self.progress_frame, fg_color="transparent")
         steps_frame.pack(side="right", padx=25)
 
@@ -129,6 +135,7 @@ class SetupWizard(ctk.CTk):
             lbl.pack(side="left", padx=5)
             if i < len(steps):
                 ctk.CTkLabel(steps_frame, text="•", text_color=C["borde"]).pack(side="left")
+
 
     def limpiar_main_frame(self):
         for w in self.main_frame.winfo_children():
@@ -181,7 +188,12 @@ class SetupWizard(ctk.CTk):
                 "escuela_nombre": "Escuela de Prueba",
                 "escuela_region": "Comarca Ngäbe Buglé",
                 "ano_lectivo": "2026",
-                "logo_escuela_path": ""
+                "logo_escuela_path": "",
+                "ruta_exportacion": os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc"),
+                "idioma": "es",
+                "jornada": "Matutina",
+                "director_nombre": "",
+                "subdirector_nombre": ""
             }
             guardar_config_segura(demo_cfg)
             
@@ -216,36 +228,37 @@ class SetupWizard(ctk.CTk):
         self.main_frame.columnconfigure(0, weight=6)
         self.main_frame.columnconfigure(1, weight=4)
 
-        col_izq = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        # Columna Izquierda: Scrollable Frame para acomodar los nuevos campos cómodamente
+        col_izq = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
         col_izq.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
 
         col_der = ctk.CTkFrame(self.main_frame, fg_color=C["card"], border_width=1, border_color=C["borde"], corner_radius=12)
         col_der.grid(row=0, column=1, sticky="nsew")
 
-        # Columna Izquierda: Formulario
-        ctk.CTkLabel(col_izq, text="Paso 1: Perfil Profesional", font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(col_izq, text="Ingresa los datos oficiales de tu libreta docente.", font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
+        # Títulos
+        ctk.CTkLabel(col_izq, text=tr("Paso 1: Perfil Profesional"), font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(col_izq, text=tr("Ingresa los datos oficiales de tu libreta docente."), font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
 
-        # Docente nombre
-        ctk.CTkLabel(col_izq, text="Nombre del Docente:", font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        # Docente nombre (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Nombre del Docente *:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
         self.ent_nom = ctk.CTkEntry(col_izq, width=380, placeholder_text="Ej: Prof. Antonio Pérez")
         self.ent_nom.pack(anchor="w", pady=(4, 12))
         self.ent_nom.insert(0, self.datos["docente_nombre"])
 
-        # Cédula
-        ctk.CTkLabel(col_izq, text="Cédula del Docente:", font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        # Cédula (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Cédula del Docente *:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
         self.ent_ced = ctk.CTkEntry(col_izq, width=380, placeholder_text="Ej: 4-750-1234")
         self.ent_ced.pack(anchor="w", pady=(4, 12))
         self.ent_ced.insert(0, self.datos["docente_cedula"])
 
-        # Escuela nombre
-        ctk.CTkLabel(col_izq, text="Nombre de la Escuela:", font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        # Escuela nombre (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Nombre de la Escuela *:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
         self.ent_esc = ctk.CTkEntry(col_izq, width=380, placeholder_text="Ej: C.E.B.G. Quebrada de Guabo")
         self.ent_esc.pack(anchor="w", pady=(4, 12))
         self.ent_esc.insert(0, self.datos["escuela_nombre"])
 
-        # Región
-        ctk.CTkLabel(col_izq, text="Región Educativa (Panamá):", font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        # Región (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Región Educativa (Panamá):"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
         regiones = [
             "Bocas del Toro", "Coclé", "Colón", "Chiriquí", "Darién", "Herrera", "Los Santos",
             "Panamá Centro", "Panamá Este", "Panamá Norte", "Panamá Oeste", "San Miguelito", 
@@ -255,26 +268,71 @@ class SetupWizard(ctk.CTk):
         self.cmb_reg.pack(anchor="w", pady=(4, 12))
         self.cmb_reg.set(self.datos["escuela_region"])
 
-        # Año lectivo
-        ctk.CTkLabel(col_izq, text="Año Lectivo:", font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
-        self.ent_ano = ctk.CTkEntry(col_izq, width=120)
+        # Año lectivo (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Año Lectivo *:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        self.ent_ano = ctk.CTkEntry(col_izq, width=380)
         self.ent_ano.pack(anchor="w", pady=(4, 12))
         self.ent_ano.insert(0, self.datos["ano_lectivo"])
 
-        # Columna Derecha: Carga de Logo
-        ctk.CTkLabel(col_der, text="Logo de la Escuela", font=("Segoe UI", 14, "bold"), text_color=C["cian"]).pack(pady=15)
+        # Director(a) (Opcional)
+        ctk.CTkLabel(col_izq, text=tr("Director(a) de la Escuela:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        self.ent_dir = ctk.CTkEntry(col_izq, width=380, placeholder_text="Ej: Prof. María Martínez")
+        self.ent_dir.pack(anchor="w", pady=(4, 12))
+        self.ent_dir.insert(0, self.datos["director_nombre"])
+
+        # Subdirector(a) (Opcional)
+        ctk.CTkLabel(col_izq, text=tr("Subdirector(a) de la Escuela:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        self.ent_sub = ctk.CTkEntry(col_izq, width=380, placeholder_text="Ej: Prof. Juan Gómez")
+        self.ent_sub.pack(anchor="w", pady=(4, 12))
+        self.ent_sub.insert(0, self.datos["subdirector_nombre"])
+
+        # Jornada
+        ctk.CTkLabel(col_izq, text=tr("Jornada Escolar:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        jornadas = ["Matutina", "Vespertina", "Nocturna", "Extendida"]
+        self.cmb_jor = ctk.CTkOptionMenu(col_izq, values=jornadas, width=380, fg_color=C["card"], button_color=C["borde"])
+        self.cmb_jor.pack(anchor="w", pady=(4, 12))
+        self.cmb_jor.set(self.datos["jornada"])
+
+        # Idioma
+        ctk.CTkLabel(col_izq, text=tr("Idioma de la Aplicación:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        idiomas = ["Español", "English"]
+        self.cmb_idioma = ctk.CTkOptionMenu(col_izq, values=idiomas, width=380, fg_color=C["card"], button_color=C["borde"], command=self.cambiar_idioma_wizard)
+        self.cmb_idioma.pack(anchor="w", pady=(4, 12))
+        self.cmb_idioma.set("Español" if self.datos["idioma"] == "es" else "English")
+
+        # Ruta de exportación (Requerido)
+        ctk.CTkLabel(col_izq, text=tr("Ubicación de Exportación de Archivos *:"), font=("Segoe UI", 12, "bold"), text_color=C["texto"]).pack(anchor="w")
+        f_exp = ctk.CTkFrame(col_izq, fg_color="transparent")
+        f_exp.pack(anchor="w", fill="x", pady=(4, 12))
+        self.ent_exp = ctk.CTkEntry(f_exp, width=270)
+        self.ent_exp.pack(side="left")
+        self.ent_exp.insert(0, self.datos["ruta_exportacion"])
         
-        self.logo_lbl = ctk.CTkLabel(col_der, text="🚫 Sin Escudo\nCargado", font=("Segoe UI", 11), text_color=C["texto_sec"], width=120, height=120, fg_color=C["fondo"], corner_radius=8)
+        btn_sel_exp = ctk.CTkButton(f_exp, text=tr("Explorar 📂"), width=100, fg_color=C["borde"], hover_color=C["fondo"], command=self.seleccionar_ruta_exportacion)
+        btn_sel_exp.pack(side="left", padx=(10, 0))
+
+        # Columna Derecha: Carga de Logo (Opcional)
+        ctk.CTkLabel(col_der, text=tr("Logo de la Escuela (Opcional)"), font=("Segoe UI", 14, "bold"), text_color=C["cian"]).pack(pady=15)
+        
+        self.logo_lbl = ctk.CTkLabel(col_der, text=tr("🚫 Sin Escudo\nCargado"), font=("Segoe UI", 11), text_color=C["texto_sec"], width=120, height=120, fg_color=C["fondo"], corner_radius=8)
         self.logo_lbl.pack(pady=10)
 
         # Actualizar preview si ya se cargó anteriormente
         if self.datos["logo_escuela_path"]:
             self.mostrar_preview_logo(self.datos["logo_escuela_path"])
 
-        btn_logo = ctk.CTkButton(col_der, text="📁 Cargar Logo", font=("Segoe UI", 11, "bold"), fg_color=C["borde"], hover_color=C["fondo"], command=self.seleccionar_logo)
+        btn_logo = ctk.CTkButton(col_der, text=tr("📁 Cargar Logo"), font=("Segoe UI", 11, "bold"), fg_color=C["borde"], hover_color=C["fondo"], command=self.seleccionar_logo)
         btn_logo.pack(pady=15)
         
-        ctk.CTkLabel(col_der, text="Recomendado: Imagen PNG\ncon fondo transparente.", font=("Segoe UI", 10, "italic"), text_color=C["texto_sec"]).pack()
+        ctk.CTkLabel(col_der, text=tr("Recomendado: Imagen PNG\ncon fondo transparente."), font=("Segoe UI", 10, "italic"), text_color=C["texto_sec"]).pack()
+
+
+    def seleccionar_ruta_exportacion(self):
+        f = filedialog.askdirectory(title="Seleccionar Carpeta de Exportación")
+        if f:
+            f_norm = os.path.normpath(f)
+            self.ent_exp.delete(0, "end")
+            self.ent_exp.insert(0, f_norm)
 
     def seleccionar_logo(self):
         f = filedialog.askopenfilename(filetypes=[("Imágenes", "*.png;*.jpg;*.jpeg")])
@@ -295,7 +353,39 @@ class SetupWizard(ctk.CTk):
             self.logo_preview_img = ImageTk.PhotoImage(img)
             self.logo_lbl.configure(image=self.logo_preview_img, text="")
         except Exception:
-            self.logo_lbl.configure(text="⚠️ Error al\ncargar logo")
+            self.logo_lbl.configure(text=tr("⚠️ Error al\ncargar logo"))
+
+    def cambiar_idioma_wizard(self, opcion):
+        nuevo_idioma = "es" if opcion in ["Español", "Spanish"] else "en"
+        self.datos["idioma"] = nuevo_idioma
+        set_current_lang(nuevo_idioma)
+        
+        # Guardar valores ingresados actualmente para no perderlos al reconstruir Paso 1
+        if hasattr(self, "ent_nom") and self.ent_nom.winfo_exists():
+            self.datos["docente_nombre"] = self.ent_nom.get().strip()
+        if hasattr(self, "ent_ced") and self.ent_ced.winfo_exists():
+            self.datos["docente_cedula"] = self.ent_ced.get().strip()
+        if hasattr(self, "ent_esc") and self.ent_esc.winfo_exists():
+            self.datos["escuela_nombre"] = self.ent_esc.get().strip()
+        if hasattr(self, "cmb_reg") and self.cmb_reg.winfo_exists():
+            self.datos["escuela_region"] = self.cmb_reg.get()
+        if hasattr(self, "ent_ano") and self.ent_ano.winfo_exists():
+            self.datos["ano_lectivo"] = self.ent_ano.get().strip()
+        if hasattr(self, "ent_dir") and self.ent_dir.winfo_exists():
+            self.datos["director_nombre"] = self.ent_dir.get().strip()
+        if hasattr(self, "ent_sub") and self.ent_sub.winfo_exists():
+            self.datos["subdirector_nombre"] = self.ent_sub.get().strip()
+        if hasattr(self, "cmb_jor") and self.cmb_jor.winfo_exists():
+            self.datos["jornada"] = self.cmb_jor.get()
+        if hasattr(self, "ent_exp") and self.ent_exp.winfo_exists():
+            self.datos["ruta_exportacion"] = self.ent_exp.get().strip()
+            
+        # Re-dibujar el paso actual y actualizar los botones de navegación
+        self.mostrar_paso()
+        self.btn_atras.configure(text=tr("⬅️ Atrás"))
+        self.btn_omitir.configure(text=tr("Omitir y Usar Demo ❌"))
+        self.btn_siguiente.configure(text=tr("Siguiente ➡️"))
+
 
     def guardar_paso_1(self) -> bool:
         nom = self.ent_nom.get().strip()
@@ -303,9 +393,21 @@ class SetupWizard(ctk.CTk):
         esc = self.ent_esc.get().strip()
         reg = self.cmb_reg.get()
         ano = self.ent_ano.get().strip()
+        dir_n = self.ent_dir.get().strip()
+        sub_n = self.ent_sub.get().strip()
+        jor = self.cmb_jor.get()
+        lang_sel = self.cmb_idioma.get()
+        exp = self.ent_exp.get().strip()
 
-        if not nom or not ced or not esc or not ano:
-            messagebox.showwarning("Atención", "Por favor completa todos los campos del formulario.")
+        if not nom or not ced or not esc or not ano or not exp:
+            messagebox.showwarning("Atención", "Por favor completa todos los campos requeridos (*).")
+            return False
+
+        # Validar ruta de exportación
+        try:
+            os.makedirs(exp, exist_ok=True)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo crear o verificar la ruta de exportación: {e}")
             return False
 
         self.datos["docente_nombre"] = nom
@@ -313,23 +415,32 @@ class SetupWizard(ctk.CTk):
         self.datos["escuela_nombre"] = esc
         self.datos["escuela_region"] = reg
         self.datos["ano_lectivo"] = ano
+        self.datos["director_nombre"] = dir_n
+        self.datos["subdirector_nombre"] = sub_n
+        self.datos["jornada"] = jor
+        self.datos["idioma"] = "es" if lang_sel in ["Español", "Spanish"] else "en"
+        self.datos["ruta_exportacion"] = os.path.normpath(exp)
+        
+        # Aplicar idioma en caliente para el resto del setup
+        set_current_lang(self.datos["idioma"])
+        
         return True
 
     # ══════════════════════════════════════════════════════════════
     #  PASO 2: GRADOS Y SECCIONES
     # ══════════════════════════════════════════════════════════════
     def mostrar_paso_2(self):
-        ctk.CTkLabel(self.main_frame, text="Paso 2: Grados y Secciones", font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(self.main_frame, text="Selecciona la modalidad y los grupos que vas a atender.", font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
+        ctk.CTkLabel(self.main_frame, text=tr("Paso 2: Grados y Secciones"), font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(self.main_frame, text=tr("Selecciona la modalidad y los grupos que vas a atender."), font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
 
         # Modalidad Selector
         mod_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         mod_frame.pack(fill="x", pady=(0, 15))
-        ctk.CTkLabel(mod_frame, text="Modalidad de Enseñanza:", font=("Segoe UI", 12, "bold")).pack(side="left", padx=(0, 15))
+        ctk.CTkLabel(mod_frame, text=tr("Modalidad de Enseñanza:"), font=("Segoe UI", 12, "bold")).pack(side="left", padx=(0, 15))
 
-        self.seg_modalidad = ctk.CTkSegmentedButton(mod_frame, values=["Premedia", "Primaria"], selected_color=C["cian"], selected_hover_color=C["hover"], command=self.cambio_modalidad)
+        self.seg_modalidad = ctk.CTkSegmentedButton(mod_frame, values=[tr("Premedia"), tr("Primaria")], selected_color=C["cian"], selected_hover_color=C["hover"], command=self.cambio_modalidad)
         self.seg_modalidad.pack(side="left")
-        self.seg_modalidad.set("Premedia" if self.datos["modalidad"] == "premedia" else "Primaria")
+        self.seg_modalidad.set(tr("Premedia") if self.datos["modalidad"] == "premedia" else tr("Primaria"))
 
         # Contenedor de Grados
         self.grados_list_frame = ctk.CTkScrollableFrame(self.main_frame, fg_color=C["card"], border_width=1, border_color=C["borde"], height=280, corner_radius=12)
@@ -338,7 +449,9 @@ class SetupWizard(ctk.CTk):
         self.construir_lista_grados()
 
     def cambio_modalidad(self, val):
-        self.datos["modalidad"] = val.lower()
+        from utils.translator import REVERSE_TRANSLATIONS
+        original_val = REVERSE_TRANSLATIONS.get(val, val)
+        self.datos["modalidad"] = original_val.lower()
         self.construir_lista_grados()
 
     def construir_lista_grados(self):
@@ -351,9 +464,10 @@ class SetupWizard(ctk.CTk):
         # Encabezados de la grilla
         header = ctk.CTkFrame(self.grados_list_frame, fg_color="transparent")
         header.pack(fill="x", pady=5)
-        ctk.CTkLabel(header, text="Habilitar", font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=100, anchor="w").pack(side="left", padx=20)
-        ctk.CTkLabel(header, text="Grado / Nivel", font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=120, anchor="w").pack(side="left")
-        ctk.CTkLabel(header, text="Sección / Letra (ej: A, B, C)", font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=200, anchor="w").pack(side="left", padx=20)
+        ctk.CTkLabel(header, text=tr("Habilitar"), font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=100, anchor="w").pack(side="left", padx=20)
+        ctk.CTkLabel(header, text=tr("Grado / Nivel"), font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=120, anchor="w").pack(side="left")
+        ctk.CTkLabel(header, text=tr("Sección / Letra (ej: A, B, C)"), font=("Segoe UI", 11, "bold"), text_color=C["cian"], width=200, anchor="w").pack(side="left", padx=20)
+
 
         self.grado_checkboxes = {}
         self.grado_entries = {}
@@ -412,17 +526,17 @@ class SetupWizard(ctk.CTk):
         col_der.grid(row=0, column=1, sticky="nsew", padx=(15, 0))
 
         # Columna Izquierda: Agregar materias
-        ctk.CTkLabel(col_izq, text="Paso 3: Materias", font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(col_izq, text="Agrega tus materias y asígnalas a los grados correspondientes.", font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 15))
+        ctk.CTkLabel(col_izq, text=tr("Paso 3: Materias"), font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(col_izq, text=tr("Agrega tus materias y asígnalas a los grados correspondientes."), font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 15))
 
         entry_frame = ctk.CTkFrame(col_izq, fg_color="transparent")
         entry_frame.pack(fill="x", pady=5)
         
-        self.ent_materia = ctk.CTkEntry(entry_frame, placeholder_text="Escribe materia (ej: Matemáticas)", width=240)
+        self.ent_materia = ctk.CTkEntry(entry_frame, placeholder_text=tr("Escribe materia (ej: Matemáticas)"), width=240)
         self.ent_materia.pack(side="left")
         self.ent_materia.bind("<Return>", lambda e: self.agregar_materia_lista())
 
-        btn_add = ctk.CTkButton(entry_frame, text="➕ Agregar", font=("Segoe UI", 12, "bold"), fg_color=C["verde"], hover_color="#059669", width=100, command=self.agregar_materia_lista)
+        btn_add = ctk.CTkButton(entry_frame, text=tr("➕ Agregar"), font=("Segoe UI", 12, "bold"), fg_color=C["verde"], hover_color="#059669", width=100, command=self.agregar_materia_lista)
         btn_add.pack(side="left", padx=10)
 
         # Scrollable list de materias
@@ -430,7 +544,7 @@ class SetupWizard(ctk.CTk):
         self.materias_scroll.pack(fill="both", expand=True, pady=10)
 
         # Columna Derecha: Mapeo de grados para la materia seleccionada
-        self.lbl_mat_select = ctk.CTkLabel(col_der, text="Selecciona una materia a la izquierda", font=("Segoe UI", 13, "bold"), text_color=C["cian"])
+        self.lbl_mat_select = ctk.CTkLabel(col_der, text=tr("Selecciona una materia a la izquierda"), font=("Segoe UI", 13, "bold"), text_color=C["cian"])
         self.lbl_mat_select.pack(pady=15, padx=20)
 
         self.grados_map_frame = ctk.CTkFrame(col_der, fg_color="transparent")
@@ -444,7 +558,7 @@ class SetupWizard(ctk.CTk):
         mat = self.ent_materia.get().strip()
         if not mat: return
         if mat in self.datos["materias_mapeadas"]:
-            messagebox.showinfo("Información", "Esta materia ya está en la lista.")
+            messagebox.showinfo(tr("Información"), tr("Esta materia ya está en la lista."))
             return
 
         self.datos["materias_mapeadas"][mat] = []
@@ -465,7 +579,7 @@ class SetupWizard(ctk.CTk):
             w.destroy()
 
         if not self.datos["materias_mapeadas"]:
-            ctk.CTkLabel(self.materias_scroll, text="Sin materias agregadas.", font=("Segoe UI", 11, "italic"), text_color=C["texto_sec"]).pack(pady=40)
+            ctk.CTkLabel(self.materias_scroll, text=tr("Sin materias agregadas."), font=("Segoe UI", 11, "italic"), text_color=C["texto_sec"]).pack(pady=40)
             return
 
         for mat in sorted(self.datos["materias_mapeadas"].keys()):
@@ -519,13 +633,13 @@ class SetupWizard(ctk.CTk):
         self.guardar_mapeo_materia_actual()
 
         if not self.datos["materias_mapeadas"]:
-            messagebox.showwarning("Atención", "Debes agregar al menos una materia.")
+            messagebox.showwarning(tr("Atención"), tr("Debes agregar al menos una materia."))
             return False
 
         # Validar que todas las materias tengan al menos un grado asignado
         for mat, lista in self.datos["materias_mapeadas"].items():
             if not lista:
-                messagebox.showwarning("Atención", f"La materia '{mat}' no tiene ningún grado seleccionado.")
+                messagebox.showwarning(tr("Atención"), tr("La materia '{mat}' no tiene ningún grado seleccionado.").format(mat=mat))
                 return False
         return True
 
@@ -533,14 +647,14 @@ class SetupWizard(ctk.CTk):
     #  PASO 4: HORARIO DE CLASES
     # ══════════════════════════════════════════════════════════════
     def mostrar_paso_4(self):
-        ctk.CTkLabel(self.main_frame, text="Paso 4: Horario de Clases", font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(self.main_frame, text="Asigna tus materias a los bloques correspondientes de la semana (puedes dejar celdas vacías).", font=("Segoe UI", 11), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 12))
+        ctk.CTkLabel(self.main_frame, text=tr("Paso 4: Horario de Clases"), font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(self.main_frame, text=tr("Asigna tus materias a los bloques correspondientes de la semana (puedes dejar celdas vacías)."), font=("Segoe UI", 11), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 12))
 
         # Crear contenedor del Horario
         grid_container = ctk.CTkScrollableFrame(self.main_frame, fg_color=C["card"], border_width=1, border_color=C["borde"], height=320, corner_radius=12)
         grid_container.pack(fill="both", expand=True)
 
-        dias = ["Hora / Bloque", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+        dias = [tr("Hora / Bloque"), tr("Lunes"), tr("Martes"), tr("Miércoles"), tr("Jueves"), tr("Viernes")]
         
         # Configure columns
         for c in range(6):
@@ -551,6 +665,7 @@ class SetupWizard(ctk.CTk):
             header_lbl = ctk.CTkLabel(grid_container, text=d, font=("Segoe UI", 11, "bold"), text_color=C["cian"], fg_color=C["borde"], height=28)
             header_lbl.grid(row=0, column=c, padx=1, pady=1, sticky="nsew")
 
+
         # Horas por bloque
         bloques = [
             "07:00 - 07:45", "07:45 - 08:30", "08:30 - 09:15", "09:15 - 10:00",
@@ -559,7 +674,7 @@ class SetupWizard(ctk.CTk):
 
         # Recopilar lista de opciones validas de materias
         # Ej: "Español - 7° A", "Matemáticas - 8° B"
-        opciones_validas = ["Libre"]
+        opciones_validas = [tr("Libre")]
         for mat, grados_asig in self.datos["materias_mapeadas"].items():
             for g_lbl in grados_asig:
                 opciones_validas.append(f"{mat} - {g_lbl}")
@@ -578,8 +693,10 @@ class SetupWizard(ctk.CTk):
 
             for c_idx, dia in enumerate(dias_ingles, 1):
                 val_inicial = previos.get((blq, dia), "Libre")
+                if val_inicial == "Libre":
+                    val_inicial = tr("Libre")
                 if val_inicial not in opciones_validas:
-                    val_inicial = "Libre"
+                    val_inicial = tr("Libre")
 
                 # Dropdown para selección rápida
                 cmb = ctk.CTkOptionMenu(grid_container, values=opciones_validas, font=("Segoe UI", 9), fg_color="#0A1628", button_color=C["borde"], height=32)
@@ -592,7 +709,7 @@ class SetupWizard(ctk.CTk):
         slots = []
         for (blq, dia), cmb in self.horario_dropdowns.items():
             val = cmb.get()
-            if val != "Libre":
+            if val != tr("Libre"):
                 slots.append({
                     "bloque": blq,
                     "dia": dia,
@@ -601,34 +718,35 @@ class SetupWizard(ctk.CTk):
         self.datos["horario_slots"] = slots
         return True
 
+
     # ══════════════════════════════════════════════════════════════
     #  PASO 5: RESUMEN Y FINALIZAR
     # ══════════════════════════════════════════════════════════════
     def mostrar_paso_5(self):
-        ctk.CTkLabel(self.main_frame, text="Paso 5: Resumen y Confirmación", font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(self.main_frame, text="Verifica que los datos sean correctos antes de construir tu libreta digital.", font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
+        ctk.CTkLabel(self.main_frame, text=tr("Paso 5: Resumen y Confirmación"), font=("Segoe UI", 20, "bold"), text_color=C["texto"]).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(self.main_frame, text=tr("Verifica que los datos sean correctos antes de construir tu libreta digital."), font=("Segoe UI", 12), text_color=C["texto_sec"]).pack(anchor="w", pady=(0, 20))
 
         # Panel resumen
         resumen_box = ctk.CTkFrame(self.main_frame, fg_color=C["card"], border_width=1, border_color=C["borde"], corner_radius=12)
         resumen_box.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Contenido resumen
-        txt_resumen = f"👤 Docente: {self.datos['docente_nombre']}\n"
-        txt_resumen += f"🪪 Cédula: {self.datos['docente_cedula']}\n"
-        txt_resumen += f"🏫 Escuela: {self.datos['escuela_nombre']} ({self.datos['escuela_region']})\n"
-        txt_resumen += f"🗓️ Año Lectivo: {self.datos['ano_lectivo']}\n"
-        txt_resumen += f"📈 Nivel: {self.datos['modalidad'].capitalize()}\n"
-        txt_resumen += f"🖼️ Logo Escolar: {'Cargado' if self.datos['logo_escuela_path'] else 'Por defecto'}\n\n"
+        txt_resumen = f"{tr('👤 Docente: ')}{self.datos['docente_nombre']}\n"
+        txt_resumen += f"{tr('🪪 Cédula: ')}{self.datos['docente_cedula']}\n"
+        txt_resumen += f"{tr('🏫 Escuela: ')}{self.datos['escuela_nombre']} ({self.datos['escuela_region']})\n"
+        txt_resumen += f"{tr('🗓️ Año Lectivo: ')}{self.datos['ano_lectivo']}\n"
+        txt_resumen += f"{tr('📈 Nivel: ')}{self.datos['modalidad'].capitalize()}\n"
+        txt_resumen += f"{tr('🖼️ Logo Escolar: ')}{tr('Cargado') if self.datos['logo_escuela_path'] else tr('Por defecto')}\n\n"
 
-        txt_resumen += "👥 Grupos Registrados:\n"
+        txt_resumen += tr("👥 Grupos Registrados:\n")
         for g, sec in self.datos["grados_seleccionados"].items():
-            txt_resumen += f"  - Grado {g} Sección {sec}\n"
+            txt_resumen += f"{tr('  - Grado ')}{g}{tr(' Sección ')}{sec}\n"
 
-        txt_resumen += "\n📚 Asignaturas:\n"
+        txt_resumen += tr("\n📚 Asignaturas:\n")
         for mat, gs in self.datos["materias_mapeadas"].items():
-            txt_resumen += f"  - {mat} dictada en: {', '.join(gs)}\n"
+            txt_resumen += f"  - {mat}{tr(' dictada en: ')}{', '.join(gs)}\n"
 
-        txt_resumen += f"\n📅 Bloques de Horario Asignados: {len(self.datos['horario_slots'])} períodos escolares."
+        txt_resumen += f"{tr('\n📅 Bloques de Horario Asignados: ')}{len(self.datos['horario_slots'])}{tr(' períodos escolares.')}"
 
         # TextBox no editable
         tb = ctk.CTkTextbox(resumen_box, fg_color="transparent", font=("Segoe UI", 12), text_color=C["texto"], border_width=0)
@@ -637,10 +755,11 @@ class SetupWizard(ctk.CTk):
         tb.configure(state="disabled")
 
         # Modificar botón siguiente a finalizar
-        self.btn_siguiente.configure(text="✅ FINALIZAR CONFIGURACIÓN", fg_color=C["verde"], hover_color="#059669", width=220, command=self.ejecutar_inicializacion_completa)
+        self.btn_siguiente.configure(text=tr("✅ FINALIZAR CONFIGURACIÓN"), fg_color=C["verde"], hover_color="#059669", width=220, command=self.ejecutar_inicializacion_completa)
 
     def ejecutar_inicializacion_completa(self):
-        self.btn_siguiente.configure(text="⏳ Generando Libreta...", state="disabled")
+        self.btn_siguiente.configure(text=tr("⏳ Generando Libreta..."), state="disabled")
+
         self.btn_atras.configure(state="disabled")
         self.btn_omitir.configure(state="disabled")
         self.update()
@@ -654,7 +773,12 @@ class SetupWizard(ctk.CTk):
                 "escuela_nombre": self.datos["escuela_nombre"],
                 "escuela_region": self.datos["escuela_region"],
                 "ano_lectivo": self.datos["ano_lectivo"],
-                "logo_escuela_path": self.datos["logo_escuela_path"]
+                "logo_escuela_path": self.datos["logo_escuela_path"],
+                "ruta_exportacion": self.datos["ruta_exportacion"],
+                "idioma": self.datos["idioma"],
+                "jornada": self.datos["jornada"],
+                "director_nombre": self.datos["director_nombre"],
+                "subdirector_nombre": self.datos["subdirector_nombre"]
             })
 
             # Guardar la cédula en el registro de Windows para verificación de desinstalación segura
@@ -679,7 +803,12 @@ class SetupWizard(ctk.CTk):
                 ("escuela_region", self.datos["escuela_region"]),
                 ("ano_lectivo", self.datos["ano_lectivo"]),
                 ("logo_escuela_path", self.datos["logo_escuela_path"]),
-                ("modalidad_activa", self.datos["modalidad"])
+                ("modalidad_activa", self.datos["modalidad"]),
+                ("ruta_exportacion", self.datos["ruta_exportacion"]),
+                ("idioma", self.datos["idioma"]),
+                ("jornada", self.datos["jornada"]),
+                ("director_nombre", self.datos["director_nombre"]),
+                ("subdirector_nombre", self.datos["subdirector_nombre"])
             ]
             cursor.executemany("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?);", config_items)
 

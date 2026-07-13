@@ -7,6 +7,7 @@ import threading
 import datetime
 from rdsecurity import cargar_config_segura, guardar_config_segura
 from theme import C
+from utils.translator import tr
 
 
 class ConfigFrame(ctk.CTkFrame):
@@ -15,15 +16,15 @@ class ConfigFrame(ctk.CTkFrame):
         self.engine = engine
         self.app_principal = app_principal 
 
-        ctk.CTkLabel(self, text="Panel de Control Maestro", font=("Segoe UI", 24, "bold"), text_color="#3B82F6").pack(anchor="center", pady=(0, 5))
+        ctk.CTkLabel(self, text=tr("Panel de Control Maestro"), font=("Segoe UI", 24, "bold"), text_color="#3B82F6").pack(anchor="center", pady=(0, 5))
         
         self.tabs = ctk.CTkTabview(self)
         self.tabs.pack(fill="both", expand=True, pady=10)
         
-        self.tab_gen = self.tabs.add("Datos de Portada y Carátula")
-        self.tab_hor = self.tabs.add("Horarios")
-        self.tab_gra = self.tabs.add("Gestión de Grados")
-        self.tab_mat = self.tabs.add("Gestión de Materias")
+        self.tab_gen = self.tabs.add(tr("Datos de Portada y Carátula"))
+        self.tab_hor = self.tabs.add(tr("Horarios"))
+        self.tab_gra = self.tabs.add(tr("Gestión de Grados"))
+        self.tab_mat = self.tabs.add(tr("Gestión de Materias"))
 
         self.crear_panel_general()
         self.crear_panel_horarios()
@@ -40,17 +41,17 @@ class ConfigFrame(ctk.CTkFrame):
 
         f1 = ctk.CTkFrame(self.scroll_gen, fg_color=C["card_alt"], corner_radius=10)
         f1.pack(fill="x", padx=10, pady=10, ipadx=10, ipady=10)
-        ctk.CTkLabel(f1, text="Modalidad Activa:", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(10, 5))
+        ctk.CTkLabel(f1, text=tr("Modalidad Activa:"), font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(10, 5))
 
         row_mod = ctk.CTkFrame(f1, fg_color="transparent")
         row_mod.pack(fill="x")
         self.var_modalidad = ctk.StringVar(value=self.engine.modalidad.capitalize())
         ctk.CTkRadioButton(row_mod, text="Premedia", variable=self.var_modalidad, value="Premedia").pack(side="left", padx=40)
         ctk.CTkRadioButton(row_mod, text="Primaria", variable=self.var_modalidad, value="Primaria").pack(side="left", padx=40)
-        ctk.CTkButton(row_mod, text="Cambiar Modalidad", fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
+        ctk.CTkButton(row_mod, text=tr("Cambiar Modalidad"), fg_color="#F59E0B", command=self.cambiar_modalidad).pack(side="right", padx=20)
 
         # --- Selector de Tema Visual ---
-        ctk.CTkLabel(f1, text="Tema Visual (Contraste):", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(15, 5))
+        ctk.CTkLabel(f1, text=tr("Tema Visual (Contraste):"), font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=20, pady=(15, 5))
         row_tema = ctk.CTkFrame(f1, fg_color="transparent")
         row_tema.pack(fill="x")
         
@@ -169,26 +170,54 @@ class ConfigFrame(ctk.CTkFrame):
         logo_path_guardado = cfg.get("logo_escuela_path", "")
         self.var_logo_path = ctk.StringVar(value=logo_path_guardado)
 
-        ctk.CTkLabel(f2, text="Logo de Escuela (Word):", anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
+        ctk.CTkLabel(f2, text=tr("Logo de Escuela (Word):"), anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
         entry_logo = ctk.CTkEntry(f2, textvariable=self.var_logo_path, state="readonly")
         entry_logo.grid(row=footer_row, column=1, sticky="ew", padx=20, pady=5)
-        btn_logo = ctk.CTkButton(f2, text="Seleccionar Logo", command=self.seleccionar_logo)
+        btn_logo = ctk.CTkButton(f2, text=tr("Seleccionar Logo"), command=self.seleccionar_logo)
         btn_logo.grid(row=footer_row, column=2, sticky="w", padx=10, pady=5)
+
+        footer_row += 1
+
+        # --- Configuración de Ruta de Exportación ---
+        export_path_guardado = cfg.get("ruta_exportacion", os.path.join(os.path.expanduser("~"), "Documents", "RegistroDoc"))
+        self.var_export_path = ctk.StringVar(value=export_path_guardado)
+
+        ctk.CTkLabel(f2, text=tr("Ubicación de Exportación:"), anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
+        entry_export = ctk.CTkEntry(f2, textvariable=self.var_export_path, state="readonly")
+        entry_export.grid(row=footer_row, column=1, sticky="ew", padx=20, pady=5)
+        btn_export = ctk.CTkButton(f2, text=tr("Seleccionar Carpeta"), command=self.seleccionar_ruta_exportacion)
+        btn_export.grid(row=footer_row, column=2, sticky="w", padx=10, pady=5)
+
+        footer_row += 1
+
+        # --- Configuración de Idioma ---
+        idioma_guardado = cfg.get("idioma", "es")
+        self.var_idioma = ctk.StringVar(value="Español" if idioma_guardado == "es" else "English")
+
+        ctk.CTkLabel(f2, text=tr("Idioma:"), anchor="w", font=("Segoe UI", 12, "bold")).grid(row=footer_row, column=0, sticky="w", padx=10, pady=5)
+        self.combo_idioma = ctk.CTkOptionMenu(
+            f2,
+            values=["Español", "English"],
+            variable=self.var_idioma,
+            command=self.cambiar_idioma_ui,
+            fg_color="#3B82F6",
+            button_color="#2563EB"
+        )
+        self.combo_idioma.grid(row=footer_row, column=1, sticky="w", padx=20, pady=5)
 
         footer_row += 1
         # --- Fin Logo ---
 
         ctk.CTkLabel(
-
             f2,
-            text="Al sincronizar, el programa inyectara estos datos en Portadas, Horarios y Asistencias.",
+            text=tr("Al sincronizar, el programa inyectara estos datos en Portadas, Horarios y Asistencias."),
             text_color="#F59E0B",
             font=("Segoe UI", 11),
         ).grid(row=footer_row, column=0, columnspan=4, pady=15)
 
         self.btn_sinc = ctk.CTkButton(
             f2,
-            text="SINCRONIZAR Y SOBREESCRIBIR EXCEL",
+            text=tr("SINCRONIZAR Y SOBREESCRIBIR EXCEL"),
             fg_color="#3B82F6",
             height=45,
             font=("Segoe UI", 14, "bold"),
@@ -199,7 +228,7 @@ class ConfigFrame(ctk.CTkFrame):
         # Tarea 25: Limpieza y Reinicio de Fin de Año Lectivo (Rollover)
         self.btn_reset_ano = ctk.CTkButton(
             f2,
-            text="🎓 CIERRE DE AÑO LECTIVO (ROLLOVER / ARCHIVO)",
+            text=tr("🎓 CIERRE DE AÑO LECTIVO (ROLLOVER / ARCHIVO)"),
             fg_color="#EF4444",
             hover_color="#DC2626",
             height=45,
@@ -222,6 +251,53 @@ class ConfigFrame(ctk.CTkFrame):
         datos = cargar_config_segura({})
         datos["logo_escuela_path"] = ruta
         guardar_config_segura(datos)
+
+    def seleccionar_ruta_exportacion(self):
+        ruta = filedialog.askdirectory(title="Seleccionar Carpeta de Exportación")
+        if ruta:
+            ruta_norm = os.path.normpath(ruta)
+            self.var_export_path.set(ruta_norm)
+
+    def cambiar_idioma_ui(self, opcion):
+        nuevo_idioma = "es" if opcion in ["Español", "Spanish"] else "en"
+        from utils.translator import set_current_lang
+        set_current_lang(nuevo_idioma)
+        
+        if hasattr(self, "app_principal") and self.app_principal:
+            try:
+                # 1. Guardar la configuración de idioma de forma persistente
+                datos = cargar_config_segura({})
+                datos["idioma"] = nuevo_idioma
+                guardar_config_segura(datos)
+                
+                # 2. Destruir main_app actual
+                main_app = self.app_principal.main_app
+                main_app.destroy()
+                
+                # 3. Limpiar caché de frames
+                self.app_principal._frames.clear()
+                
+                # 4. Reconstruir MainApplication
+                from app import MainApplication
+                self.app_principal.main_app = MainApplication(
+                    self.app_principal, self.app_principal.engine, app_principal=self.app_principal
+                )
+                self.app_principal.main_app.grid(row=0, column=0, sticky="nsew")
+                
+                # 5. Volver a mostrar la pantalla de configuración
+                self.app_principal.mostrar_configuracion()
+                
+                # 6. Mostrar mensaje (toast) en el idioma seleccionado
+                if hasattr(self.app_principal, "mostrar_toast"):
+                    msg = "✓ Idioma cambiado a Español" if nuevo_idioma == "es" else "✓ Language changed to English"
+                    self.app_principal.mostrar_toast(msg, color="#10B981")
+            except Exception as e:
+                print(f"[!] Error al recrear MainApplication tras cambio de idioma: {e}")
+        else:
+            root = self.winfo_toplevel()
+            if hasattr(root, "mostrar_toast"):
+                root.mostrar_toast(f"✓ Idioma cambiado a {opcion}", color="#10B981")
+
 
     def _crear_campo(self, parent, row, texto, valor):
         ctk.CTkLabel(parent, text=texto, anchor="w", font=("Segoe UI", 12, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=5)
@@ -408,6 +484,8 @@ class ConfigFrame(ctk.CTkFrame):
             "materias_activas": [m for m, var in getattr(self, "vars_materias", {}).items() if var.get()] if getattr(self, 'vars_materias', None) else [],
             "tema": "dark" if self.var_tema.get() == "Oscuro" else "light",
             "logo_escuela_path": self.var_logo_path.get(),
+            "ruta_exportacion": self.var_export_path.get(),
+            "idioma": "es" if self.var_idioma.get() in ["Español", "Spanish"] else "en",
         }
         guardar_config_segura(datos)
         

@@ -11,6 +11,7 @@ import ctypes
 import json
 import tkinter as tk
 import customtkinter as ctk
+from utils.translator import tr
 
 from utils.dialogs import patch_messagebox
 patch_messagebox()
@@ -73,19 +74,21 @@ class MainApplication(ctk.CTkFrame):
     # ══════════════════════════════════════════════════════════════════════
     def _obtener_nombre_menu_breadcrumb(self):
         nombres = {
-            "Inicio": "Inicio",
-            "Estudiantes": "Inicio › Estudiantes",
-            "Notas y Asistencia": "Inicio › Notas y Asistencia",
-            "Observaciones": "Inicio › Observaciones",
-            "Reportes y Gráficos": "Inicio › Reportes y Gráficos",
-            "Impresión": "Inicio › Impresión",
-            "Hábitos y Actitudes": "Inicio › Hábitos y Actitudes",
-            "Ayuda": "Inicio › Ayuda",
-            "Tareas Programadas": "Inicio › Tareas Programadas",
-            "Minutas y Citaciones": "Inicio › Minutas y Citaciones",
-            "Registro Completo": "Inicio › Registro Completo"
+            "Inicio": tr("Inicio"),
+            "Estudiantes": tr("Inicio › Estudiantes"),
+            "Notas y Asistencia": tr("Inicio › Notas y Asistencia"),
+            "Observaciones": tr("Inicio › Observaciones"),
+            "Reportes y Gráficos": tr("Inicio › Reportes y Gráficos"),
+            "Impresión": tr("Inicio › Impresión"),
+            "Hábitos": tr("Inicio › Hábitos"),
+            "Ayuda y Guía": tr("Inicio › Ayuda y Guía"),
+            "Tareas Programadas": tr("Inicio › Tareas Programadas"),
+            "Reuniones": tr("Inicio › Reuniones"),
+            "Configuración": tr("Inicio › Configuración"),
+            "Registro Completo": tr("Inicio › Registro Completo")
         }
-        return nombres.get(self.menu_activo, "Inicio")
+        return nombres.get(self.menu_activo, tr("Inicio"))
+
 
     def _renderizar_header(self):
         # Si ya se creó el header, solo actualizar el breadcrumb
@@ -240,7 +243,7 @@ class MainApplication(ctk.CTkFrame):
             tc = self._acento if activo else C["texto_sec"]
             bw = 1.5 if activo else 0
 
-            label_txt = f"  {icono}   {texto}"
+            label_txt = f"  {icono}   {tr(texto)}"
 
             def make_cmd(c=cmd, t=texto):
                 def wrapper():
@@ -588,6 +591,7 @@ class RegistroDocApp(ctk.CTk):
             w.destroy()
 
     def mostrar_toast(self, mensaje, color="#10B981"):
+        mensaje = tr(mensaje)
         if hasattr(self, "_toast_widget"):
             try:
                 if self._toast_widget.winfo_exists():

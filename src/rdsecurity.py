@@ -654,9 +654,18 @@ def obtener_dir_datos_usuario() -> str:
     ruta = os.path.join(base, "RegistroDoc")
     return ruta
 
+_CONFIG_CACHE = None
+_CONFIG_MTIME = None
+
 def guardar_config_segura(cfg: dict) -> None:
     """Cifra y guarda la configuración. Datos personales protegidos."""
+    global _CONFIG_CACHE, _CONFIG_MTIME
+    _CONFIG_CACHE = dict(cfg)
     guardar_cifrado(CONFIG_FILE, cfg)
+    try:
+        _CONFIG_MTIME = os.path.getmtime(CONFIG_FILE)
+    except Exception:
+        _CONFIG_MTIME = None
     registrar_auditoria("CONFIG", "GUARDADO", "Configuración actualizada")
     
     # También sincronizar con la tabla configuracion de SQLite
@@ -703,6 +712,21 @@ def guardar_config_segura(cfg: dict) -> None:
 
 def cargar_config_segura(default: dict) -> dict:
     """Carga configuración cifrada. Retorna default si no existe."""
+    global _CONFIG_CACHE, _CONFIG_MTIME
+    try:
+        current_mtime = os.path.getmtime(CONFIG_FILE)
+    except Exception:
+        current_mtime = None
+
+    if current_mtime is None:
+        _CONFIG_CACHE = None
+        _CONFIG_MTIME = None
+
+    if _CONFIG_CACHE is not None and _CONFIG_MTIME == current_mtime:
+        cfg = dict(default)
+        cfg.update(_CONFIG_CACHE)
+        return cfg
+
     from config import CONFIG_FILE as PLAIN_CONFIG_FILE
     if not os.path.exists(CONFIG_FILE) and os.path.exists(PLAIN_CONFIG_FILE):
         try:
@@ -806,6 +830,11 @@ def cargar_config_segura(default: dict) -> dict:
         return dict(default)
     cfg = dict(default)
     cfg.update(datos)
+    _CONFIG_CACHE = dict(datos)
+    try:
+        _CONFIG_MTIME = os.path.getmtime(CONFIG_FILE)
+    except Exception:
+        _CONFIG_MTIME = None
     return cfg
 
 # ══════════════════════════════════════════════════════════════
