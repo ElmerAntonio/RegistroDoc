@@ -260,8 +260,8 @@ class DataEngine:
                         cursor.execute("SELECT id FROM estudiantes WHERE id = ?;", (str(est["id"]),))
                         if cursor.fetchone():
                             cursor.execute(
-                                "UPDATE estudiantes SET nombre = ?, cedula = ?, sexo = ?, grado_id = ? WHERE id = ?;",
-                                (nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id, str(est["id"]))
+                                "UPDATE estudiantes SET nombre = ?, cedula = ?, grado_id = ? WHERE id = ?;",
+                                (nombre_cifrado, cedula_cifrada, grado_id, str(est["id"]))
                             )
                         else:
                             cursor.execute(
@@ -426,8 +426,8 @@ class DataEngine:
                 cursor.execute("SELECT id FROM estudiantes WHERE id = ?;", (str(est["id"]),))
                 if cursor.fetchone():
                     cursor.execute(
-                        "UPDATE estudiantes SET nombre = ?, cedula = ?, sexo = ?, grado_id = ? WHERE id = ?;",
-                        (nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id, str(est["id"]))
+                        "UPDATE estudiantes SET nombre = ?, cedula = ?, grado_id = ? WHERE id = ?;",
+                        (nombre_cifrado, cedula_cifrada, grado_id, str(est["id"]))
                     )
                 else:
                     cursor.execute(
