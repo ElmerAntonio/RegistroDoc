@@ -196,11 +196,13 @@ class SQLDatabaseManager:
             import uuid
             old_comps = []
             if platform.system() == "Windows":
+                creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
                 # 1. UUID BIOS
                 try:
                     r = subprocess.check_output(
                         ["wmic", "csproduct", "get", "UUID"],
-                        stderr=subprocess.DEVNULL, timeout=3
+                        stderr=subprocess.DEVNULL, timeout=3,
+                        creationflags=creationflags
                     ).decode().strip().split("\n")
                     uid_old = r[-1].strip() if len(r) > 1 else ""
                     if uid_old and uid_old != "UUID":
@@ -211,7 +213,8 @@ class SQLDatabaseManager:
                 try:
                     r = subprocess.check_output(
                         ["cmd.exe", "/c", "vol", "C:"],
-                        stderr=subprocess.DEVNULL, timeout=3
+                        stderr=subprocess.DEVNULL, timeout=3,
+                        creationflags=creationflags
                     ).decode()
                     serial_old = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
                     if serial_old:
