@@ -886,13 +886,18 @@ class DashboardFrame(ctk.CTkFrame):
         if not grados:
             grados = ["7°", "8°", "9°"] if self.engine.modalidad == "premedia" else ["1°"]
 
+        from utils.date_helpers import obtener_trimestre_actual
+        trimestre_actual = obtener_trimestre_actual()
+
         valores = []
         for g in grados:
             proms = self.engine.obtener_promedios_reales(g, None, "Anual")
             if not proms:
-                proms = self.engine.obtener_promedios_reales(g, None, "Trimestre 1")
-            if proms:
-                avg = sum(proms.values()) / len(proms)
+                proms = self.engine.obtener_promedios_reales(g, None, trimestre_actual)
+            
+            valid_vals = [v for v in proms.values() if v is not None] if proms else []
+            if valid_vals:
+                avg = sum(valid_vals) / len(valid_vals)
                 valores.append(round(avg, 2))
             else:
                 valores.append(1.0)
@@ -1220,9 +1225,11 @@ class DashboardFrame(ctk.CTkFrame):
         # Analizar promedios para buscar alumnos con notas < 3.0
         alertas = []
         try:
+            from utils.date_helpers import obtener_trimestre_actual
+            trimestre_actual = obtener_trimestre_actual()
             grados = self.engine.obtener_grados_activos()
             for g in grados:
-                proms = self.engine.obtener_promedios_reales(g, None, "Trimestre 1")
+                proms = self.engine.obtener_promedios_reales(g, None, trimestre_actual)
                 if not proms:
                     proms = self.engine.obtener_promedios_reales(g, None, "Anual")
                 for nom, prom in proms.items():

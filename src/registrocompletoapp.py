@@ -201,14 +201,12 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         trim_num_prev = int(trimestre.replace("Trimestre ", ""))
         inicio_trim = trim_inicio.get(trim_num_prev, f"{anio}-01-01")
 
-        # Incluir estudiantes activos + retirados que tengan fecha_retiro >= inicio del trimestre
+        # Excluir estudiantes retirados
         cursor.execute("""
             SELECT id, nombre, estado, fecha_retiro FROM estudiantes
-            WHERE grado_id = ?
-              AND (estado = 'Activo'
-                   OR (estado = 'Retirado' AND (fecha_retiro IS NULL OR fecha_retiro >= ?)))
+            WHERE grado_id = ? AND estado = 'Activo'
             ORDER BY CAST(id AS INTEGER);
-        """, (grado_id, inicio_trim))
+        """, (grado_id,))
         estudiantes = []
         for r in cursor.fetchall():
             nombre_dec = self.engine.db_manager.desencriptar_campo(r[1])
@@ -532,10 +530,12 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                 ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
                 ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
                 
+                from grapp import ToolTip
                 for desc, tipo in h_notas:
                     # Mostrar descripción corta en el header
                     lbl_h = ctk.CTkLabel(f_header, text=desc[:8], width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
                     lbl_h.pack(side="left", padx=3)
+                    ToolTip(lbl_h, desc)
                     
                 ctk.CTkLabel(f_header, text="Promedio", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
 

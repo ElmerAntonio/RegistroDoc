@@ -514,10 +514,7 @@ class ReportesFrame(ctk.CTkFrame):
             trim_query = "Anual" if trimestre == "Todos" else trimestre
             promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, None, trim_query)
             estudiantes = getattr(self.engine, 'obtener_estudiantes_completos', lambda g: [])(grado)
-            est_name_to_idx = {est['nombre'].upper().strip(): idx + 1 for idx, est in enumerate(estudiantes)}
-            if not promedios_por_est and estudiantes:
-                for est in estudiantes:
-                    promedios_por_est[est['nombre']] = 1.0
+            est_name_to_idx = {est['nombre'].upper().strip(): (int(est['id']) % 100 if str(est['id']).isdigit() else est['id']) for est in estudiantes}
 
             # Pastel
             etiquetas = ['Aprobados (>=3.0)', 'En Riesgo (2.5-2.9)', 'Reprobados (<2.5)']
@@ -595,15 +592,12 @@ class ReportesFrame(ctk.CTkFrame):
             pass
 
         # Mapa de nombres a índices para el scatter
-        est_name_to_idx = {est['nombre'].upper().strip(): idx + 1 for idx, est in enumerate(estudiantes)}
+        est_name_to_idx = {est['nombre'].upper().strip(): (int(est['id']) % 100 if str(est['id']).isdigit() else est['id']) for est in estudiantes}
 
         # Mapear trimestre para la consulta de base de datos
         trim_query = "Anual" if trimestre in ["Todos", "Todos los Trimestres"] else trimestre
 
         promedios_por_est = getattr(self.engine, 'obtener_promedios_reales', lambda g,m,t: {})(grado, materia, trim_query)
-        if not promedios_por_est and estudiantes:
-            for est in estudiantes:
-                promedios_por_est[est['nombre']] = 1.0
 
         aprobados = sum(1 for v in promedios_por_est.values() if v >= 3.0)
         en_riesgo = sum(1 for v in promedios_por_est.values() if 2.5 <= v < 3.0)

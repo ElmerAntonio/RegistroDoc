@@ -269,69 +269,75 @@ class DataEngine:
                                 (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
                             )
 
-                    # Si no tiene notas en la BD, importar notas desde Excel para este grado (Autocuración)
-                    cursor.execute("""
-                        SELECT COUNT(*) FROM notas n 
-                        JOIN materias m ON n.materia_id = m.id 
-                        WHERE m.grado_id = ?;
-                    """, (grado_id,))
-                    tiene_notas_grado = cursor.fetchone()[0] > 0
-                    
-                    if not tiene_notas_grado:
-                        materias = self.obtener_materias_por_grado(g, wb=self._wb_cache)
-                        for mat in materias:
-                            if mat == "Sin materias registradas":
-                                continue
-                            cursor.execute(
-                                "INSERT OR IGNORE INTO materias (nombre, grado_id) VALUES (?, ?);",
-                                (mat, grado_id)
-                            )
-                            self.db_conn.commit()
-                            
-                            cursor.execute(
-                                "SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;",
-                                (mat, grado_id)
-                            )
-                            materia_id = cursor.fetchone()[0]
-                            
-                            for trim in (1, 2, 3):
-                                trim_str = f"Trimestre {trim}"
-                                for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
-                                    descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo, wb=self._wb_cache)
-                                    if not descripciones:
+                    # Sincronización incremental de notas desde Excel para este grado (Autocuración)
+                    materias = self.obtener_materias_por_grado(g, wb=self._wb_cache)
+                    for mat in materias:
+                        if mat == "Sin materias registradas":
+                            continue
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO materias (nombre, grado_id) VALUES (?, ?);",
+                            (mat, grado_id)
+                        )
+                        self.db_conn.commit()
+                        
+                        cursor.execute(
+                            "SELECT id FROM materias WHERE nombre = ? AND grado_id = ?;",
+                            (mat, grado_id)
+                        )
+                        materia_id = cursor.fetchone()[0]
+                        
+                        for trim in (1, 2, 3):
+                            trim_str = f"Trimestre {trim}"
+                            for tipo in ("Diaria / Parcial", "Apreciación", "Examen"):
+                                descripciones = self.obtener_descripciones_notas(g, mat, trim_str, tipo, wb=self._wb_cache)
+                                if not descripciones:
+                                    continue
+                                
+                                wb = self._wb_cache
+                                nombre_hoja = self._encontrar_hoja_prom(wb, g, mat)
+                                if not nombre_hoja:
+                                    continue
+                                ws = wb[nombre_hoja]
+                                rango = self._obtener_rango_columnas(ws, trim_str, tipo)
+                                if rango == (None, None):
+                                    continue
+                                
+                                col_inicio, col_fin = rango
+                                for c in range(col_inicio, col_fin + 1):
+                                    val_desc = ws.cell(row=self.fila_desc, column=c).value
+                                    if not val_desc:
                                         continue
                                     
-                                    wb = self._wb_cache
-                                    nombre_hoja = self._encontrar_hoja_prom(wb, g, mat)
-                                    if not nombre_hoja:
-                                        continue
-                                    ws = wb[nombre_hoja]
-                                    rango = self._obtener_rango_columnas(ws, trim_str, tipo)
-                                    if rango == (None, None):
-                                        continue
+                                    fecha_val = ws.cell(row=4, column=c).value or "01-01"
+                                    desc_limpia = str(val_desc).replace('\n', ' ').strip()
                                     
-                                    col_inicio, col_fin = rango
-                                    for c in range(col_inicio, col_fin + 1):
-                                        val_desc = ws.cell(row=self.fila_desc, column=c).value
-                                        if not val_desc:
-                                            continue
-                                        
-                                        fecha_val = ws.cell(row=4, column=c).value or "01-01"
-                                        desc_limpia = str(val_desc).replace('\n', ' ').strip()
-                                        
-                                        for est in estudiantes:
-                                            fila_excel = 4 + (int(est["id"]) % 100)
-                                            val_nota = ws.cell(row=fila_excel, column=c).value
-                                            if val_nota is not None:
-                                                try:
+                                    for est in estudiantes:
+                                        fila_excel = 4 + (int(est["id"]) % 100)
+                                        val_nota = ws.cell(row=fila_excel, column=c).value
+                                        if val_nota is not None:
+                                            try:
+                                                cursor.execute(
+                                                    """SELECT id, valor FROM notas 
+                                                    WHERE estudiante_id = ? AND materia_id = ? AND trimestre = ? AND tipo = ? AND descripcion = ?;""",
+                                                    (str(est["id"]), materia_id, trim, tipo, desc_limpia)
+                                                )
+                                                existing_note = cursor.fetchone()
+                                                if existing_note:
+                                                    note_id, current_val = existing_note
+                                                    if current_val != float(val_nota):
+                                                        cursor.execute(
+                                                            "UPDATE notas SET valor = ? WHERE id = ?;",
+                                                            (float(val_nota), note_id)
+                                                        )
+                                                else:
                                                     cursor.execute(
-                                                        """INSERT OR REPLACE INTO notas 
+                                                        """INSERT INTO notas 
                                                         (estudiante_id, materia_id, trimestre, tipo, descripcion, valor, fecha) 
                                                         VALUES (?, ?, ?, ?, ?, ?, ?);""",
                                                         (str(est["id"]), materia_id, trim, tipo, desc_limpia, float(val_nota), str(fecha_val))
                                                     )
-                                                except Exception:
-                                                    pass
+                                            except Exception:
+                                                pass
 
                     # Si no tiene asistencia en la BD, importar asistencia desde Excel para este grado (Autocuración)
                     cursor.execute("""
@@ -2206,13 +2212,15 @@ class DataEngine:
             cursor.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'Activo';")
             total = cursor.fetchone()[0] or 0
 
-            # 2. Alumnos en riesgo (promedio < 3.0 en trimestre actual)
+            # 2. Alumnos en riesgo (promedio < 3.0 en trimestre actual, fallback a Anual)
             try:
                 cursor.execute("SELECT nombre FROM grados WHERE modalidad = ?;", (self.modalidad,))
                 grados_activos = [r[0] for r in cursor.fetchall()]
                 riesgo = 0
                 for g in grados_activos:
                     proms = self.obtener_promedios_reales(g, None, trimestre_actual)
+                    if not proms:
+                        proms = self.obtener_promedios_reales(g, None, "Anual")
                     for p in proms.values():
                         if p is not None and p < 3.0:
                             riesgo += 1
@@ -2777,13 +2785,10 @@ class DataEngine:
         if not rows:
             return None
             
-        cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
-        ordered_ids = [r[0] for r in cursor.fetchall()]
-        
         asistencia = {}
         for est_id, estado in rows:
             try:
-                idx_1based = ordered_ids.index(est_id) + 1
+                idx_1based = int(est_id) % 100 if str(est_id).isdigit() else est_id
                 asistencia[idx_1based] = estado
             except ValueError:
                 pass

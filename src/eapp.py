@@ -81,6 +81,15 @@ class NotasFrame(ctk.CTkFrame):
         self.btn_ver_tabla_puntos.pack(side="left", padx=(8, 2))
         self.btn_ver_tabla_puntos.configure(state="disabled")
 
+        # Frame de Búsqueda
+        f_buscar = ctk.CTkFrame(frame_izq, fg_color="transparent")
+        f_buscar.pack(fill="x", padx=20, pady=(0, 5))
+        
+        ctk.CTkLabel(f_buscar, text="🔍 Buscar:", font=("Segoe UI", 12, "bold")).pack(side="left", padx=(0, 5))
+        self.entry_buscar = ctk.CTkEntry(f_buscar, placeholder_text="Escriba nombre del estudiante...", font=("Segoe UI", 12))
+        self.entry_buscar.pack(side="left", fill="x", expand=True)
+        self.entry_buscar.bind("<KeyRelease>", self.al_filtrar_estudiantes)
+
         self.scroll_estudiantes = ctk.CTkScrollableFrame(
             frame_izq, fg_color="transparent")
         self.scroll_estudiantes.pack(fill="both", expand=True,
@@ -151,7 +160,7 @@ class NotasFrame(ctk.CTkFrame):
         from utils.calendar_popup import crear_date_picker
         val_def = datetime.datetime.now().strftime("%m-%d")
         fecha_frame, self.entry_fecha = crear_date_picker(
-            tab_nueva, formato="MM-DD", val_defecto=val_def, on_key_release=al_escribir_fecha
+            tab_nueva, formato="MM-DD", val_defecto=val_def, on_key_release=al_escribir_fecha, state="readonly"
         )
         fecha_frame.pack(fill="x", padx=10, pady=5)
 
@@ -407,11 +416,14 @@ class NotasFrame(ctk.CTkFrame):
     def cargar_estudiantes(self, grado=None):
         if grado is None:
             grado = self.combo_grado.get()
+        if hasattr(self, "entry_buscar"):
+            self.entry_buscar.delete(0, "end")
         self._limpiar_scroll()
         self.entradas_notas.clear()
         self.pills_notas.clear()
         self.estudiantes_notas.clear()
         self.col_a_modificar = None
+        self.filas_estudiantes = {}
 
         # Header Row
         header_row = ctk.CTkFrame(self.scroll_estudiantes, fg_color="transparent")
@@ -427,6 +439,11 @@ class NotasFrame(ctk.CTkFrame):
         num_requeridos = len(ests)
         for i, est in enumerate(ests):
             f_row, widgets = self._obtener_fila_reciclada(i)
+            self.filas_estudiantes[est['id']] = f_row
+            
+            # Alternar color de fondo para líneas guía
+            bg_color = C["card_alt"] if i % 2 == 0 else "transparent"
+            f_row.configure(fg_color=bg_color)
             
             widgets["num"].configure(text=f"{i+1}.")
             widgets["nombre"].configure(text=est['nombre'])
@@ -457,6 +474,19 @@ class NotasFrame(ctk.CTkFrame):
             self.estudiantes_notas[est['id']] = est
             
         self._limpiar_filas_excedentes(num_requeridos)
+
+    def al_filtrar_estudiantes(self, event=None):
+        texto = self.entry_buscar.get().strip().lower()
+        i_visible = 0
+        for est_id, f_row in self.filas_estudiantes.items():
+            est_nom = self.estudiantes_notas[est_id]['nombre'].lower()
+            if not texto or texto in est_nom:
+                f_row.pack(fill="x", pady=2)
+                bg_color = C["card_alt"] if i_visible % 2 == 0 else "transparent"
+                f_row.configure(fg_color=bg_color)
+                i_visible += 1
+            else:
+                f_row.pack_forget()
 
     def cargar_descripciones(self, *args):
         grado = self.combo_grado.get()

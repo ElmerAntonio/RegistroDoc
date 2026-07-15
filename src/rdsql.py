@@ -189,6 +189,61 @@ class SQLDatabaseManager:
         if self.raw_hw_key not in self.claves_candidatas:
             self.claves_candidatas.append(self.raw_hw_key)
 
+        # Derivar la clave de hardware antigua (v1.x) para retrocompatibilidad
+        try:
+            import subprocess
+            import platform
+            import uuid
+            old_comps = []
+            if platform.system() == "Windows":
+                # 1. UUID BIOS
+                try:
+                    r = subprocess.check_output(
+                        ["wmic", "csproduct", "get", "UUID"],
+                        stderr=subprocess.DEVNULL, timeout=3
+                    ).decode().strip().split("\n")
+                    uid_old = r[-1].strip() if len(r) > 1 else ""
+                    if uid_old and uid_old != "UUID":
+                        old_comps.append(uid_old)
+                except Exception:
+                    pass
+                # 2. Volume Serial
+                try:
+                    r = subprocess.check_output(
+                        ["cmd.exe", "/c", "vol", "C:"],
+                        stderr=subprocess.DEVNULL, timeout=3
+                    ).decode()
+                    serial_old = re.search(r"[0-9A-F]{4}-[0-9A-F]{4}", r)
+                    if serial_old:
+                        old_comps.append(serial_old.group())
+                except Exception:
+                    pass
+            old_comps.append(platform.node())
+            old_comps.append(os.environ.get("USERNAME", "") or os.environ.get("USER", ""))
+            try:
+                mac_old = hex(uuid.getnode())
+                old_comps.append(mac_old)
+            except Exception:
+                pass
+                
+            seed_old = "|".join(old_comps).encode("utf-8")
+            old_hw_key = hashlib.sha256(seed_old).digest()
+            
+            # Añadir old_hw_key solo
+            if old_hw_key not in self.claves_candidatas:
+                self.claves_candidatas.append(old_hw_key)
+            # Añadir old_hw_key + cedula
+            if cedula_efectiva:
+                old_key_ced = hashlib.sha256(old_hw_key + cedula_efectiva.encode("utf-8")).digest()
+                if old_key_ced not in self.claves_candidatas:
+                    self.claves_candidatas.append(old_key_ced)
+            if cedula_config and cedula_config != cedula_efectiva:
+                old_key_cfg = hashlib.sha256(old_hw_key + cedula_config.encode("utf-8")).digest()
+                if old_key_cfg not in self.claves_candidatas:
+                    self.claves_candidatas.append(old_key_cfg)
+        except Exception as e:
+            logger.warning(f"SQLDatabaseManager: Error calculando la clave de hardware antigua: {e}")
+
         self.conn = None
 
     def _validar_proceso_ejecutor(self) -> bool:
@@ -636,11 +691,24 @@ class SQLDatabaseManager:
                     descifrado = descifrar(cifrado, candidate)
                     with open(self.db_temp_path, "wb") as f:
                         f.write(descifrado)
+                    
+                    # Verificar integridad del SQLite descifrado
+                    test_conn = sqlite3.connect(self.db_temp_path, check_same_thread=False, timeout=30.0)
+                    try:
+                        test_conn.execute("SELECT name FROM sqlite_master;")
+                    finally:
+                        test_conn.close()
+                    
                     descifrado_ok = True
                     if candidate != self.key:
                         rekey_needed = True
                     break
                 except Exception:
+                    if os.path.exists(self.db_temp_path):
+                        try:
+                            os.remove(self.db_temp_path)
+                        except Exception:
+                            pass
                     continue
 
             if not descifrado_ok:
@@ -667,8 +735,10 @@ class SQLDatabaseManager:
                             
                             # Intentar abrir conexión para verificar que no esté corrupta
                             test_conn = sqlite3.connect(self.db_temp_path, check_same_thread=False, timeout=30.0)
-                            test_conn.execute("SELECT name FROM sqlite_master;")
-                            test_conn.close()
+                            try:
+                                test_conn.execute("SELECT name FROM sqlite_master;")
+                            finally:
+                                test_conn.close()
                             
                             # Si llegó aquí, restaurar este backup como el archivo oficial
                             shutil.copy2(bak_path, self.db_enc_path)
@@ -677,6 +747,11 @@ class SQLDatabaseManager:
                             logger.info(f"Base de datos recuperada exitosamente desde el respaldo: {bak_path}")
                             break
                         except Exception:
+                            if os.path.exists(self.db_temp_path):
+                                try:
+                                    os.remove(self.db_temp_path)
+                                except Exception:
+                                    pass
                             continue
                     if restaurado:
                         break
@@ -692,15 +767,370 @@ class SQLDatabaseManager:
         # Conectar a la base de datos temporal
         self.conn = sqlite3.connect(self.db_temp_path, check_same_thread=False, timeout=30.0)
         self.conn.execute("PRAGMA foreign_keys = ON;")
+        self.conn.execute("PRAGMA journal_mode = DELETE;")
         
         # Inicializar tablas si es necesario
         self.inicializar_tablas(self.conn)
+        
+        # Intentar auto-reparar la corrupción de nombres/cédulas en hex
+        try:
+            if self._autocubrir_y_reparar_hex_corrupcion(self.conn):
+                rekey_needed = True
+        except Exception as e:
+            logger.error(f"SQLDatabaseManager: Error durante la auto-reparación: {e}")
+            
+        # Intentar fusionar registros de registro_plano.db de forma automática y única
+        self._revisar_y_fusionar_registro_plano(self.conn)
         
         # Guardar una versión cifrada limpia si es nueva o si requiere re-keying
         if not os.path.exists(self.db_enc_path) or rekey_needed:
             self.guardar_cifrado()
             
         return ThreadSafeConnection(self.conn, self.db_lock)
+
+    def _autocubrir_y_reparar_hex_corrupcion(self, conn) -> bool:
+        """
+        Detecta si los nombres de estudiantes están corruptos (cifrados como hex strings legibles).
+        Si es así, busca copias de seguridad de Excel no corruptas y restaura los nombres reales
+        tanto en los archivos de trabajo de Excel como en la base de datos SQLite.
+        Mantiene intactos los géneros y todas las calificaciones/asistencias actuales.
+        """
+        import re
+        import openpyxl
+        import shutil
+        
+        cursor = conn.cursor()
+        
+        # 1. Obtener estudiantes de la BD para verificar si hay corrupción
+        try:
+            cursor.execute("SELECT id, nombre, cedula FROM estudiantes;")
+            estudiantes_db = cursor.fetchall()
+        except Exception:
+            return False # Si no se puede consultar, abortar
+            
+        if not estudiantes_db:
+            return False # Sin estudiantes, nada que hacer
+            
+        corruptos_count = 0
+        for est_id, nombre_enc, cedula_enc in estudiantes_db:
+            dec_nombre = self.desencriptar_campo(nombre_enc)
+            if dec_nombre and re.match(r"^[0-9a-fA-F]{30,}$", dec_nombre):
+                corruptos_count += 1
+                
+        if corruptos_count == 0:
+            logger.info("SQLDatabaseManager: Verificación de consistencia de nombres exitosa (sin corrupción).")
+            return False
+            
+        logger.warning(f"SQLDatabaseManager: Detectada corrupción de nombres en {corruptos_count} estudiantes. Iniciando auto-reparación...")
+        
+        # 2. Determinar la modalidad y los grados configurados en la base de datos
+        try:
+            cursor.execute("SELECT id, nombre, modalidad FROM grados;")
+            grados_info = cursor.fetchall()
+        except Exception:
+            grados_info = []
+            
+        if not grados_info:
+            return False
+            
+        # Agrupar por modalidad
+        modalidad_grados = {}
+        for g_id, g_nombre, g_modalidad in grados_info:
+            if g_modalidad not in modalidad_grados:
+                modalidad_grados[g_modalidad] = []
+            modalidad_grados[g_modalidad].append((g_id, g_nombre))
+            
+        # 3. Buscar archivos de respaldo Excel que contengan nombres válidos (no hex)
+        directorios_respaldo = [
+            os.path.join(self.user_dir, "temp", "Respaldos_Locales"),
+            os.path.join(self.user_dir, "temp", "Respaldos_Auto"),
+            os.path.join(self.user_dir, "temp"),
+            r"c:\RegistroDoc\Respaldos_Locales",
+            r"c:\RegistroDoc\Respaldos_Auto",
+            r"c:\RegistroDoc"
+        ]
+        
+        candidatos = []
+        for d in directorios_respaldo:
+            if os.path.exists(d):
+                try:
+                    for f in os.listdir(d):
+                        if f.endswith(".xlsx") and not f.startswith("~$") and "test" not in f.lower() and "cache" not in f.lower():
+                            path = os.path.join(d, f)
+                            candidatos.append((path, os.path.getmtime(path)))
+                except Exception:
+                    pass
+                    
+        # Ordenar por fecha de modificación descendente (más nuevos primero)
+        candidatos.sort(key=lambda x: x[1], reverse=True)
+        
+        # Encontrar respaldos válidos por modalidad
+        backup_por_modalidad = {}
+        for path, _ in candidatos:
+            try:
+                # Comprobar si el archivo contiene nombres reales y no hex
+                wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+                nombre_maestro = None
+                for s in wb.sheetnames:
+                    if "MAESTRO" in s.upper():
+                        nombre_maestro = s
+                        break
+                if not nombre_maestro:
+                    wb.close()
+                    continue
+                    
+                ws = wb[nombre_maestro]
+                tiene_hex = False
+                tiene_nombres_reales = False
+                
+                # Escanear columnas buscando nombres reales
+                for col in range(1, 40):
+                    for r in range(5, 46):
+                        val = ws.cell(row=r, column=col).value
+                        if val:
+                            val_str = str(val).strip()
+                            if re.match(r"^[0-9a-fA-F]{30,}$", val_str):
+                                tiene_hex = True
+                                break
+                            elif len(val_str) > 2 and any(c.isalpha() for c in val_str):
+                                tiene_nombres_reales = True
+                    if tiene_hex:
+                        break
+                        
+                wb.close()
+                if tiene_nombres_reales and not tiene_hex:
+                    ws_type = "premedia"
+                    if "primaria" in path.lower() or "primaria" in nombre_maestro.lower():
+                        ws_type = "primaria"
+                    elif "premedia" in path.lower() or "premedia" in nombre_maestro.lower():
+                        ws_type = "premedia"
+                    else:
+                        ws_type = "premedia"
+                        
+                    if ws_type not in backup_por_modalidad:
+                        backup_por_modalidad[ws_type] = path
+                        logger.info(f"SQLDatabaseManager: Encontrado respaldo válido para {ws_type}: {path}")
+                        
+                    if len(backup_por_modalidad) >= len(modalidad_grados):
+                        break
+            except Exception:
+                pass
+                
+        # 4. Extraer el mapeo de nombres y cédulas
+        student_recovery_map = {}
+        for mod, g_list in modalidad_grados.items():
+            path_bak = backup_por_modalidad.get(mod)
+            if not path_bak:
+                path_bak = next(iter(backup_por_modalidad.values()), None)
+                
+            if not path_bak:
+                logger.error(f"SQLDatabaseManager: No se encontró respaldo válido para la modalidad {mod}.")
+                continue
+                
+            try:
+                wb_bak = openpyxl.load_workbook(path_bak, data_only=True)
+                nombre_maestro = None
+                for s in wb_bak.sheetnames:
+                    if "MAESTRO" in s.upper():
+                        nombre_maestro = s
+                        break
+                ws_m_bak = wb_bak[nombre_maestro]
+                
+                for grado_id, grado_nombre in g_list:
+                    col_nom = None
+                    grado_limpio = grado_nombre.replace("°", "").strip()
+                    for r_h in [3, 4]:
+                        for c in range(1, 40):
+                            val = str(ws_m_bak.cell(row=r_h, column=c).value or "").strip()
+                            if grado_limpio in val or grado_nombre in val:
+                                if "NOMBRE" in str(ws_m_bak.cell(row=4, column=c).value or "").upper():
+                                    col_nom = c
+                                    break
+                                elif "NOMBRE" in str(ws_m_bak.cell(row=4, column=c+1).value or "").upper():
+                                    col_nom = c+1
+                                    break
+                        if col_nom:
+                            break
+                            
+                    if not col_nom:
+                        continue
+                        
+                    ws_planilla_bak = None
+                    if mod == "premedia":
+                        for sheet in wb_bak.sheetnames:
+                            if "Planilla" in sheet and grado_nombre.replace("°", "") in sheet:
+                                ws_planilla_bak = wb_bak[sheet]
+                                break
+                                
+                    for r in range(5, 46):
+                        nom = ws_m_bak.cell(row=r, column=col_nom).value
+                        if nom:
+                            student_id = grado_id * 100 + (r - 4)
+                            cedula = ""
+                            if mod == "primaria":
+                                cedula = ws_m_bak.cell(row=r, column=5).value
+                            elif ws_planilla_bak:
+                                fila_plan = 15 + (r - 4)
+                                cedula = ws_planilla_bak.cell(row=fila_plan, column=5).value
+                                
+                            student_recovery_map[student_id] = {
+                                "nombre": str(nom).strip(),
+                                "cedula": str(cedula).strip() if cedula else ""
+                            }
+                wb_bak.close()
+            except Exception as e:
+                logger.error(f"SQLDatabaseManager: Error extrayendo datos del respaldo {path_bak}: {e}")
+                
+        if not student_recovery_map:
+            logger.error("SQLDatabaseManager: No se pudieron extraer estudiantes válidos de los respaldos.")
+            return False
+            
+        # 5. Sobrescribir en el Excel activo (en AppData/temp y en la raíz)
+        excel_repaired = False
+        for mod, g_list in modalidad_grados.items():
+            active_excel_name = "Registro_Premedia.xlsx" if mod == "premedia" else "Registro_Primaria.xlsx"
+            active_excel_path = os.path.join(self.user_dir, "temp", active_excel_name)
+            root_excel_path = os.path.join(r"c:\RegistroDoc", active_excel_name)
+            
+            if os.path.exists(active_excel_path):
+                try:
+                    shutil.copy2(active_excel_path, active_excel_path + ".corrupted.bak")
+                    
+                    wb_active = openpyxl.load_workbook(active_excel_path)
+                    nombre_maestro = None
+                    for s in wb_active.sheetnames:
+                        if "MAESTRO" in s.upper():
+                            nombre_maestro = s
+                            break
+                    ws_m_act = wb_active[nombre_maestro]
+                    
+                    for grado_id, grado_nombre in g_list:
+                        col_nom = None
+                        grado_limpio = grado_nombre.replace("°", "").strip()
+                        for r_h in [3, 4]:
+                            for c in range(1, 40):
+                                val = str(ws_m_act.cell(row=r_h, column=c).value or "").strip()
+                                if grado_limpio in val or grado_nombre in val:
+                                    if "NOMBRE" in str(ws_m_act.cell(row=4, column=c).value or "").upper():
+                                        col_nom = c
+                                        break
+                                    elif "NOMBRE" in str(ws_m_act.cell(row=4, column=c+1).value or "").upper():
+                                        col_nom = c+1
+                                        break
+                            if col_nom:
+                                break
+                                
+                        if not col_nom:
+                            continue
+                            
+                        ws_planilla_act = None
+                        if mod == "premedia":
+                            for sheet in wb_active.sheetnames:
+                                if "Planilla" in sheet and grado_nombre.replace("°", "") in sheet:
+                                    ws_planilla_act = wb_active[sheet]
+                                    break
+                                    
+                        for r in range(5, 46):
+                            student_id = grado_id * 100 + (r - 4)
+                            if student_id in student_recovery_map:
+                                recovered = student_recovery_map[student_id]
+                                ws_m_act.cell(row=r, column=col_nom).value = recovered["nombre"]
+                                if mod == "primaria":
+                                    ws_m_act.cell(row=r, column=5).value = recovered["cedula"]
+                                elif ws_planilla_act:
+                                    fila_plan = 15 + (r - 4)
+                                    ws_planilla_act.cell(row=fila_plan, column=5).value = recovered["cedula"]
+                                    
+                    wb_active.save(active_excel_path)
+                    wb_active.close()
+                    excel_repaired = True
+                    logger.info(f"SQLDatabaseManager: Excel activo reparado con éxito: {active_excel_path}")
+                except Exception as e:
+                    logger.error(f"SQLDatabaseManager: Error reparando el Excel activo {active_excel_name}: {e}")
+                    
+            if excel_repaired and os.path.exists(root_excel_path):
+                try:
+                    shutil.copy2(root_excel_path, root_excel_path + ".corrupted.bak")
+                    shutil.copy2(active_excel_path, root_excel_path)
+                    logger.info(f"SQLDatabaseManager: Excel raíz en {root_excel_path} actualizado.")
+                except Exception as e:
+                    logger.warning(f"SQLDatabaseManager: No se pudo copiar a la raíz: {e}")
+                    
+        # 6. Actualizar la base de datos SQLite con los nombres y cédulas cifrados correctamente
+        try:
+            updated_db_count = 0
+            for student_id, recovered in student_recovery_map.items():
+                nombre_cifrado = self.encriptar_campo(recovered["nombre"])
+                cedula_cifrada = self.encriptar_campo(recovered["cedula"])
+                cursor.execute(
+                    "UPDATE estudiantes SET nombre = ?, cedula = ? WHERE id = ?;",
+                    (nombre_cifrado, cedula_cifrada, str(student_id))
+                )
+                updated_db_count += 1
+            conn.commit()
+            logger.info(f"SQLDatabaseManager: Base de datos SQLite reparada ({updated_db_count} estudiantes).")
+            return True
+        except Exception as e:
+            logger.error(f"SQLDatabaseManager: Error actualizando estudiantes en BD: {e}")
+            return False
+
+    def _revisar_y_fusionar_registro_plano(self, conn):
+        plano_path = r"c:\RegistroDoc\registro_plano.db"
+        if not os.path.exists(plano_path):
+            return
+            
+        logger.info("Detectada base de datos plana registro_plano.db. Iniciando fusión...")
+        try:
+            conn_plano = sqlite3.connect(plano_path)
+            cursor_pla = conn_plano.cursor()
+            
+            # Obtener datos de asistencia en plano
+            cursor_pla.execute("SELECT estudiante_id, fecha, estado, trimestre FROM asistencia;")
+            asis_pla = cursor_pla.fetchall()
+            conn_plano.close()
+            
+            # Obtener datos actuales
+            cursor_act = conn.cursor()
+            cursor_act.execute("SELECT estudiante_id, fecha, estado, trimestre FROM asistencia;")
+            asis_act = set(cursor_act.fetchall())
+            
+            merged_count = 0
+            for est_id, fecha, estado, trim in asis_pla:
+                # Comprobar si ya existe el registro (normalizando fechas invertidas MM-DD y DD-MM)
+                swapped_fecha = fecha
+                if len(fecha) == 5 and '-' in fecha:
+                    parts = fecha.split('-')
+                    swapped_fecha = f"{parts[1]}-{parts[0]}"
+                    
+                has_match = False
+                for act_est, act_f, act_est_val, act_trim in asis_act:
+                    if act_est == est_id and (act_f == fecha or act_f == swapped_fecha):
+                        has_match = True
+                        break
+                        
+                if not has_match:
+                    cursor_act.execute(
+                        "INSERT INTO asistencia (estudiante_id, fecha, estado, trimestre) VALUES (?, ?, ?, ?);",
+                        (est_id, fecha, estado, trim)
+                    )
+                    merged_count += 1
+            
+            if merged_count > 0:
+                conn.commit()
+                # Cifrar y guardar inmediatamente
+                self.guardar_cifrado()
+                logger.info(f"Fusión automática completada. Se recuperaron {merged_count} registros.")
+            
+            # Renombrar archivo a .bak para no repetir
+            bak_path = plano_path + "_procesado.bak"
+            if os.path.exists(bak_path):
+                try: os.remove(bak_path)
+                except: pass
+            os.rename(plano_path, bak_path)
+            logger.info("Archivo registro_plano.db renombrado exitosamente.")
+            
+        except Exception as e:
+            logger.error(f"Error en la fusión de registro_plano.db: {e}", exc_info=True)
 
     def guardar_cifrado(self):
         """Lee el archivo temporal SQLite activo, lo cifra y guarda en disco.
@@ -733,6 +1163,9 @@ class SQLDatabaseManager:
     def cerrar(self):
         """Cierra la conexión, realiza el guardado cifrado final y limpia el archivo temporal."""
         with self.db_lock:
+            if os.path.exists(self.db_temp_path):
+                self.guardar_cifrado()
+
             if self.conn:
                 try:
                     self.conn.close()
@@ -741,7 +1174,6 @@ class SQLDatabaseManager:
                 self.conn = None
 
             if os.path.exists(self.db_temp_path):
-                self.guardar_cifrado()
                 # Destruir archivo temporal de forma segura (wiping antes de eliminar)
                 try:
                     tamanio = os.path.getsize(self.db_temp_path)

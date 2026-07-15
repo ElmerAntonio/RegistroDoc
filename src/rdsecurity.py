@@ -45,7 +45,7 @@ logger = logging.getLogger("rdsecurity")
 #  CONSTANTES — NO MODIFICAR
 # ══════════════════════════════════════════════════════════════
 
-VERSION         = "2.0.0"
+VERSION         = "5.0.2"
 PBKDF2_ITERS    = 600_000          # NIST SP 800-132 recomendación 2023
 SALT_LEN        = 32               # 256 bits
 NONCE_LEN       = 12               # 96 bits — estándar GCM
@@ -679,7 +679,7 @@ def guardar_config_segura(cfg: dict) -> None:
             # WAL mode permite escrituras concurrentes aunque SQLDatabaseManager ya tenga la BD abierta
             conn = sqlite3.connect(temp_db, timeout=30.0)
             try:
-                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA journal_mode=DELETE;")
                 cursor = conn.cursor()
                 for k, v in cfg.items():
                     if isinstance(v, (list, dict)):

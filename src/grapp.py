@@ -91,6 +91,29 @@ class GraficosFrame(ctk.CTkFrame):
         # Trimestre (si aplica)
         self.combo_trimestre = ctk.CTkOptionMenu(f_top, values=["Trimestre 1", "Trimestre 2", "Trimestre 3", "Todos los Trimestres"], command=lambda _: self.actualizar_graficos())
         self.combo_trimestre.pack(side="left", padx=5)
+        try:
+            from utils.date_helpers import obtener_trimestre_actual
+            trim_def = obtener_trimestre_actual()
+            has_data = False
+            grados_disp = self.engine.obtener_grados_activos() if hasattr(self, "engine") else []
+            for g in grados_disp:
+                if self.engine.obtener_promedios_reales(g, None, trim_def):
+                    has_data = True
+                    break
+            
+            if not has_data:
+                for t in ["Trimestre 3", "Trimestre 2", "Trimestre 1"]:
+                    for g in grados_disp:
+                        if self.engine.obtener_promedios_reales(g, None, t):
+                            trim_def = t
+                            has_data = True
+                            break
+                    if has_data:
+                        break
+            
+            self.combo_trimestre.set(trim_def)
+        except Exception:
+            self.combo_trimestre.set("Trimestre 1")
 
         # Opciones de graficos (agrupadas)
         f_opciones = ctk.CTkFrame(f_top, fg_color="#13263f", corner_radius=8)
@@ -321,10 +344,8 @@ class GraficosFrame(ctk.CTkFrame):
                         promedios_por_est = obtener_promedios(grado, materia, trimestre)
                     except Exception: pass
 
-            if not promedios_por_est and estudiantes:
-                # Fallback a 1.0 si no hay calificaciones válidas registradas aún
-                for est in estudiantes:
-                    promedios_por_est[est['nombre']] = 1.0
+            # Filtrar valores nulos (None) en promedios
+            promedios_por_est = {k: v for k, v in promedios_por_est.items() if v is not None}
 
             for nom, promedio in promedios_por_est.items():
                 if promedio >= 3.0: aprobados += 1
@@ -558,20 +579,29 @@ class GraficosFrame(ctk.CTkFrame):
         ax.set_facecolor(self.C["fondo"])
         self.fig_objs.append(fig)
 
-        # Tomar solo los primeros 10-15 para no saturar si son muchos
-        nombres = list(promedios_dict.keys())[:15]
-        notas = [promedios_dict[n] for n in nombres]
+        if not promedios_dict:
+            ax.text(0.5, 0.5, "Sin Datos", ha='center', va='center', color='white', fontsize=14)
+            ax.spines['bottom'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+        else:
+            # Tomar solo los primeros 10-15 para no saturar si son muchos
+            nombres = list(promedios_dict.keys())[:15]
+            notas = [promedios_dict[n] for n in nombres]
 
-        # Nombres cortos para X
-        nombres_cortos = [n.split(" ")[0] for n in nombres]
+            # Nombres cortos para X
+            nombres_cortos = [n.split(" ")[0] for n in nombres]
 
-        # Colores dinámicos basados en la nota
-        colores = [self.C["rojo"] if n < 3.0 else self.C["verde"] for n in notas]
+            # Colores dinámicos basados en la nota
+            colores = [self.C["rojo"] if n < 3.0 else self.C["verde"] for n in notas]
 
-        barras = ax.bar(nombres_cortos, notas, color=colores, edgecolor=self.C["cian"], alpha=0.8)
+            barras = ax.bar(nombres_cortos, notas, color=colores, edgecolor=self.C["cian"], alpha=0.8)
 
-        # Línea de pase (3.0)
-        ax.axhline(y=3.0, color=self.C["amarillo"], linestyle='--', alpha=0.7)
+            # Línea de pase (3.0)
+            ax.axhline(y=3.0, color=self.C["amarillo"], linestyle='--', alpha=0.7)
 
         ax.tick_params(axis='x', colors=self.C["texto"], rotation=45)
         ax.tick_params(axis='y', colors=self.C["texto"])
@@ -700,7 +730,7 @@ class GraficosFrame(ctk.CTkFrame):
                     if not promedios:
                         # Intenta cualquier trimestre si Anual está vacío
                         promedios = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, mat, "Trimestre 1")
-                    reps += sum(1 for v in promedios.values() if v < 3.0)
+                    reps += sum(1 for v in promedios.values() if v is not None and v < 3.0)
                 reprobados_por_materia[mat] = reps
 
             reprobados_ordenado = dict(sorted(reprobados_por_materia.items(), key=lambda item: item[1], reverse=True))
@@ -882,9 +912,9 @@ class GraficosFrame(ctk.CTkFrame):
             p_t1 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 1")
             p_t2 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 2")
             p_t3 = getattr(self.engine, 'obtener_promedios_reales', lambda gr,m,t: {})(g, materia, "Trimestre 3")
-            t1_vals.extend(p_t1.values())
-            t2_vals.extend(p_t2.values())
-            t3_vals.extend(p_t3.values())
+            t1_vals.extend([v for v in p_t1.values() if v is not None])
+            t2_vals.extend([v for v in p_t2.values() if v is not None])
+            t3_vals.extend([v for v in p_t3.values() if v is not None])
 
         t1_avg = sum(t1_vals) / len(t1_vals) if t1_vals else 0
         t2_avg = sum(t2_vals) / len(t2_vals) if t2_vals else 0
@@ -1073,30 +1103,78 @@ class GraficosFrame(ctk.CTkFrame):
         self.fig_objs.append(fig)
 
         import json
-        ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
         criterios_dict = {}
-        try:
-            if os.path.exists(ruta_json):
-                with open(ruta_json, "r", encoding="utf-8") as f:
-                    habitos_data = json.load(f)
-                
-                for key, val_entry in habitos_data.items():
-                    parts = key.split("::")
-                    k_grado = parts[0]
-                    k_trim = parts[1] if len(parts) > 1 else ""
+        db_exito = False
+        if hasattr(self.engine, 'db_conn') and self.engine.db_conn is not None:
+            try:
+                cursor = self.engine.db_conn.cursor()
+                if grado == "Todos los Grados":
+                    try:
+                        grados_activos = self.engine.obtener_grados_activos()
+                    except Exception:
+                        grados_activos = []
+                else:
+                    grados_activos = [grado]
                     
-                    if (grado == "Todos los Grados" or grado.replace("°","") in k_grado.replace("°","")) and \
-                       (trimestre == "Todos los Trimestres" or k_trim.lower() == trimestre.lower()):
+                if trimestre == "Todos los Trimestres":
+                    trimestres = [1, 2, 3]
+                else:
+                    try:
+                        trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                        trimestres = [trim_num]
+                    except ValueError:
+                        trimestres = [1, 2, 3]
+                
+                for g in grados_activos:
+                    cursor.execute("SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;", (g, self.engine.modalidad))
+                    row_g = cursor.fetchone()
+                    if not row_g:
+                        continue
+                    grado_id = row_g[0]
+                    
+                    query = """
+                        SELECT h.criterio_codigo, h.nota 
+                        FROM habitos h
+                        JOIN estudiantes e ON h.estudiante_id = e.id
+                        WHERE e.grado_id = ? AND h.trimestre IN ({});
+                    """.format(",".join("?" for _ in trimestres))
+                    
+                    cursor.execute(query, [grado_id] + trimestres)
+                    rows = cursor.fetchall()
+                    for crit, score in rows:
+                        crit_clean = str(crit).strip()
+                        if crit_clean not in criterios_dict:
+                            criterios_dict[crit_clean] = {"S": 0, "R": 0, "X": 0}
+                        if score in ["S", "R", "X"]:
+                            criterios_dict[crit_clean][score] += 1
+                db_exito = True
+            except Exception as e:
+                print(f"Error cargando habitos de SQLite: {e}")
+                
+        if not db_exito:
+            try:
+                ruta_json = os.path.abspath(os.path.join(os.path.dirname(self.engine.ruta), "Expedientes_Estudiantes", "habitos_evaluaciones.json"))
+                if os.path.exists(ruta_json):
+                    with open(ruta_json, "r", encoding="utf-8") as f:
+                        habitos_data = json.load(f)
+                    
+                    for key, val_entry in habitos_data.items():
+                        parts = key.split("::")
+                        k_grado = parts[0]
+                        k_trim = parts[1] if len(parts) > 1 else ""
                         
-                        est_evals = val_entry.get("estudiantes", {})
-                        for est_id, crit_vals in est_evals.items():
-                            for crit, score in crit_vals.items():
-                                if crit not in criterios_dict:
-                                    criterios_dict[crit] = {"S": 0, "R": 0, "X": 0}
-                                if score in ["S", "R", "X"]:
-                                    criterios_dict[crit][score] += 1
-        except Exception as e:
-            print(f"Error cargando habitos para grafico: {e}")
+                        if (grado == "Todos los Grados" or grado.replace("°","") in k_grado.replace("°","")) and \
+                           (trimestre == "Todos los Trimestres" or k_trim.lower() == trimestre.lower()):
+                            
+                            est_evals = val_entry.get("estudiantes", {})
+                            for est_id, crit_vals in est_evals.items():
+                                for crit, score in crit_vals.items():
+                                    if crit not in criterios_dict:
+                                        criterios_dict[crit] = {"S": 0, "R": 0, "X": 0}
+                                    if score in ["S", "R", "X"]:
+                                        criterios_dict[crit][score] += 1
+            except Exception as e:
+                print(f"Error cargando habitos desde JSON fallback: {e}")
 
         if not criterios_dict:
             ax.text(0.5, 0.5, "Sin Datos de Hábitos", ha='center', va='center', color='white')

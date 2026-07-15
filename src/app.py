@@ -464,6 +464,10 @@ class RegistroDocApp(ctk.CTk):
             except Exception:
                 pass
         self.bind("<Configure>", self._on_window_configure)
+        self.bind("<Unmap>", self._on_window_unmap)
+        self.bind("<Map>", self._on_window_map)
+        self._is_minimized = False
+        self._just_restored = False
         self._resizing = False
         self._resize_job = None
         self._last_width = 1280
@@ -541,6 +545,8 @@ class RegistroDocApp(ctk.CTk):
             def on_splash_complete(app_inst):
                 if app_inst:
                     try:
+                        # Pre-renderizado invisible
+                        app_inst.attributes("-alpha", 0.0)
                         app_inst.deiconify()
                         
                         # Cargar icono en barra de tareas al revelar la ventana
@@ -551,6 +557,9 @@ class RegistroDocApp(ctk.CTk):
                             except Exception:
                                 pass
                                 
+                        app_inst.update_idletasks()
+                        app_inst.update()
+                        app_inst.attributes("-alpha", 1.0)
                         app_inst.lift()
                         app_inst.focus_force()
                     except Exception:
@@ -574,6 +583,7 @@ class RegistroDocApp(ctk.CTk):
 
     def _mostrar_app_principal(self):
         try:
+            self.attributes("-alpha", 0.0)
             self.deiconify()
             icon_p = os.path.join(ASSETS_DIR, "icon_fixed.ico")
             if os.path.exists(icon_p):
@@ -581,6 +591,9 @@ class RegistroDocApp(ctk.CTk):
                     self.iconbitmap(icon_p)
                 except Exception:
                     pass
+            self.update_idletasks()
+            self.update()
+            self.attributes("-alpha", 1.0)
             self.lift()
             self.focus_force()
         except Exception:
@@ -636,6 +649,10 @@ class RegistroDocApp(ctk.CTk):
         active_frame = self._frames[class_name]
         active_frame.pack(fill="both", expand=True)
         self._frame_activo = class_name
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
 
         # Solo llamar actualizar_vista si cambiamos de frame (ya_activo es False)
         # Y además la versión de datos cambió desde la última actualización del frame.
@@ -981,8 +998,38 @@ class RegistroDocApp(ctk.CTk):
         except Exception:
             pass
 
+    def _on_window_unmap(self, event):
+        if event.widget == self:
+            self._is_minimized = True
+
+    def _on_window_map(self, event):
+        if event.widget == self:
+            try:
+                # Ocultar restauración con opacidad 0.0 temporalmente
+                self.attributes("-alpha", 0.0)
+                self._is_minimized = False
+                self._just_restored = True
+                
+                # Forzar recálculo y renderizado en búfer de todos los componentes
+                self.update_idletasks()
+                self.update()
+                
+                # Revelar instantáneamente con todos los widgets dibujados
+                self.attributes("-alpha", 1.0)
+            except Exception:
+                pass
+            self.after(300, self._clear_just_restored)
+
+    def _clear_just_restored(self):
+        self._just_restored = False
+
     def _on_window_configure(self, event):
         if event.widget == self:
+            if getattr(self, "_is_minimized", False) or getattr(self, "_just_restored", False) or self.state() == "iconic":
+                if self.state() != "iconic":
+                    self._last_width = event.width
+                    self._last_height = event.height
+                return
             w = event.width
             h = event.height
             if w != self._last_width or h != self._last_height:
