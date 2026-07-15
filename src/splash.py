@@ -260,9 +260,7 @@ class SplashScreen(ctk.CTkToplevel):
         y = (screen_height - height) // 2
         self.geometry(f"{width}x{height}+{x}+{y}")
 
-        self.deiconify()
-        
-        # Force the borderless (overrideredirect) window onto the Windows taskbar
+        # Ocultar la pantalla de carga de la barra de tareas de Windows
         if sys.platform == "win32":
             try:
                 import ctypes
@@ -271,18 +269,19 @@ class SplashScreen(ctk.CTkToplevel):
                     hwnd = self.winfo_id()
                     
                 GWL_EXSTYLE = -20
-                WS_EX_APPWINDOW = 0x00040000
                 WS_EX_TOOLWINDOW = 0x00000080
+                WS_EX_APPWINDOW = 0x00040000
                 
+                # Obtener estilo actual y forzar WS_EX_TOOLWINDOW (y remover WS_EX_APPWINDOW)
                 style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                style = (style & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+                style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
                 
-                # Refresh window to register style change with Windows taskbar
+                # Refrescar ventana para aplicar el cambio de estilo nativo en la barra de tareas
                 self.withdraw()
                 self.deiconify()
             except Exception as e:
-                print(f"Error forzando icono en barra de tareas: {e}")
+                print(f"Error ocultando ventana de la barra de tareas: {e}")
                 
         self.fade_in(0.93, 0.0)
 

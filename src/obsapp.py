@@ -110,10 +110,12 @@ class ObservacionesFrame(ctk.CTkFrame):
             pady=(
                 15,
                 5))
-        self.entry_fecha = ctk.CTkEntry(panel_obs)
-        self.entry_fecha.insert(
-            0, datetime.datetime.now().strftime("%d-%m-%Y"))
-        self.entry_fecha.pack(fill="x", padx=20)
+        from utils.calendar_popup import crear_date_picker
+        val_def = datetime.datetime.now().strftime("%d-%m-%Y")
+        fecha_frame, self.entry_fecha = crear_date_picker(
+            panel_obs, formato="DD-MM-YYYY", val_defecto=val_def
+        )
+        fecha_frame.pack(fill="x", padx=20)
 
         ctk.CTkLabel(
             panel_obs,

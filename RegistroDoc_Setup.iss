@@ -39,6 +39,9 @@ Filename: "{app}\RegistroDoc.exe"; Description: "{cm:LaunchProgram,RegistroDoc P
 [Registry]
 Root: HKCU; Subkey: "Software\RegistroDocPro"; Flags: uninsdeletekey
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
+
 [Code]
 var
   PrevVersionInstalled: Boolean;
@@ -221,19 +224,24 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDataDir: String;
+  AppDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    // Localizar el directorio AppData/Local/RegistroDoc del usuario activo
+    // Localizar el directorio AppData/Local/RegistroDoc del usuario activo (Base de datos y temporales)
     AppDataDir := ExpandConstant('{localappdata}\RegistroDoc');
-    
     if DirExists(AppDataDir) then
     begin
       // Eliminar recursivamente la base de datos cifrada, logs de auditoría y archivos de trabajo
-      if DelTree(AppDataDir, True, True, True) then
-      begin
-        // Operación de limpieza exitosa
-      end;
+      DelTree(AppDataDir, True, True, True);
+    end;
+
+    // Localizar el directorio de la aplicación ({app}) que contiene config.enc, .env, etc. creados a posteriori
+    AppDir := ExpandConstant('{app}');
+    if DirExists(AppDir) then
+    begin
+      // Eliminar recursivamente el directorio de instalación
+      DelTree(AppDir, True, True, True);
     end;
   end;
 end;

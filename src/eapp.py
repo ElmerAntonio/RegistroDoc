@@ -137,10 +137,6 @@ class NotasFrame(ctk.CTkFrame):
 
         ctk.CTkLabel(tab_nueva, text="Fecha (MM-DD):", font=("Segoe UI", 12)
                      ).pack(anchor="w", padx=10, pady=(5, 0))
-        self.entry_fecha = ctk.CTkEntry(tab_nueva)
-        self.entry_fecha.insert(0, datetime.datetime.now().strftime("%m-%d"))
-        self.entry_fecha.pack(fill="x", padx=10, pady=5)
-
         def al_escribir_fecha(event=None):
             try:
                 from utils.date_helpers import obtener_trimestre_actual
@@ -151,7 +147,13 @@ class NotasFrame(ctk.CTkFrame):
                         self.combo_trimestre.set(trim)
             except Exception:
                 pass
-        self.entry_fecha.bind("<KeyRelease>", al_escribir_fecha)
+
+        from utils.calendar_popup import crear_date_picker
+        val_def = datetime.datetime.now().strftime("%m-%d")
+        fecha_frame, self.entry_fecha = crear_date_picker(
+            tab_nueva, formato="MM-DD", val_defecto=val_def, on_key_release=al_escribir_fecha
+        )
+        fecha_frame.pack(fill="x", padx=10, pady=5)
 
         self.lbl_desc_counter = ctk.CTkLabel(
             tab_nueva, text="Descripción (Ej. Charla): (0/25)",
@@ -221,8 +223,11 @@ class NotasFrame(ctk.CTkFrame):
 
         ctk.CTkLabel(tab_mod, text="Fecha de guardado:", font=(
             "Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 0))
-        self.entry_fecha_guardado = ctk.CTkEntry(tab_mod, state="readonly", placeholder_text="No cargada", justify="center")
-        self.entry_fecha_guardado.pack(fill="x", padx=10, pady=5)
+        from utils.calendar_popup import crear_date_picker
+        fecha_frame_guardado, self.entry_fecha_guardado = crear_date_picker(
+            tab_mod, formato="MM-DD", state="readonly", placeholder_text="No cargada", justify="center"
+        )
+        fecha_frame_guardado.pack(fill="x", padx=10, pady=5)
 
         ctk.CTkButton(
             tab_mod,

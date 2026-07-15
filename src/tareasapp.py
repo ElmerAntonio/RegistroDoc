@@ -122,12 +122,13 @@ class TareasFrame(ctk.CTkFrame):
         ctk.CTkLabel(form, text="Fecha límite (DD-MM-YYYY):",
                       font=ctk.CTkFont(FONT_BODY, 12),
                       text_color=C["texto"]).pack(anchor="w", padx=16, pady=(4, 2))
-        self.entry_fecha = ctk.CTkEntry(form, fg_color=C["input"],
-                                         border_color=C["borde"],
-                                         placeholder_text="Ej: 15-06-2026")
+        from utils.calendar_popup import crear_date_picker
         manana = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%d-%m-%Y")
-        self.entry_fecha.insert(0, manana)
-        self.entry_fecha.pack(fill="x", padx=16, pady=(0, 6))
+        fecha_frame, self.entry_fecha = crear_date_picker(
+            form, formato="DD-MM-YYYY", val_defecto=manana, fg_color=C["input"],
+            border_color=C["borde"], placeholder_text="Ej: 15-06-2026"
+        )
+        fecha_frame.pack(fill="x", padx=16, pady=(0, 6))
 
         # Descripción
         ctk.CTkLabel(form, text="Descripción (opcional):",

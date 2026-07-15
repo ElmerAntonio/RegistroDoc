@@ -277,3 +277,138 @@ def test_sincronizar_excel_a_sql_self_healing(tmp_path):
     
     cursor.execute("SELECT COUNT(*) FROM asistencia;")
     assert cursor.fetchone()[0] > 0
+
+
+def test_sincronizar_excel_a_sql_preserves_retired_students(tmp_path):
+    import openpyxl
+    file_path = str(tmp_path / "Test_Premedia.xlsx")
+    wb = openpyxl.Workbook()
+    
+    ws_gen = wb.active
+    ws_gen.title = "DASHBOARD"
+    
+    ws_maestro = wb.create_sheet("MAESTRO")
+    ws_maestro.cell(row=3, column=1, value="7° GRADO")
+    ws_maestro.cell(row=5, column=2, value="Tugri Clemente") # row 5 in column 2 (index 1)
+    
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    cursor = engine.db_conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES ('7\u00b0 A', 'A', 'premedia');")
+    cursor.execute("SELECT id FROM grados WHERE nombre = '7\u00b0 A';")
+    g_id = cursor.fetchone()[0]
+    
+    # Insert student Clemente as Retirado in SQLite
+    clemente_id = str(g_id * 100 + 1)
+    nombre_cifrado = engine.db_manager.encriptar_campo("Tugri Clemente")
+    cursor.execute("""
+        INSERT INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado, fecha_retiro, motivo_retiro, nombre_acudiente)
+        VALUES (?, ?, '', 'M', ?, 'Retirado', '2026-06-25', 'Se Fue con su mama a otro lugar', '');
+    """, (clemente_id, nombre_cifrado, g_id))
+    engine.db_conn.commit()
+    
+    # Run sync. Since Clemente is in the Excel sheet row 5 (active_ids), normally he would be marked Activo.
+    # But with our fix, his retirement details and state are preserved.
+    engine.sincronizar_excel_a_sql()
+    
+    cursor.execute("SELECT estado, fecha_retiro, motivo_retiro FROM estudiantes WHERE id = ?;", (clemente_id,))
+    row = cursor.fetchone()
+    assert row is not None
+    assert row[0] == 'Retirado'
+    assert row[1] == '2026-06-25'
+    assert row[2] == 'Se Fue con su mama a otro lugar'
+
+
+def test_agregar_estudiante_generates_composite_id(tmp_path):
+    import openpyxl
+    file_path = str(tmp_path / "Test_Premedia.xlsx")
+    wb = openpyxl.Workbook()
+    
+    ws_gen = wb.active
+    ws_gen.title = "DASHBOARD"
+    
+    ws_maestro = wb.create_sheet("MAESTRO")
+    ws_maestro.cell(row=3, column=1, value="7° GRADO")
+    # Empty rows 5 to 40
+    
+    ws_p = wb.create_sheet("Planilla 7")
+    
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    cursor = engine.db_conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES ('7\u00b0 A', 'A', 'premedia');")
+    cursor.execute("SELECT id FROM grados WHERE nombre = '7\u00b0 A';")
+    g_id = cursor.fetchone()[0]
+    engine.db_conn.commit()
+    
+    # Add student
+    exito = engine.agregar_estudiante("7° A", "Tugri Clemente", cedula="8-123-456", sexo="M")
+    assert exito is True
+    
+    # Verify ID in SQLite is composite (g_id * 100 + 1)
+    expected_id = str(g_id * 100 + 1)
+    cursor.execute("SELECT id, estado FROM estudiantes WHERE nombre LIKE ?;", (f"%Tugri Clemente%",))
+    res = cursor.fetchone()
+    assert res is not None
+    assert res[0] == expected_id
+    assert res[1] == 'Activo'
+
+
+def test_guardar_cambios_estudiantes_correct_excel_row(tmp_path):
+    import openpyxl
+    file_path = str(tmp_path / "Test_Premedia.xlsx")
+    wb = openpyxl.Workbook()
+    
+    ws_gen = wb.active
+    ws_gen.title = "DASHBOARD"
+    
+    ws_maestro = wb.create_sheet("MAESTRO")
+    ws_maestro.cell(row=3, column=1, value="7° GRADO")
+    ws_maestro.cell(row=4, column=2, value="NOMBRE")
+    ws_maestro.cell(row=5, column=2, value="Tugri Clemente")
+    
+    ws_p = wb.create_sheet("Planilla 7")
+    
+    wb.save(file_path)
+    wb.close()
+    
+    engine = DataEngine(file_path)
+    engine.modalidad = "premedia"
+    
+    cursor = engine.db_conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO grados (nombre, seccion, modalidad) VALUES ('7\u00b0 A', 'A', 'premedia');")
+    cursor.execute("SELECT id FROM grados WHERE nombre = '7\u00b0 A';")
+    g_id = cursor.fetchone()[0]
+    engine.db_conn.commit()
+    
+    # Update student changes using composite ID (g_id * 100 + 1)
+    clemente_id = str(g_id * 100 + 1)
+    datos_modificados = {
+        clemente_id: {
+            "nombre": "Tugri Clemente Modificado",
+            "cedula": "8-999-9999",
+            "sexo": "M"
+        }
+    }
+    
+    exito = engine.guardar_cambios_estudiantes("7° A", datos_modificados)
+    assert exito is True
+    
+    # Load workbook and check row 5
+    wb_check = openpyxl.load_workbook(file_path, data_only=True)
+    ws_m_check = wb_check["MAESTRO"]
+    assert ws_m_check.cell(row=5, column=2).value == "Tugri Clemente Modificado"
+    
+    ws_p_check = wb_check["Planilla 7"]
+    # Row index in planilla is 15 + offset = 15 + 1 = 16
+    assert ws_p_check.cell(row=16, column=5).value == "8-999-9999"
+    wb_check.close()
+

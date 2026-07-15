@@ -255,10 +255,19 @@ class DataEngine:
                         nombre_cifrado = self.db_manager.encriptar_campo(est["nombre"])
                         cedula_cifrada = self.db_manager.encriptar_campo(est["cedula"])
                         sexo_cifrado = self.db_manager.encriptar_campo(est["sexo"])
-                        cursor.execute(
-                            "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
-                            (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
-                        )
+                        
+                        # Evitar sobrescribir el estado de estudiantes retirados
+                        cursor.execute("SELECT id FROM estudiantes WHERE id = ?;", (str(est["id"]),))
+                        if cursor.fetchone():
+                            cursor.execute(
+                                "UPDATE estudiantes SET nombre = ?, cedula = ?, sexo = ?, grado_id = ? WHERE id = ?;",
+                                (nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id, str(est["id"]))
+                            )
+                        else:
+                            cursor.execute(
+                                "INSERT INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                                (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                            )
 
                     # Si no tiene notas en la BD, importar notas desde Excel para este grado (Autocuración)
                     cursor.execute("""
@@ -412,10 +421,19 @@ class DataEngine:
                 nombre_cifrado = self.db_manager.encriptar_campo(est["nombre"])
                 cedula_cifrada = self.db_manager.encriptar_campo(est["cedula"])
                 sexo_cifrado = self.db_manager.encriptar_campo(est["sexo"])
-                cursor.execute(
-                    "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
-                    (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
-                )
+                
+                # Evitar sobrescribir el estado de estudiantes retirados
+                cursor.execute("SELECT id FROM estudiantes WHERE id = ?;", (str(est["id"]),))
+                if cursor.fetchone():
+                    cursor.execute(
+                        "UPDATE estudiantes SET nombre = ?, cedula = ?, sexo = ?, grado_id = ? WHERE id = ?;",
+                        (nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id, str(est["id"]))
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                        (str(est["id"]), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                    )
             
             # 4. Materias
             materias = self.obtener_materias_por_grado(g, wb=self._wb_cache)
@@ -1554,7 +1572,7 @@ class DataEngine:
         ws_m.cell(row=fila_vacia, column=col_nom).value = nombre
         if self.modalidad == "primaria": ws_m.cell(row=fila_vacia, column=5).value = cedula
         else:
-            num_grado = grado.replace("°","")
+            num_grado = "".join(c for c in grado if c.isdigit())
             id_est = fila_vacia - 4
             for sheet in wb.sheetnames:
                 if "Planilla" in sheet and num_grado in sheet:
@@ -1572,7 +1590,7 @@ class DataEngine:
             row_g = cursor.fetchone()
             if row_g:
                 grado_id = row_g[0]
-                est_id = str(fila_vacia - 4)
+                est_id = str(grado_id * 100 + (fila_vacia - 4))
                 nombre_cifrado = self.db_manager.encriptar_campo(nombre)
                 cedula_cifrada = self.db_manager.encriptar_campo(cedula)
                 sexo_cifrado = self.db_manager.encriptar_campo(sexo)
@@ -1604,15 +1622,15 @@ class DataEngine:
             }
 
         for id_est, datos in datos_sanos.items():
-            fila = 4 + int(id_est)
+            fila = 4 + (int(id_est) % 100)
             ws_m.cell(row=fila, column=col_nom).value = datos["nombre"]
             if self.modalidad == "primaria": ws_m.cell(row=fila, column=5).value = datos["cedula"]
             else:
-                num_grado = grado.replace("°","")
+                num_grado = "".join(c for c in grado if c.isdigit())
                 for sheet in wb.sheetnames:
                     if "Planilla" in sheet and num_grado in sheet:
                         ws_p = wb[sheet]
-                        ws_p.cell(row=15+int(id_est), column=5).value = datos["cedula"]
+                        ws_p.cell(row=15+(int(id_est) % 100), column=5).value = datos["cedula"]
         self._save_wb(wb)
         wb.close()
 
@@ -3524,7 +3542,7 @@ class DataEngine:
             fecha_val = ws.cell(row=fila_fechas, column=c).value
             if not fecha_val:
                 continue
-            val = ws.cell(row=fila_fechas + int(id_estudiante), column=c).value
+            val = ws.cell(row=fila_fechas + (int(id_estudiante) % 100), column=c).value
             if val is not None and str(val).strip():
                 total_dias += 1
                 if val == "-":
@@ -3569,7 +3587,7 @@ class DataEngine:
             materias = self.obtener_materias_por_grado(grado, wb=wb)
             tareas_vacias = {}
             total_vacias = 0
-            row_est = 4 + int(id_estudiante)
+            row_est = 4 + (int(id_estudiante) % 100)
             
             if not materias or materias == ["Sin materias registradas"]:
                 materias = []
