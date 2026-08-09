@@ -640,6 +640,25 @@ class SQLDatabaseManager:
 
         conn.commit()
 
+    def _sqlite_integro(self, ruta) -> bool:
+        """Verifica que el SQLite en `ruta` abra Y pase PRAGMA quick_check.
+
+        `quick_check` detecta corrupción PROFUNDA de páginas del archivo, no solo
+        que el archivo se pueda abrir. Así, la restauración automática desde backup
+        se dispara también ante daños internos, no únicamente cuando el archivo no
+        abre en absoluto. Devuelve True solo si la integridad es correcta.
+        """
+        try:
+            c = sqlite3.connect(ruta, check_same_thread=False, timeout=30.0)
+            try:
+                c.execute("SELECT name FROM sqlite_master;")
+                row = c.execute("PRAGMA quick_check;").fetchone()
+                return bool(row) and str(row[0]).strip().lower() == "ok"
+            finally:
+                c.close()
+        except Exception:
+            return False
+
     def conectar(self) -> sqlite3.Connection:
         """
         Descifra la base de datos a su ubicación temporal y abre una conexión.
@@ -698,13 +717,11 @@ class SQLDatabaseManager:
                     with open(self.db_temp_path, "wb") as f:
                         f.write(descifrado)
                     
-                    # Verificar integridad del SQLite descifrado
-                    test_conn = sqlite3.connect(self.db_temp_path, check_same_thread=False, timeout=30.0)
-                    try:
-                        test_conn.execute("SELECT name FROM sqlite_master;")
-                    finally:
-                        test_conn.close()
-                    
+                    # Verificar integridad del SQLite descifrado (incluye quick_check:
+                    # detecta corrupción profunda de páginas, no solo que el archivo abra)
+                    if not self._sqlite_integro(self.db_temp_path):
+                        raise sqlite3.DatabaseError("quick_check falló — SQLite corrupto")
+
                     descifrado_ok = True
                     if candidate != self.key:
                         rekey_needed = True
@@ -739,13 +756,11 @@ class SQLDatabaseManager:
                             with open(self.db_temp_path, "wb") as f:
                                 f.write(descifrado)
                             
-                            # Intentar abrir conexión para verificar que no esté corrupta
-                            test_conn = sqlite3.connect(self.db_temp_path, check_same_thread=False, timeout=30.0)
-                            try:
-                                test_conn.execute("SELECT name FROM sqlite_master;")
-                            finally:
-                                test_conn.close()
-                            
+                            # Verificar integridad del backup (quick_check) antes de aceptarlo:
+                            # no restauramos un backup que también esté corrupto por dentro.
+                            if not self._sqlite_integro(self.db_temp_path):
+                                raise sqlite3.DatabaseError("el backup no pasó quick_check")
+
                             # Si llegó aquí, restaurar este backup como el archivo oficial
                             shutil.copy2(bak_path, self.db_enc_path)
                             descifrado_ok = True
@@ -1158,11 +1173,19 @@ class SQLDatabaseManager:
                     datos = f.read()
                 cifrado = cifrar(datos, self.key)
                 
-                # Guardar de forma atómica para evitar corrupción si se corta la corriente
+                # Guardar de forma ATÓMICA para evitar corrupción si se corta la
+                # corriente o se cierra la app durante el guardado.
+                #   - flush + fsync: fuerza los bytes cifrados a disco antes de sustituir.
+                #   - os.replace: reemplazo atómico en Windows AUNQUE el destino ya
+                #     exista (shutil.move NO es atómico aquí: os.rename falla porque el
+                #     destino existe y cae a un copy+delete que puede dejar el .enc a
+                #     medias — causa raíz de las corrupciones de BD).
                 db_enc_tmp = self.db_enc_path + ".tmp"
                 with open(db_enc_tmp, "wb") as f:
                     f.write(cifrado)
-                shutil.move(db_enc_tmp, self.db_enc_path)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(db_enc_tmp, self.db_enc_path)
             except Exception as e:
                 logger.error(f"Error guardando base cifrada: {e}")
 

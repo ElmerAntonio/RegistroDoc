@@ -245,7 +245,11 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         else:
             tasks = tasks_raw
         from utils.date_helpers import parse_fecha_segura
-        tasks.sort(key=lambda t: parse_fecha_segura(t["fecha"]))
+        # Agrupar las columnas por TIPO de nota (Diaria/Parcial → Apreciación → Examen)
+        # y, dentro de cada tipo, por fecha. Así las notas quedan SEPARADAS por tipo
+        # sin tener que usar el filtro "Tipo".
+        _orden_tipo = {"Diaria / Parcial": 0, "Apreciación": 1, "Examen": 2}
+        tasks.sort(key=lambda t: (_orden_tipo.get(t["tipo"], 9), parse_fecha_segura(t["fecha"])))
             
         promedios_finales = self.engine.obtener_promedios_reales(grado, materia, trimestre)
         student_ids_str = [str(e["id"]) for e in estudiantes]
@@ -528,20 +532,41 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                 ctk.CTkLabel(self.scroll_notas, text="No hay calificaciones registradas para esta materia y trimestre.",
                              font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=40)
             else:
+                # Color por tipo de nota → separa visualmente los tipos
+                _tipo_color = {"Diaria / Parcial": C["cian"], "Apreciación": C["amarillo"], "Examen": C["rojo"]}
+                def _color_tipo(tp):
+                    return _tipo_color.get(tp, C["texto_sec"])
+
+                # Leyenda de tipos presentes
+                tipos_presentes = [tp for tp in ["Diaria / Parcial", "Apreciación", "Examen"]
+                                   if any(t == tp for _, t in h_notas)]
+                if tipos_presentes:
+                    f_leg = ctk.CTkFrame(self.scroll_notas, fg_color="transparent")
+                    f_leg.pack(fill="x", padx=8, pady=(2, 0))
+                    ctk.CTkLabel(f_leg, text="Tipos de nota:", font=(FONT_BODY, 10, "bold"),
+                                 text_color=C["texto_sec"]).pack(side="left", padx=(0, 6))
+                    for _tp in tipos_presentes:
+                        ctk.CTkLabel(f_leg, text="⬤ " + _tp, font=(FONT_BODY, 10, "bold"),
+                                     text_color=_color_tipo(_tp)).pack(side="left", padx=6)
+
                 # Encabezados
                 f_header = ctk.CTkFrame(self.scroll_notas, fg_color=C["badge_bg"], corner_radius=5)
                 f_header.pack(fill="x", padx=5, pady=2)
-                
+
                 ctk.CTkLabel(f_header, text="N°", width=35, font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
                 ctk.CTkLabel(f_header, text="Nombre del Estudiante", width=180, anchor="w", font=(FONT_BODY, 11, "bold")).pack(side="left", padx=5)
-                
+
                 from grapp import ToolTip
+                prev_tipo = None
                 for desc, tipo in h_notas:
-                    # Mostrar descripción corta en el header
-                    lbl_h = ctk.CTkLabel(f_header, text=desc[:8], width=65, font=(FONT_BODY, 10, "bold"), text_color=C["cian"])
-                    lbl_h.pack(side="left", padx=3)
-                    ToolTip(lbl_h, desc)
-                    
+                    # Espacio extra al cambiar de tipo → separa los grupos de columnas
+                    gap = (16, 3) if (prev_tipo is not None and tipo != prev_tipo) else 3
+                    lbl_h = ctk.CTkLabel(f_header, text=desc[:8], width=65, font=(FONT_BODY, 10, "bold"),
+                                         text_color=_color_tipo(tipo))
+                    lbl_h.pack(side="left", padx=gap)
+                    ToolTip(lbl_h, f"{desc}  —  {tipo}")
+                    prev_tipo = tipo
+
                 ctk.CTkLabel(f_header, text="Promedio", width=80, font=(FONT_BODY, 11, "bold"), text_color=C["verde"]).pack(side="right", padx=10)
 
                 # Estudiantes
@@ -558,7 +583,11 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                         lbl_val = ctk.CTkLabel(f_row, text="", width=65, font=(FONT_BODY, 11))
                         widgets["valores"].append(lbl_val)
 
+                    prev_tipo = None
                     for j, nota in enumerate(row_data["notas"]):
+                        tipo_col = h_notas[j][1] if j < len(h_notas) else None
+                        # Mismo espacio separador que el encabezado al cambiar de tipo
+                        gap = (16, 3) if (prev_tipo is not None and tipo_col != prev_tipo) else 3
                         lbl_val = widgets["valores"][j]
                         color = C["texto"]
                         if isinstance(nota, (int, float)):
@@ -567,7 +596,8 @@ class RegistroCompletoFrame(ctk.CTkFrame):
                             elif nota >= 4.5:
                                 color = C["verde"]
                         lbl_val.configure(text=f"{nota}" if nota != "" else "-", text_color=color)
-                        lbl_val.pack(side="left", padx=3)
+                        lbl_val.pack(side="left", padx=gap)
+                        prev_tipo = tipo_col
 
                     prom = row_data["promedio"]
                     prom_str = f"{prom:.2f}" if isinstance(prom, (int, float)) else (f"{prom}" if prom else "-")

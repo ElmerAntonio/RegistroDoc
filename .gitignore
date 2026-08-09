@@ -47,3 +47,7 @@ dist/
 Output/
 scratch/
 implementation_plan.md
+
+# Análisis interno — no publicar (seguridad: no exponer arquitectura/superficie)
+DIAGNOSTICO.md
+graphify-out/

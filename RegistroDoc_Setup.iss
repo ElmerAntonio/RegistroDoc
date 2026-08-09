@@ -5,7 +5,7 @@
 
 [Setup]
 AppName=RegistroDoc Pro
-AppVersion=5.0.2
+AppVersion=5.0.3
 AppPublisher=RegistroDoc Pro - MEDUCA
 DefaultDirName={localappdata}\RegistroDocPro
 DefaultGroupName=RegistroDoc Pro
