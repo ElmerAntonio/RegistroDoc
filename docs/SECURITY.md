@@ -32,3 +32,17 @@ Si la Opción 1 no está disponible, por favor abre un nuevo **Issue** en el rep
 * **Tiempo de respuesta:** Reviso GitHub constantemente, por lo que acusaré recibo de tu reporte en un plazo máximo de 24 a 48 horas.
 * **Proceso:** Analizaré el problema, confirmaré si es reproducible y te mantendré informado sobre el progreso del parche directamente en el hilo de GitHub.
 * Una vez que la vulnerabilidad sea parcheada, se lanzará una actualización en la rama principal.
+
+---
+
+## Sistema de Licencias (actualización 2026-08)
+
+RegistroDoc Pro usa **firma digital asimétrica Ed25519** para las licencias:
+
+- **Clave privada** (firma/genera códigos): vive **solo** en la herramienta del vendedor (`C:\RegistroDoc_Mis_Ventas\`), nunca se distribuye.
+- **Clave pública** (verifica): embebida en `src/rdlicense.py`. Solo permite verificar; **no** puede generar códigos.
+- Los códigos de activación se verifican **offline** (sin internet) y son **imposibles de falsificar** sin la clave privada.
+- El programa incluye un **período de prueba de 30 días**; luego exige el código de activación.
+- La verificación de licencia **falla-abierto** ante errores para no bloquear al docente por un fallo técnico.
+
+Ver `docs/GUIA_VENTAS_Y_LICENCIAS.md` para la operación de ventas.

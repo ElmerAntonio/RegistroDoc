@@ -280,3 +280,15 @@ Cada agente tiene un rol fijo, responsabilidades claras y entregables medibles.
 - Manejo exhaustivo de `try/except PermissionError`.
 - Lógica bimodal integrada: 28 notas continuas para Primaria, secciones divididas para Premedia.
 - Sincronización automática de carátulas (Q24, Q25) con `sapp.py`.
+
+---
+
+## ✅ Actualización de estado (2026-08-09)
+
+Completado en esta iteración:
+- **Sistema de licencias asimétrico (Ed25519)** — `src/rdlicense.py` + `tests/test_rdlicense.py`. Reemplaza el esquema simétrico previo (que exponía el secreto en el .exe). Códigos pre-generables por lote, en documento, verificación offline no falsificable.
+- **Activación + período de prueba de 30 días** en la app (`_verificar_licencia` / pantalla de activación).
+- **Generador del vendedor** por lotes con registro cifrado y documento `licencias_generadas.txt` (interfaz mejorada).
+- **Tres instaladores**: normal, con datos (preserva datos), y **prueba/beta** con documento de experiencia.
+- **Fiabilidad/seguridad**: guardado atómico de BD (fsync+os.replace), `PRAGMA quick_check` con restauración automática, contraseña de acceso opcional (reseteable con cédula), separación visual de tipos de nota en Registro Completo, y arreglo del asistente de configuración (sin espacio negro).
+- **Tests**: suite en 113 passed. **GitHub**: todo publicado en `main` con `.gitignore` que protege datos de alumnos y la clave privada.
