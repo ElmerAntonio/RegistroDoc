@@ -589,6 +589,11 @@ class RegistroDocApp(ctk.CTk):
                         app_inst._exigir_password_acceso()
                     except Exception:
                         pass
+                    # Verificar licencia / período de prueba (30 días)
+                    try:
+                        app_inst._verificar_licencia()
+                    except Exception:
+                        pass
 
             self.splash.set_tasks(loading_tasks, on_splash_complete)
             self.splash.iniciar()
@@ -1078,6 +1083,96 @@ class RegistroDocApp(ctk.CTk):
                           command=_pantalla_password).pack(pady=(4, 0))
 
         _pantalla_password()
+
+    # ─── LICENCIA / ACTIVACIÓN (prueba 30 días + código firmado) ───
+    def _dias_prueba_restante(self, cfg) -> int:
+        import datetime
+        ini = cfg.get("trial_inicio")
+        if not ini:
+            ini = datetime.date.today().isoformat()
+            cfg["trial_inicio"] = ini
+            try:
+                from rdsecurity import guardar_config_segura
+                guardar_config_segura(cfg)
+            except Exception:
+                pass
+        try:
+            d0 = datetime.date.fromisoformat(ini)
+            usados = (datetime.date.today() - d0).days
+            return max(0, 30 - usados)
+        except Exception:
+            return 30
+
+    def _verificar_licencia(self):
+        """Al arrancar: si está activado, sigue. Si está en prueba, avisa los días.
+        Si la prueba venció y no hay licencia, exige el código de activación.
+        Falla ABIERTO ante errores para no dejar al docente fuera por un bug."""
+        try:
+            from rdsecurity import cargar_config_segura
+            cfg = cargar_config_segura({})
+        except Exception:
+            return
+        if cfg.get("licencia_activada"):
+            return
+        try:
+            dias = self._dias_prueba_restante(cfg)
+        except Exception:
+            return
+        if dias > 0:
+            try:
+                self.mostrar_toast(f"Versión de prueba: {dias} días restantes", "#F59E0B")
+            except Exception:
+                pass
+            return
+        self._pantalla_activacion(cfg)
+
+    def _pantalla_activacion(self, cfg):
+        from theme import C, FONT_TITLE, FONT_BODY
+        import rdlicense, datetime
+
+        ov = ctk.CTkFrame(self, fg_color="#0A141D")
+        ov.place(relx=0, rely=0, relwidth=1, relheight=1)
+        ov.lift()
+        self.bind_all("<Key>", lambda e: "break")
+
+        ctk.CTkLabel(ov, text="🔑 Activar RegistroDoc Pro", font=(FONT_TITLE, 22, "bold"),
+                     text_color=C["cian"]).pack(pady=(150, 10))
+        ctk.CTkLabel(ov, text="Su período de prueba terminó. Ingrese su código de activación:",
+                     font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=8)
+        entry = ctk.CTkEntry(ov, width=560, placeholder_text="RD-XXXXXX-XXXXXX-XXXXXX-...")
+        entry.pack(pady=8)
+        entry.focus_force()
+        err = ctk.CTkLabel(ov, text="", text_color=C["rojo"], font=(FONT_BODY, 12, "bold"))
+        err.pack(pady=6)
+
+        def _activar():
+            cod = entry.get().strip()
+            if rdlicense.verificar_codigo(cod):
+                cfg["licencia_activada"] = True
+                cfg["licencia_serial"] = rdlicense.serial_de(cod)
+                cfg["licencia_fecha"] = datetime.date.today().isoformat()
+                try:
+                    from rdsecurity import guardar_config_segura
+                    guardar_config_segura(cfg)
+                except Exception:
+                    pass
+                try:
+                    self.unbind_all("<Key>")
+                except Exception:
+                    pass
+                ov.destroy()
+                try:
+                    self.mostrar_toast("✅ Programa activado. ¡Gracias por su compra!", "#22C55E")
+                except Exception:
+                    pass
+            else:
+                err.configure(text="Código inválido. Verifique e intente de nuevo.")
+
+        entry.bind("<Return>", lambda e: _activar())
+        ctk.CTkButton(ov, text="🔓 Activar programa", fg_color=C["cian"], hover_color=C["verde"],
+                      command=_activar).pack(pady=8)
+        ctk.CTkLabel(ov, text="¿No tiene código? Contacte al proveedor para adquirir su licencia.",
+                     font=(FONT_BODY, 10), text_color=C["texto_sec"]).pack(pady=(4, 0))
 
     # ─── AUTO-BACKUP ───────────────────────────────────────────────
     def _iniciar_auto_backup(self):
