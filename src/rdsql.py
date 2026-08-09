@@ -648,6 +648,10 @@ class SQLDatabaseManager:
         se dispara también ante daños internos, no únicamente cuando el archivo no
         abre en absoluto. Devuelve True solo si la integridad es correcta.
         """
+        # Sin esta guarda, sqlite3.connect CREARÍA una BD vacía nueva (que pasaría
+        # quick_check) y devolveríamos True para un archivo inexistente.
+        if not os.path.exists(ruta):
+            return False
         try:
             c = sqlite3.connect(ruta, check_same_thread=False, timeout=30.0)
             try:
