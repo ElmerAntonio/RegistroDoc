@@ -140,6 +140,14 @@ class SetupWizard(ctk.CTk):
     def limpiar_main_frame(self):
         for w in self.main_frame.winfo_children():
             w.destroy()
+        # Resetear pesos de grid para que no se "filtren" entre pasos (unos usan
+        # grid y otros pack). Cada paso vuelve a fijar los suyos.
+        for i in range(3):
+            try:
+                self.main_frame.rowconfigure(i, weight=0)
+                self.main_frame.columnconfigure(i, weight=0)
+            except Exception:
+                pass
 
     def mostrar_paso(self):
         self.dibujar_progreso()
@@ -227,6 +235,7 @@ class SetupWizard(ctk.CTk):
         # Contenedor de dos columnas
         self.main_frame.columnconfigure(0, weight=6)
         self.main_frame.columnconfigure(1, weight=4)
+        self.main_frame.rowconfigure(0, weight=1)  # que la fila llene el alto → sin espacio negro
 
         # Columna Izquierda: Scrollable Frame para acomodar los nuevos campos cómodamente
         col_izq = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
@@ -518,6 +527,7 @@ class SetupWizard(ctk.CTk):
     def mostrar_paso_3(self):
         self.main_frame.columnconfigure(0, weight=5)
         self.main_frame.columnconfigure(1, weight=5)
+        self.main_frame.rowconfigure(0, weight=1)  # que la fila llene el alto → sin espacio negro
 
         col_izq = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         col_izq.grid(row=0, column=0, sticky="nsew", padx=(0, 15))
