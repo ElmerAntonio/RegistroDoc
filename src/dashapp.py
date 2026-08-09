@@ -60,10 +60,63 @@ class DashboardFrame(ctk.CTkFrame):
         self._construir()
 
     def actualizar_vista(self):
-        self._stats = self._cargar_stats()
-        if hasattr(self, "_panel_container") and self._panel_container.winfo_exists():
-            self._panel_container.destroy()
-        self._panel_principal(self)
+        """Recarga estadísticas en hilo de fondo y actualiza solo los widgets afectados."""
+        import threading
+
+        token = object()
+        self._async_token = token
+
+        def _fetch():
+            return self._cargar_stats()
+
+        def _apply(stats):
+            # Verificar token y existencia antes de tocar widgets
+            if getattr(self, "_async_token", None) is not token:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            self._stats = stats
+            # Refrescar solo los contenedores de datos dinámicos (sin destroy del panel)
+            try:
+                if hasattr(self, "_cards_container") and self._cards_container.winfo_exists():
+                    for w in self._cards_container.winfo_children():
+                        w.destroy()
+                    self._tarjetas_metricas(self._cards_container)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "_dist_container") and self._dist_container.winfo_exists():
+                    for w in self._dist_container.winfo_children():
+                        w.destroy()
+                    self._panel_distribucion_sexo(self._dist_container)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "_habitos_container") and self._habitos_container.winfo_exists():
+                    for w in self._habitos_container.winfo_children():
+                        w.destroy()
+                    self._panel_habitos(self._habitos_container)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "_graficas_container") and self._graficas_container.winfo_exists():
+                    for w in self._graficas_container.winfo_children():
+                        w.destroy()
+                    self._graficas(self._graficas_container)
+            except Exception:
+                pass
+
+        def _run():
+            datos = _fetch()
+            try:
+                self.after(0, lambda: _apply(datos))
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════════════
     #  DATOS

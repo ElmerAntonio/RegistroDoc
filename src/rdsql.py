@@ -262,6 +262,9 @@ class SQLDatabaseManager:
                 return False
             import sys
             main_file = os.path.basename(sys.argv[0]).lower()
+            # Permitir: scripts .py directos, lanzadores de RegistroDoc, pytest y __main__
+            if main_file.endswith(".py"):
+                return True
             if not any(x in main_file for x in ["python", "registrodoc", "pytest", "__main__.py"]):
                 return False
         except Exception:

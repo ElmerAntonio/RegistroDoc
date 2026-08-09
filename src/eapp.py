@@ -508,7 +508,37 @@ class NotasFrame(ctk.CTkFrame):
             self.actualizar_tab_tareas()
 
     def actualizar_vista(self):
-        self.al_cambiar_grado(self.combo_grado.get())
+        """Recarga grados y estudiantes de notas en hilo de fondo."""
+        import threading
+        token = object()
+        self._async_token = token
+
+        def _fetch():
+            return self.engine.obtener_grados_activos() or ["Sin datos"]
+
+        def _apply(opciones):
+            if getattr(self, "_async_token", None) is not token:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            old_sel = self.combo_grado.get()
+            self.combo_grado.configure(values=opciones)
+            grado = old_sel if old_sel in opciones else opciones[0]
+            self.combo_grado.set(grado)
+            self.al_cambiar_grado(grado)
+
+        def _run():
+            datos = _fetch()
+            try:
+                self.after(0, lambda: _apply(datos))
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, daemon=True).start()
+
 
     def actualizar_tab_tareas(self):
         for w in self.scroll_tareas_tab.winfo_children():

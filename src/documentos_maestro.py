@@ -696,7 +696,8 @@ def generar_expediente_retiro(datos: dict) -> str:
 
     # ── Encabezado institucional ───────────────────────────────────────────
     try:
-        add_header_with_logo(doc, escuela, ano)
+        logo_path = get_school_logo_path()
+        add_header_with_logo(doc, logo_path, text=escuela)
     except Exception:
         pass
 
@@ -825,7 +826,8 @@ def generar_expediente_retiro(datos: dict) -> str:
 
     # ── Pie de página ─────────────────────────────────────────────────────
     try:
-        add_footer_with_logo(doc, escuela, ano)
+        logo_path = get_school_logo_path()
+        add_footer_with_logo(doc, logo_path, "RegistroDoc Pro")
     except Exception:
         pass
 

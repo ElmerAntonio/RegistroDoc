@@ -45,6 +45,11 @@ class RegistroCompletoFrame(ctk.CTkFrame):
         self.combo_trimestre.pack(side="right", padx=5, pady=15)
 
     def al_cambiar_grado(self, grado):
+        # Guardia: combo_materia se crea en crear_tabs(), que va después de crear_filtros().
+        # Si este callback se dispara antes (e.g. customtkinter inicializa el combo con un valor),
+        # simplemente ignoramos la llamada para evitar AttributeError.
+        if not hasattr(self, 'combo_materia'):
+            return
         materias = self.engine.obtener_materias_por_grado(grado)
         if materias:
             self.combo_materia.configure(values=materias)

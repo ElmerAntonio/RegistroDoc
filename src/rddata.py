@@ -257,10 +257,12 @@ class DataEngine:
                         sexo_cifrado = self.db_manager.encriptar_campo(est["sexo"])
                         
                         # Evitar sobrescribir el estado de estudiantes retirados
+                        # NOTA: NO se actualiza sexo desde Excel porque el Excel
+                        # siempre devuelve 'M' hardcodeado y pisaria el valor real.
                         cursor.execute("SELECT id FROM estudiantes WHERE id = ?;", (str(est["id"]),))
                         if cursor.fetchone():
                             cursor.execute(
-                                "UPDATE estudiantes SET nombre = ?, cedula = ?, grado_id = ? WHERE id = ?;",
+                                "UPDATE estudiantes SET nombre = ?, cedula = ?, grado_id = ? WHERE id = ? AND estado != 'Retirado';",
                                 (nombre_cifrado, cedula_cifrada, grado_id, str(est["id"]))
                             )
                         else:
@@ -1651,10 +1653,20 @@ class DataEngine:
                     nombre_cifrado = self.db_manager.encriptar_campo(datos["nombre"])
                     cedula_cifrada = self.db_manager.encriptar_campo(datos.get("cedula", ""))
                     sexo_cifrado = self.db_manager.encriptar_campo(datos.get("sexo", "M"))
-                    cursor.execute(
-                        "INSERT OR REPLACE INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
-                        (str(id_est), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
-                    )
+                    # Bug #1: No usar INSERT OR REPLACE con estado='Activo' — sobrescribiría retirados
+                    cursor.execute("SELECT estado FROM estudiantes WHERE id = ?;", (str(id_est),))
+                    existing = cursor.fetchone()
+                    if existing:
+                        # Solo actualiza datos del estudiante; preserva su estado actual (Activo/Retirado)
+                        cursor.execute(
+                            "UPDATE estudiantes SET nombre = ?, cedula = ?, sexo = ?, grado_id = ? WHERE id = ? AND estado = 'Activo';",
+                            (nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id, str(id_est))
+                        )
+                    else:
+                        cursor.execute(
+                            "INSERT INTO estudiantes (id, nombre, cedula, sexo, grado_id, estado) VALUES (?, ?, ?, ?, ?, 'Activo');",
+                            (str(id_est), nombre_cifrado, cedula_cifrada, sexo_cifrado, grado_id)
+                        )
                 self.db_conn.commit()
                 self._schedule_save()
         except Exception as e:
@@ -1697,6 +1709,9 @@ class DataEngine:
             from datetime import date
             fecha_retiro = date.today().strftime("%Y-%m-%d")
 
+            # Encriptar motivo antes de guardar (consistente con desencriptar en la lectura)
+            motivo_cifrado = self.db_manager.encriptar_campo(motivo.strip()) if motivo else ""
+
             cursor.execute(
                 """UPDATE estudiantes
                    SET estado = 'Retirado',
@@ -1704,7 +1719,7 @@ class DataEngine:
                        motivo_retiro = ?,
                        nombre_acudiente = ?
                    WHERE id = ?;""",
-                (fecha_retiro, motivo.strip(), acudiente_cifrado, str(est_id))
+                (fecha_retiro, motivo_cifrado, acudiente_cifrado, str(est_id))
             )
             self.db_conn.commit()
             self._schedule_save()
@@ -1790,7 +1805,7 @@ class DataEngine:
                     "cedula":           self.db_manager.desencriptar_campo(r[2]) if r[2] else "",
                     "sexo":             self.db_manager.desencriptar_campo(r[3]) if r[3] else "",
                     "fecha_retiro":     r[4] or "",
-                    "motivo_retiro":    r[5] or "",
+                    "motivo_retiro":    self.db_manager.desencriptar_campo(r[5]) if r[5] else "",
                     "nombre_acudiente": self.db_manager.desencriptar_campo(r[6]) if r[6] else "",
                     "grado":            r[7] or "",
                 })
@@ -2808,19 +2823,35 @@ class DataEngine:
                     return False, "Grado no encontrado."
                 grado_id = row_g[0]
                 
-                cursor.execute("SELECT id FROM estudiantes WHERE grado_id = ? ORDER BY CAST(id AS INTEGER);", (grado_id,))
+                # Construir un mapa directo de id_DB por posición para el fallback de Excel
+                # (el dic_asistencia puede venir con el ID real o con el índice de posición)
+                cursor.execute(
+                    "SELECT id FROM estudiantes WHERE grado_id = ? AND estado = 'Activo' ORDER BY CAST(id AS INTEGER);",
+                    (grado_id,)
+                )
                 student_ids = [r[0] for r in cursor.fetchall()]
-                
+                student_id_set = {str(sid) for sid in student_ids}
+                pos_to_id = {idx + 1: str(sid) for idx, sid in enumerate(student_ids)}
+
                 for id_estudiante, datos in dic_asistencia.items():
                     try:
-                        idx_1based = int(id_estudiante) % 100 if str(id_estudiante).isdigit() else int(id_estudiante)
-                        est_id = student_ids[idx_1based - 1]
+                        id_str = str(id_estudiante)
+                        # 1. Si el valor es ya un ID real de la tabla, usarlo directamente
+                        if id_str in student_id_set:
+                            est_id = id_str
+                        else:
+                            # 2. Fallback: interpretar como índice de posición (1-based) del Excel
+                            idx_1based = int(id_estudiante) % 100 if str(id_estudiante).isdigit() else int(id_estudiante)
+                            est_id = pos_to_id.get(idx_1based)
+                            if est_id is None:
+                                logger.error(f"No se encontró estudiante en posición {idx_1based} para grado {grado}")
+                                continue
                         cursor.execute(
                             """INSERT OR REPLACE INTO asistencia (estudiante_id, fecha, estado, trimestre)
                             VALUES (?, ?, ?, ?);""",
-                            (str(est_id), str(fecha), datos["estado"], trim_num)
+                            (est_id, str(fecha), datos["estado"], trim_num)
                         )
-                    except (IndexError, ValueError) as e:
+                    except (ValueError) as e:
                         logger.error(f"Error mapping student in guardar_asistencia: {e}")
                 self.db_conn.commit()
                 self._schedule_save()
@@ -3523,6 +3554,50 @@ class DataEngine:
         return True
 
     def obtener_estadisticas_asistencia(self, grado, trimestre, id_estudiante, wb=None):
+        # ── Rama SQLite (prioritaria): leer asistencia ya registrada en la BD ──
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute(
+                "SELECT id FROM grados WHERE nombre = ? AND seccion = 'A' AND modalidad = ?;",
+                (grado, self.modalidad)
+            )
+            row_g = cursor.fetchone()
+            if row_g:
+                grado_id = row_g[0]
+                # Calcular trimestre numérico (admite "Todos" para suma global)
+                if str(trimestre).upper() in ["TODOS", "TODO", "ALL"]:
+                    trim_filter = ""
+                    trim_params = (str(id_estudiante),)
+                    cursor.execute(
+                        "SELECT estado FROM asistencia WHERE estudiante_id = ?;",
+                        trim_params
+                    )
+                else:
+                    trim_num = int(str(trimestre).replace("Trimestre ", ""))
+                    cursor.execute(
+                        "SELECT estado FROM asistencia WHERE estudiante_id = ? AND trimestre = ?;",
+                        (str(id_estudiante), trim_num)
+                    )
+                rows_sql = cursor.fetchall()
+                if rows_sql:
+                    total_dias = len(rows_sql)
+                    ausencias  = sum(1 for r in rows_sql if r[0] == "-")
+                    tardanzas  = sum(1 for r in rows_sql if r[0] == "T")
+                    excusas    = sum(1 for r in rows_sql if r[0] == "E")
+                    asistidos  = total_dias - ausencias
+                    pct = round((asistidos / total_dias) * 100, 1) if total_dias > 0 else 0.0
+                    return {
+                        "total_dias":    total_dias,
+                        "ausencias":     ausencias,
+                        "tardanzas":     tardanzas,
+                        "excusas":       excusas,
+                        "dias_asistidos": asistidos,
+                        "pct_asistencia": pct,
+                    }
+        except Exception as e:
+            logger.warning(f"obtener_estadisticas_asistencia: fallo SQL, usando Excel. {e}")
+
+        # ── Fallback: leer desde Excel ──
         if wb is None:
             self._verificar_y_recargar_cache()
         if not os.path.exists(self.ruta) and wb is None and self._wb_cache is None:
@@ -3537,12 +3612,12 @@ class DataEngine:
         ws = wb[hoja]
         mapa_trimestres = {"Trimestre 1": 2, "Trimestre 2": 45, "Trimestre 3": 88}
         fila_fechas = mapa_trimestres.get(trimestre, 2)
-        
+
         total_dias = 0
         ausencias = 0
         tardanzas = 0
         excusas = 0
-        
+
         for c in range(3, 61):
             fecha_val = ws.cell(row=fila_fechas, column=c).value
             if not fecha_val:
@@ -3556,13 +3631,17 @@ class DataEngine:
                     tardanzas += 1
                 elif val == "E":
                     excusas += 1
-                
+
         if should_close: wb.close()
+        asistidos = total_dias - ausencias
+        pct = round((asistidos / total_dias) * 100, 1) if total_dias > 0 else 0.0
         return {
-            "total_dias": total_dias,
-            "ausencias": ausencias,
-            "tardanzas": tardanzas,
-            "excusas": excusas
+            "total_dias":     total_dias,
+            "ausencias":      ausencias,
+            "tardanzas":      tardanzas,
+            "excusas":        excusas,
+            "dias_asistidos": asistidos,
+            "pct_asistencia": pct,
         }
 
     def obtener_tareas_sin_nota(self, grado, trimestre, id_estudiante, wb=None):

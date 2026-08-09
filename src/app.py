@@ -451,6 +451,15 @@ class RegistroDocApp(ctk.CTk):
         self.resizable(True, True) # Permite maximizar y achicar
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # Fondo del tema en la VENTANA RAÍZ: al maximizar/redimensionar, Windows
+        # rellena el área recién expuesta con este color (brush de la ventana) en
+        # vez de negro, así no se ven los márgenes negros mientras el frame interno
+        # se reajusta al nuevo tamaño.
+        try:
+            self.configure(fg_color=C["fondo"])
+        except Exception:
+            pass
+
         # Ocultar ventana principal durante la pantalla de carga
         self.withdraw()
 
@@ -467,12 +476,8 @@ class RegistroDocApp(ctk.CTk):
         self.bind("<Unmap>", self._on_window_unmap)
         self.bind("<Map>", self._on_window_map)
         self._is_minimized = False
-        self._just_restored = False
-        self._resizing = False
-        self._resize_job = None
         self._last_width = 1280
         self._last_height = 720
-        self._resize_overlay = None
 
         # Definir las tareas del Splash Screen (Arranque rápido e instantáneo)
         def task_cargar_motor(sp):
@@ -503,6 +508,10 @@ class RegistroDocApp(ctk.CTk):
             self.mostrar_dashboard()
             if sp:
                 sp.app_instance = self
+            # Pre-calentar las filas de datos de las secciones navegables mientras
+            # el usuario ve el Dashboard → la primera navegación a cada una es fluida.
+            if not os.environ.get("PYTEST_CURRENT_TEST"):
+                self.after(700, self._precalentar_datos_en_idle)
 
         if os.environ.get("PYTEST_CURRENT_TEST"):
             # En entorno de pruebas (pytest), inicializar todo síncronamente y omitir el Splash Screen
@@ -548,7 +557,18 @@ class RegistroDocApp(ctk.CTk):
                         # Pre-renderizado invisible
                         app_inst.attributes("-alpha", 0.0)
                         app_inst.deiconify()
-                        
+
+                        # Desactivar las animaciones de DWM (maximizar/minimizar/
+                        # restaurar) para ESTA ventana → sin doble-imagen/ghosting.
+                        app_inst._deshabilitar_animaciones_dwm()
+
+                        # Abrir MAXIMIZADA (a pantalla completa) como una app normal,
+                        # en vez de una ventana flotante pequeña sobre otras ventanas.
+                        try:
+                            app_inst.state("zoomed")
+                        except Exception:
+                            pass
+
                         # Cargar icono en barra de tareas al revelar la ventana
                         icon_p = os.path.join(ASSETS_DIR, "icon_fixed.ico")
                         if os.path.exists(icon_p):
@@ -580,6 +600,35 @@ class RegistroDocApp(ctk.CTk):
                 self._frames[class_name] = f
             except Exception as e:
                 print(f"[!] Error precargando {class_name}: {e}")
+
+    def _precalentar_datos_en_idle(self):
+        """Construye los datos/filas de las secciones navegables una vez, en idle
+        y fuera de la vista (el usuario está en el Dashboard), para que la primera
+        navegación a cada sección no tenga freeze de construcción de filas."""
+        if getattr(self, "_destroyed", False):
+            return
+        nombres = ["EstudiantesFrame", "NotasAsistenciaFrame", "ObservacionesFrame"]
+        self._cola_precalentar = [n for n in nombres if n in self._frames]
+        self._calentar_siguiente_frame()
+
+    def _calentar_siguiente_frame(self):
+        if getattr(self, "_destroyed", False):
+            return
+        cola = getattr(self, "_cola_precalentar", [])
+        if not cola:
+            return
+        nombre = cola.pop(0)
+        frame = self._frames.get(nombre)
+        try:
+            if (frame and frame.winfo_exists()
+                    and hasattr(frame, "actualizar_vista")
+                    and not getattr(frame, "_precalentado", False)):
+                frame._precalentado = True
+                frame.actualizar_vista()
+        except Exception as e:
+            print(f"[precalentar] {nombre}: {e}")
+        # Espaciar cada sección para no encadenar trabajo pesado en el hilo principal
+        self.after(250, self._calentar_siguiente_frame)
 
     def _mostrar_app_principal(self):
         try:
@@ -633,43 +682,55 @@ class RegistroDocApp(ctk.CTk):
         class_name = frame_class.__name__
         ya_activo   = (getattr(self, "_frame_activo", None) == class_name)
 
-        # Ocultar todos los frames en la caché
+        # ── 1. Ocultar todos los frames en caché ──────────────────────────
         for f in self._frames.values():
             try:
                 f.pack_forget()
             except Exception:
                 pass
 
-        # Si el frame no está en la caché, crearlo
+        # ── 2. Crear el frame si aún no existe ────────────────────────────
         if class_name not in self._frames:
             f = frame_class(self.main_app.main_content_frame, self.engine, *args, **kwargs)
             self._frames[class_name] = f
 
-        # Mostrar el frame activo
+        # ── 3. Mostrar el frame INMEDIATAMENTE (sin bloquear) ─────────────
         active_frame = self._frames[class_name]
         active_frame.pack(fill="both", expand=True)
         self._frame_activo = class_name
+
+        # ── 4. Determinar si los datos necesitan actualizarse ─────────────
+        version_actual = 0
         try:
-            self.update_idletasks()
+            if hasattr(self.engine, "db_manager") and self.engine.db_manager and self.engine.db_manager.conn:
+                version_actual = self.engine.db_manager.conn.total_changes
         except Exception:
             pass
 
-        # Solo llamar actualizar_vista si cambiamos de frame (ya_activo es False)
-        # Y además la versión de datos cambió desde la última actualización del frame.
-        version_actual = 0
-        if hasattr(self.engine, "db_manager") and self.engine.db_manager and self.engine.db_manager.conn:
-            try:
-                version_actual = self.engine.db_manager.conn.total_changes
-            except Exception:
-                pass
-
         last_ver = getattr(active_frame, "last_updated_version", -1)
-        if not ya_activo and (last_ver != version_actual or not hasattr(active_frame, "last_updated_version")) and hasattr(active_frame, "actualizar_vista"):
-            try:
-                active_frame.actualizar_vista()
-                active_frame.last_updated_version = version_actual
-            except Exception as e:
-                print(f"[!] Error actualizando vista {class_name}: {e}")
+        necesita_update = (
+            not ya_activo and
+            hasattr(active_frame, "actualizar_vista") and
+            (last_ver != version_actual or not hasattr(active_frame, "last_updated_version"))
+        )
+
+        if necesita_update:
+            # Marcar versión antes de lanzar para no repetir si llegan
+            # varias navegaciones seguidas al mismo frame
+            active_frame.last_updated_version = version_actual
+
+            # ── 5. Diferir la actualización: el frame ya es visible
+            #       cuando llega este callback → el usuario ve el cambio
+            #       de sección instantáneo y los datos llegan sin freeze.
+            def _defer_update(frame=active_frame, cn=class_name):
+                try:
+                    if not frame.winfo_exists():
+                        return
+                    frame.actualizar_vista()
+                except Exception as e:
+                    print(f"[!] Error actualizando vista {cn}: {e}")
+
+            self.after(0, _defer_update)
 
         return active_frame
 
@@ -998,84 +1059,59 @@ class RegistroDocApp(ctk.CTk):
         except Exception:
             pass
 
+    def _deshabilitar_animaciones_dwm(self):
+        """Desactiva las transiciones (animaciones) de DWM SOLO para esta ventana.
+
+        En Windows, al maximizar/minimizar/restaurar, el compositor (DWM) anima el
+        cambio de tamaño cruzando la imagen ANTERIOR con la NUEVA. Como
+        CustomTkinter repinta sus canvas relativamente lento, durante esa animación
+        se ven ambas imágenes a la vez → el efecto de doble-imagen / ghosting.
+
+        Al desactivar la transición por-ventana, el cambio de tamaño se aplica de
+        forma limpia e instantánea, sin el fantasma. Es una API nativa de Win32
+        (no pelea con el sistema ni usa alpha/overlays)."""
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            if not hwnd:
+                hwnd = self.winfo_id()
+            DWMWA_TRANSITIONS_FORCEDISABLED = 3
+            valor = ctypes.c_int(1)  # 1 = desactivar animaciones
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_TRANSITIONS_FORCEDISABLED,
+                ctypes.byref(valor),
+                ctypes.sizeof(valor),
+            )
+        except Exception:
+            pass
+
     def _on_window_unmap(self, event):
         if event.widget == self:
             self._is_minimized = True
 
     def _on_window_map(self, event):
+        # Restaurar desde minimizado: NO tocamos alpha ni forzamos update() aquí.
+        # Esos "trucos" se ejecutaban DURANTE la animación de restauración de
+        # Windows/DWM y provocaban la doble-imagen / ghosting. Dejamos que el
+        # sistema operativo anime la ventana de forma nativa.
         if event.widget == self:
-            try:
-                # Ocultar restauración con opacidad 0.0 temporalmente
-                self.attributes("-alpha", 0.0)
-                self._is_minimized = False
-                self._just_restored = True
-                
-                # Forzar recálculo y renderizado en búfer de todos los componentes
-                self.update_idletasks()
-                self.update()
-                
-                # Revelar instantáneamente con todos los widgets dibujados
-                self.attributes("-alpha", 1.0)
-            except Exception:
-                pass
-            self.after(300, self._clear_just_restored)
-
-    def _clear_just_restored(self):
-        self._just_restored = False
+            self._is_minimized = False
 
     def _on_window_configure(self, event):
+        # Solo rastreamos el tamaño actual. El redimensionado (arrastrar bordes,
+        # maximizar y restaurar) lo maneja Windows de forma NATIVA: no dibujamos
+        # overlay ni forzamos redibujados, que era lo que causaba el parpadeo y la
+        # doble-imagen. El fondo navy de la ventana raíz cubre cualquier zona aún
+        # no repintada durante la transición.
         if event.widget == self:
-            if getattr(self, "_is_minimized", False) or getattr(self, "_just_restored", False) or self.state() == "iconic":
+            try:
                 if self.state() != "iconic":
                     self._last_width = event.width
                     self._last_height = event.height
-                return
-            w = event.width
-            h = event.height
-            if w != self._last_width or h != self._last_height:
-                self._last_width = w
-                self._last_height = h
-                self._handle_resize_start()
-
-    def _handle_resize_start(self):
-        if not self._resizing:
-            self._resizing = True
-            try:
-                # Cover the entire root window (self) directly to block black margins or layout structures
-                self._resize_overlay = ctk.CTkFrame(
-                    self,
-                    fg_color=C["fondo"],
-                    corner_radius=0
-                )
-                self._resize_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
-                
-                lbl = ctk.CTkLabel(
-                    self._resize_overlay,
-                    text="⚙️ OPTIMIZANDO DISEÑO...",
-                    font=(FONT_BODY, 13, "bold"),
-                    text_color=C["texto_dim"]
-                )
-                lbl.place(relx=0.5, rely=0.5, anchor="center")
-                self._resize_overlay.lift()
-                self.update()
             except Exception:
                 pass
-
-        if self._resize_job:
-            self.after_cancel(self._resize_job)
-        self._resize_job = self.after(185, self._handle_resize_end)
-
-    def _handle_resize_end(self):
-        self._resizing = False
-        self._resize_job = None
-        if self._resize_overlay:
-            try:
-                if self._resize_overlay.winfo_exists():
-                    self._resize_overlay.destroy()
-            except Exception:
-                pass
-            self._resize_overlay = None
-            self.update()
 
 
 def iniciar_programa_principal():

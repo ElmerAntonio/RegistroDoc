@@ -692,15 +692,36 @@ class ObservacionesFrame(ctk.CTkFrame):
             doc.save(ruta_archivo)
 
     def actualizar_vista(self):
-        """Recarga la lista de grados y estudiantes."""
-        opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
-        old_sel = self.combo_grado.get()
-        self.combo_grado.configure(values=opciones)
-        if old_sel in opciones:
-            self.combo_grado.set(old_sel)
-        else:
-            self.combo_grado.set(opciones[0])
-        self.al_cambiar_grado(self.combo_grado.get())
+        """Recarga grados y estudiantes de observaciones en hilo de fondo."""
+        import threading
+        token = object()
+        self._async_token = token
+
+        def _fetch():
+            return self.engine.obtener_grados_activos() or ["Sin datos"]
+
+        def _apply(opciones):
+            if getattr(self, "_async_token", None) is not token:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            old_sel = self.combo_grado.get()
+            self.combo_grado.configure(values=opciones)
+            grado = old_sel if old_sel in opciones else opciones[0]
+            self.combo_grado.set(grado)
+            self.al_cambiar_grado(grado)
+
+        def _run():
+            datos = _fetch()
+            try:
+                self.after(0, lambda: _apply(datos))
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def cargar_plantillas(self):
         ruta = os.path.join(BASE_DIR, "..", "data", "observaciones_plantillas.json")

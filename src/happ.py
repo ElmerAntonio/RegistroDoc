@@ -192,18 +192,37 @@ class ReportesFrame(ctk.CTkFrame):
             ctk.CTkLabel(row_h, text=x_txt, width=130, anchor="w", text_color="#EF4444").pack(side="left", padx=10)
 
     def actualizar_vista(self):
-        """Recarga los grados activos y refresca los reportes."""
-        opciones = self.engine.obtener_grados_activos()
-        if not opciones:
-            opciones = ["Sin datos"]
-        old_sel = self.combo_grado.get()
-        self.combo_grado.configure(values=opciones)
-        if old_sel in opciones:
-            self.combo_grado.set(old_sel)
-        else:
-            self.combo_grado.set(opciones[0])
-        self.cargar_reportes(self.combo_grado.get())
-        self._initialized = True
+        """Recarga los grados activos y reportes en hilo de fondo."""
+        import threading
+        token = object()
+        self._async_token = token
+
+        def _fetch():
+            return self.engine.obtener_grados_activos() or ["Sin datos"]
+
+        def _apply(opciones):
+            if getattr(self, "_async_token", None) is not token:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            old_sel = self.combo_grado.get()
+            self.combo_grado.configure(values=opciones)
+            grado = old_sel if old_sel in opciones else opciones[0]
+            self.combo_grado.set(grado)
+            self.cargar_reportes(grado)
+            self._initialized = True
+
+        def _run():
+            datos = _fetch()
+            try:
+                self.after(0, lambda: _apply(datos))
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _limpiar(self, frame):
         for w in frame.winfo_children(): w.destroy()

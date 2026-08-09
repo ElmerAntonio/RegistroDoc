@@ -309,16 +309,24 @@ class EstudiantesFrame(ctk.CTkFrame):
 
         if exito:
             # Generar expediente de retiro
+            ruta_expediente = None
             try:
-                self._generar_expediente_retiro(est_id, nombre, motivo, acudiente)
-            except Exception:
-                pass
+                ruta_expediente = self._generar_expediente_retiro(est_id, nombre, motivo, acudiente)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[dapp] No se pudo generar expediente de retiro: {e}")
 
             if hasattr(root, "mostrar_toast"):
-                root.mostrar_toast(
-                    f"🚪 {resultado} retirado. Expediente actualizado.",
-                    color="#F97316"
-                )
+                if ruta_expediente:
+                    root.mostrar_toast(
+                        f"🛝 {resultado} retirado. Expediente en: {ruta_expediente}",
+                        color="#F97316"
+                    )
+                else:
+                    root.mostrar_toast(
+                        f"🚪 {resultado} retirado correctamente.",
+                        color="#F97316"
+                    )
             self.cargar_lista(self.combo_grado.get())
             self.cargar_retirados(self.combo_grado.get())
         else:
@@ -343,7 +351,9 @@ class EstudiantesFrame(ctk.CTkFrame):
             messagebox.showerror("Error", f"No se pudo reactivar.\n{resultado}")
 
     def _generar_expediente_retiro(self, est_id, nombre, motivo, acudiente):
-        """Genera el expediente Word de retiro (delega a documentos_maestro)."""
+        """Genera el expediente Word de retiro (delega a documentos_maestro).
+        Retorna la ruta del archivo generado, o None si hubo un error.
+        """
         try:
             from rdsecurity import cargar_config_segura
             from documentos_maestro import generar_expediente_retiro
@@ -375,9 +385,11 @@ class EstudiantesFrame(ctk.CTkFrame):
             r = cursor.fetchone()
             datos["cedula"] = self.engine.db_manager.desencriptar_campo(r[0]) if r and r[0] else ""
 
-            generar_expediente_retiro(datos)
+            ruta = generar_expediente_retiro(datos)
+            return ruta  # Devuelve la ruta para que el caller muestre la ubicación
         except Exception as e:
             print(f"[dapp] No se pudo generar expediente de retiro: {e}")
+            return None
 
     # ──────────────────────────────────────────────────────────────────────
     # Agregar / Guardar
@@ -530,18 +542,38 @@ class EstudiantesFrame(ctk.CTkFrame):
                                 f"Lista de clase en Word generada exitosamente:\n{ruta}")
 
     def actualizar_vista(self):
-        """Recarga la lista de grados activos y refresca la vista."""
-        opciones = self.engine.obtener_grados_activos() or ["Sin datos"]
-        old_sel  = self.combo_grado.get()
-        self.combo_grado.configure(values=opciones)
-        if old_sel in opciones:
-            self.combo_grado.set(old_sel)
-        else:
-            self.combo_grado.set(opciones[0])
-        grado = self.combo_grado.get()
-        self.cargar_lista(grado)
-        self.cargar_retirados(grado)
-        self._initialized = True
+        """Recarga grados y estudiantes en hilo de fondo para no freezar el UI."""
+        import threading
+        token = object()
+        self._async_token = token
+
+        def _fetch():
+            return self.engine.obtener_grados_activos() or ["Sin datos"]
+
+        def _apply(opciones):
+            if getattr(self, "_async_token", None) is not token:
+                return
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+            old_sel = self.combo_grado.get()
+            self.combo_grado.configure(values=opciones)
+            grado = old_sel if old_sel in opciones else opciones[0]
+            self.combo_grado.set(grado)
+            self.cargar_lista(grado)
+            self.cargar_retirados(grado)
+            self._initialized = True
+
+        def _run():
+            datos = _fetch()
+            try:
+                self.after(0, lambda: _apply(datos))
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, daemon=True).start()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
