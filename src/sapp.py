@@ -25,12 +25,14 @@ class ConfigFrame(ctk.CTkFrame):
         self.tab_hor = self.tabs.add(tr("Horarios"))
         self.tab_gra = self.tabs.add(tr("Gestión de Grados"))
         self.tab_mat = self.tabs.add(tr("Gestión de Materias"))
+        self.tab_seg = self.tabs.add(tr("🔐 Seguridad"))
 
         self.crear_panel_general()
         self.crear_panel_horarios()
         self.crear_panel_grados()
         self.crear_panel_materias()
-        self.actualizar_listas_ui() 
+        self.crear_panel_password()
+        self.actualizar_listas_ui()
 
     # ================= PESTAÑA 1: DATOS (GRID RESPONSIVO) =================
     def crear_panel_general(self):
@@ -307,6 +309,108 @@ class ConfigFrame(ctk.CTkFrame):
         return entry
 
     # ================= PESTAÑA 2: HORARIOS (GRID RESPONSIVO Y CENTRADO) =================
+    # ================= PESTAÑA 5: SEGURIDAD (CONTRASEÑA DE ACCESO) =================
+    def crear_panel_password(self):
+        """Gestión de la contraseña de acceso (opcional). Solo controla el acceso a
+        la app; NO es la clave de cifrado, así que quitarla/olvidarla no pierde datos."""
+        from rdsecurity import hash_password, verify_password
+
+        cont = ctk.CTkScrollableFrame(self.tab_seg, fg_color="transparent")
+        cont.pack(fill="both", expand=True, padx=20, pady=20)
+
+        def _tiene_password():
+            cfg = cargar_config_segura({})
+            return bool(cfg.get("app_password_hash") and cfg.get("app_password_salt"))
+
+        def _refrescar():
+            for w in cont.winfo_children():
+                w.destroy()
+            activo = _tiene_password()
+
+            ctk.CTkLabel(cont, text="🔐 Contraseña de acceso", font=("Segoe UI", 18, "bold"),
+                         text_color=C["cian"]).pack(anchor="w", pady=(0, 6))
+            ctk.CTkLabel(cont, text=("Estado: ✅ Activa" if activo else "Estado: ○ Sin contraseña"),
+                         font=("Segoe UI", 13, "bold"),
+                         text_color=(C["verde"] if activo else C["texto_sec"])).pack(anchor="w", pady=(0, 4))
+            ctk.CTkLabel(cont,
+                         text=("Protege el ACCESO a la app al abrirla. NO es la clave de cifrado:\n"
+                               "si la olvida, puede quitarla con su cédula desde la pantalla de bloqueo.\n"
+                               "Sus datos NUNCA se pierden por olvidar esta contraseña."),
+                         font=("Segoe UI", 11), text_color=C["texto_sec"], justify="left").pack(anchor="w", pady=(0, 14))
+
+            if not activo:
+                ctk.CTkLabel(cont, text="Nueva contraseña:", font=("Segoe UI", 12), text_color=C["texto"]).pack(anchor="w")
+                e1 = ctk.CTkEntry(cont, show="*", width=280)
+                e1.pack(anchor="w", pady=4)
+                ctk.CTkLabel(cont, text="Confirmar contraseña:", font=("Segoe UI", 12), text_color=C["texto"]).pack(anchor="w")
+                e2 = ctk.CTkEntry(cont, show="*", width=280)
+                e2.pack(anchor="w", pady=4)
+
+                def _activar():
+                    p1, p2 = e1.get(), e2.get()
+                    if len(p1) < 4:
+                        messagebox.showwarning("Contraseña", "La contraseña debe tener al menos 4 caracteres.")
+                        return
+                    if p1 != p2:
+                        messagebox.showwarning("Contraseña", "Las contraseñas no coinciden.")
+                        return
+                    cfg = cargar_config_segura({})
+                    salt, h = hash_password(p1)
+                    cfg["app_password_salt"] = salt
+                    cfg["app_password_hash"] = h
+                    guardar_config_segura(cfg)
+                    messagebox.showinfo("Contraseña", "Contraseña activada. Se pedirá la próxima vez que abra la app.")
+                    _refrescar()
+
+                ctk.CTkButton(cont, text="Activar contraseña", fg_color=C["cian"], hover_color=C["verde"],
+                              command=_activar).pack(anchor="w", pady=14)
+            else:
+                ctk.CTkLabel(cont, text="Contraseña actual:", font=("Segoe UI", 12), text_color=C["texto"]).pack(anchor="w")
+                ea = ctk.CTkEntry(cont, show="*", width=280)
+                ea.pack(anchor="w", pady=4)
+                ctk.CTkLabel(cont, text="Nueva contraseña (para cambiar):", font=("Segoe UI", 12), text_color=C["texto"]).pack(anchor="w")
+                en = ctk.CTkEntry(cont, show="*", width=280)
+                en.pack(anchor="w", pady=4)
+
+                def _verif_actual():
+                    cfg = cargar_config_segura({})
+                    return verify_password(ea.get(), cfg.get("app_password_salt", ""), cfg.get("app_password_hash", ""))
+
+                def _cambiar():
+                    if not _verif_actual():
+                        messagebox.showerror("Contraseña", "La contraseña actual es incorrecta.")
+                        return
+                    if len(en.get()) < 4:
+                        messagebox.showwarning("Contraseña", "La nueva contraseña debe tener al menos 4 caracteres.")
+                        return
+                    cfg = cargar_config_segura({})
+                    salt, h = hash_password(en.get())
+                    cfg["app_password_salt"] = salt
+                    cfg["app_password_hash"] = h
+                    guardar_config_segura(cfg)
+                    messagebox.showinfo("Contraseña", "Contraseña actualizada.")
+                    _refrescar()
+
+                def _quitar():
+                    if not _verif_actual():
+                        messagebox.showerror("Contraseña", "Ingrese la contraseña actual para quitarla.")
+                        return
+                    cfg = cargar_config_segura({})
+                    cfg.pop("app_password_salt", None)
+                    cfg.pop("app_password_hash", None)
+                    guardar_config_segura(cfg)
+                    messagebox.showinfo("Contraseña", "Contraseña quitada.")
+                    _refrescar()
+
+                fbtn = ctk.CTkFrame(cont, fg_color="transparent")
+                fbtn.pack(anchor="w", pady=14)
+                ctk.CTkButton(fbtn, text="Cambiar", fg_color=C["cian"], hover_color=C["verde"],
+                              command=_cambiar).pack(side="left", padx=(0, 8))
+                ctk.CTkButton(fbtn, text="Quitar contraseña", fg_color=C["rojo"], hover_color="#B91C1C",
+                              command=_quitar).pack(side="left")
+
+        _refrescar()
+
     def crear_panel_horarios(self):
         horario_data = self.engine.obtener_horario()
         

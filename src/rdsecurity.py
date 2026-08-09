@@ -202,6 +202,28 @@ def descifrar(blob: bytes, password: bytes) -> bytes:
     except Exception:
         raise ValueError("Autenticación fallida — archivo manipulado o clave incorrecta")
 
+# ══════════════════════════════════════════════════════════════
+#  CONTRASEÑA DE ACCESO (opcional) — solo controla el acceso a la app.
+#  NO es la clave de cifrado: si se olvida, los datos NO se pierden
+#  (se puede resetear con la cédula del docente). Se guarda hasheada.
+# ══════════════════════════════════════════════════════════════
+
+def hash_password(password: str) -> tuple:
+    """Devuelve (salt_hex, hash_hex) para una contraseña usando PBKDF2-HMAC-SHA256.
+    Nunca se guarda la contraseña en texto plano."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
+    return salt.hex(), dk.hex()
+
+def verify_password(password: str, salt_hex: str, hash_hex: str) -> bool:
+    """Verifica una contraseña contra su (salt, hash) en tiempo constante."""
+    try:
+        salt = bytes.fromhex(salt_hex)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except Exception:
+        return False
+
 def guardar_cifrado(ruta: str, datos: dict, password: bytes = None) -> None:
     """Serializa dict a JSON y lo cifra con AES-256-GCM."""
     if password is None:

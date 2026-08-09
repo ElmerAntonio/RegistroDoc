@@ -584,6 +584,11 @@ class RegistroDocApp(ctk.CTk):
                         app_inst.focus_force()
                     except Exception:
                         pass
+                    # Exigir contraseña de acceso si el docente configuró una
+                    try:
+                        app_inst._exigir_password_acceso()
+                    except Exception:
+                        pass
 
             self.splash.set_tasks(loading_tasks, on_splash_complete)
             self.splash.iniciar()
@@ -966,6 +971,113 @@ class RegistroDocApp(ctk.CTk):
         else:
             self.lbl_error_lock.configure(text="Cédula incorrecta. Intente de nuevo.")
             self.entry_cedula_lock.delete(0, "end")
+
+    # ─── CONTRASEÑA DE ACCESO (opcional) ───────────────────────────
+    def _exigir_password_acceso(self):
+        """Si hay una contraseña de acceso configurada, muestra una pantalla que la
+        exige antes de usar la app. NO es la clave de cifrado: se puede resetear con
+        la cédula del docente (sin pérdida de datos). Falla ABIERTO ante cualquier
+        error, para nunca dejar al docente fuera por un bug."""
+        try:
+            from rdsecurity import cargar_config_segura
+            cfg = cargar_config_segura({})
+            salt = cfg.get("app_password_salt", "")
+            phash = cfg.get("app_password_hash", "")
+            if not salt or not phash:
+                return  # No hay contraseña configurada → nada que exigir
+        except Exception:
+            return  # fail-open: si algo falla, no bloquear
+
+        from theme import C, FONT_TITLE, FONT_BODY
+
+        self._pwd_lock = ctk.CTkFrame(self, fg_color="#0A141D")
+        self._pwd_lock.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self._pwd_lock.lift()
+
+        # Bloquear atajos de teclado mientras la pantalla está activa
+        self.bind_all("<Key>", lambda e: "break")
+
+        def _cerrar_lock():
+            try:
+                self.unbind_all("<Key>")
+            except Exception:
+                pass
+            try:
+                self._registrar_atajos()
+            except Exception:
+                pass
+            try:
+                self._pwd_lock.destroy()
+            except Exception:
+                pass
+
+        def _pantalla_password():
+            for w in self._pwd_lock.winfo_children():
+                w.destroy()
+            ctk.CTkLabel(self._pwd_lock, text="🔐 RegistroDoc Pro", font=(FONT_TITLE, 22, "bold"),
+                         text_color=C["cian"]).pack(pady=(170, 10))
+            ctk.CTkLabel(self._pwd_lock, text="Ingrese su contraseña de acceso:",
+                         font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=8)
+            entry = ctk.CTkEntry(self._pwd_lock, show="*", width=280, placeholder_text="Contraseña")
+            entry.pack(pady=8)
+            entry.focus_force()
+            lbl_err = ctk.CTkLabel(self._pwd_lock, text="", text_color=C["rojo"], font=(FONT_BODY, 12, "bold"))
+            lbl_err.pack(pady=6)
+
+            def _intentar():
+                from rdsecurity import verify_password
+                if verify_password(entry.get(), salt, phash):
+                    _cerrar_lock()
+                else:
+                    lbl_err.configure(text="Contraseña incorrecta. Intente de nuevo.")
+                    entry.delete(0, "end")
+
+            entry.bind("<Return>", lambda e: _intentar())
+            ctk.CTkButton(self._pwd_lock, text="🔓 Entrar", fg_color=C["cian"], hover_color=C["verde"],
+                          command=_intentar).pack(pady=8)
+            ctk.CTkButton(self._pwd_lock, text="¿Olvidó su contraseña?", fg_color="transparent",
+                          hover_color="#0A141D", text_color=C["texto_sec"],
+                          command=_pantalla_reset).pack(pady=(4, 0))
+
+        def _pantalla_reset():
+            for w in self._pwd_lock.winfo_children():
+                w.destroy()
+            ctk.CTkLabel(self._pwd_lock, text="Restablecer contraseña", font=(FONT_TITLE, 18, "bold"),
+                         text_color=C["amarillo"]).pack(pady=(170, 10))
+            ctk.CTkLabel(self._pwd_lock, text="Ingrese su Cédula de docente para quitar la contraseña:",
+                         font=(FONT_BODY, 13), text_color=C["texto_sec"]).pack(pady=8)
+            entry_ced = ctk.CTkEntry(self._pwd_lock, show="*", width=280, placeholder_text="Cédula")
+            entry_ced.pack(pady=8)
+            entry_ced.focus_force()
+            lbl_err2 = ctk.CTkLabel(self._pwd_lock, text="", text_color=C["rojo"], font=(FONT_BODY, 12, "bold"))
+            lbl_err2.pack(pady=6)
+
+            def _reset():
+                import re
+                from rdsecurity import cargar_config_segura, guardar_config_segura
+                try:
+                    cfg2 = cargar_config_segura({})
+                    ced_ok = re.sub(r'[^a-zA-Z0-9]', '', cfg2.get("docente_cedula", "")).upper()
+                    ced_in = re.sub(r'[^a-zA-Z0-9]', '', entry_ced.get()).upper()
+                    if ced_ok and ced_in == ced_ok:
+                        cfg2.pop("app_password_salt", None)
+                        cfg2.pop("app_password_hash", None)
+                        guardar_config_segura(cfg2)
+                        _cerrar_lock()
+                        return
+                except Exception:
+                    pass
+                lbl_err2.configure(text="Cédula incorrecta.")
+                entry_ced.delete(0, "end")
+
+            entry_ced.bind("<Return>", lambda e: _reset())
+            ctk.CTkButton(self._pwd_lock, text="Quitar contraseña", fg_color=C["amarillo"],
+                          text_color="#0A141D", command=_reset).pack(pady=8)
+            ctk.CTkButton(self._pwd_lock, text="← Volver", fg_color="transparent",
+                          hover_color="#0A141D", text_color=C["texto_sec"],
+                          command=_pantalla_password).pack(pady=(4, 0))
+
+        _pantalla_password()
 
     # ─── AUTO-BACKUP ───────────────────────────────────────────────
     def _iniciar_auto_backup(self):
